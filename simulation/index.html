@@ -160,6 +160,27 @@
     font-size: 11px;
   }
 
+  .card-slider {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
+    color: #aaa;
+  }
+
+  .card-slider input[type="range"] {
+    flex: 1;
+    height: 14px;
+  }
+
+  .card-slider .slider-val {
+    color: #4fc3f7;
+    font-weight: bold;
+    width: 30px;
+    text-align: right;
+    font-size: 11px;
+  }
+
   #vehicle-list {
     display: flex;
     flex-direction: column;
@@ -260,14 +281,6 @@
   <div class="btn-row">
     <button class="btn btn-stop" id="stop-btn">Stop All</button>
     <button class="btn btn-reset" id="reset-btn">Reset All</button>
-  </div>
-  <div class="slider-row">
-    <label>Simulation Speed <span id="speed-value">1x</span></label>
-    <input type="range" id="speed-slider" min="1" max="5" value="1">
-  </div>
-  <div class="slider-row">
-    <label>Speed Contrast <span id="contrast-value">50%</span></label>
-    <input type="range" id="contrast-slider" min="0" max="100" value="50">
   </div>
 
   <h2>Vehicles</h2>
@@ -382,6 +395,8 @@ function createVehicle(typeIndex) {
     wheelRotation: 0,
     color: color,
     light: { on: false, intensity: 50 },
+    simSpeed: 1,
+    speedContrast: 50,
   };
   vehicles.push(v);
   if (!selectedVehicleId) selectedVehicleId = v.id;
@@ -400,8 +415,6 @@ function getVehicleType(v) {
 }
 
 // --- Global state ---
-let simSpeed = 1;
-let speedContrast = 50;
 let stopped = false;
 
 // --- Canvas setup ---
@@ -502,7 +515,7 @@ function stepVehicle(v, dt) {
   v.wheelRotation += (leftSpeed + rightSpeed) / 2 * dt * 10;
 
   const maxPixelsPerSec = 180;
-  const exp = 1 + (speedContrast / 50);
+  const exp = 1 + (v.speedContrast / 50);
   const vl = Math.pow(leftSpeed, exp) * maxPixelsPerSec;
   const vr = Math.pow(rightSpeed, exp) * maxPixelsPerSec;
 
@@ -806,9 +819,9 @@ function loop(timestamp) {
   if (!lastTime) lastTime = timestamp;
   const rawDt = (timestamp - lastTime) / 1000;
   lastTime = timestamp;
-  const dt = Math.min(rawDt, 0.05) * simSpeed;
+  const baseDt = Math.min(rawDt, 0.05);
   if (!stopped) {
-    for (const v of vehicles) stepVehicle(v, dt);
+    for (const v of vehicles) stepVehicle(v, baseDt * v.simSpeed);
   }
   draw();
   requestAnimationFrame(loop);
@@ -895,8 +908,54 @@ function buildVehicleCards() {
     lightRow.appendChild(lightSlider);
     lightRow.appendChild(lightVal);
 
+    // Speed row
+    const speedRow = document.createElement('div');
+    speedRow.className = 'card-slider';
+    const speedLabel = document.createElement('span');
+    speedLabel.textContent = 'Speed';
+    const speedSlider = document.createElement('input');
+    speedSlider.type = 'range';
+    speedSlider.min = 1;
+    speedSlider.max = 5;
+    speedSlider.value = v.simSpeed;
+    const speedVal = document.createElement('span');
+    speedVal.className = 'slider-val';
+    speedVal.textContent = v.simSpeed + 'x';
+    speedSlider.addEventListener('input', (e) => {
+      e.stopPropagation();
+      v.simSpeed = parseInt(e.target.value);
+      speedVal.textContent = v.simSpeed + 'x';
+    });
+    speedRow.appendChild(speedLabel);
+    speedRow.appendChild(speedSlider);
+    speedRow.appendChild(speedVal);
+
+    // Contrast row
+    const contrastRow = document.createElement('div');
+    contrastRow.className = 'card-slider';
+    const contrastLabel = document.createElement('span');
+    contrastLabel.textContent = 'Contrast';
+    const contrastSlider = document.createElement('input');
+    contrastSlider.type = 'range';
+    contrastSlider.min = 0;
+    contrastSlider.max = 100;
+    contrastSlider.value = v.speedContrast;
+    const contrastVal = document.createElement('span');
+    contrastVal.className = 'slider-val';
+    contrastVal.textContent = v.speedContrast + '%';
+    contrastSlider.addEventListener('input', (e) => {
+      e.stopPropagation();
+      v.speedContrast = parseInt(e.target.value);
+      contrastVal.textContent = v.speedContrast + '%';
+    });
+    contrastRow.appendChild(contrastLabel);
+    contrastRow.appendChild(contrastSlider);
+    contrastRow.appendChild(contrastVal);
+
     card.appendChild(header);
     card.appendChild(lightRow);
+    card.appendChild(speedRow);
+    card.appendChild(contrastRow);
 
     // Click card to select vehicle
     card.addEventListener('click', () => {
@@ -924,16 +983,6 @@ function updateReadoutName() {
 }
 
 // --- UI: Controls ---
-document.getElementById('speed-slider').addEventListener('input', (e) => {
-  simSpeed = parseInt(e.target.value);
-  document.getElementById('speed-value').textContent = simSpeed + 'x';
-});
-
-document.getElementById('contrast-slider').addEventListener('input', (e) => {
-  speedContrast = parseInt(e.target.value);
-  document.getElementById('contrast-value').textContent = speedContrast + '%';
-});
-
 document.getElementById('stop-btn').addEventListener('click', () => {
   stopped = !stopped;
   const btn = document.getElementById('stop-btn');
