@@ -384,7 +384,9 @@ function getSensorPositions() {
   return { leftX, leftY, rightX, rightY };
 }
 
-// Combined intensity from all lights at a point, using soft saturation per light
+// Combined intensity from all lights at a point
+// Sum raw (unsaturated) contributions, then apply soft saturation once
+// This lets a single light reach ~1.0 at close range (so inhibitory vehicles can stop)
 function totalIntensityAt(px, py) {
   let sum = 0;
   for (const light of lights) {
@@ -394,10 +396,8 @@ function totalIntensityAt(px, py) {
     const distSq = dx * dx + dy * dy;
     const minDist = 20;
     const effectiveDist = Math.max(distSq, minDist * minDist);
-    const raw = (light.intensity / 75) * 80000 / effectiveDist;
-    sum += raw / (1 + raw);
+    sum += (light.intensity / 75) * 80000 / effectiveDist;
   }
-  // Soft-cap the total so it approaches 1.0 but preserves differential
   return sum / (1 + sum);
 }
 
