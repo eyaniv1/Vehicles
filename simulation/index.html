@@ -1,0 +1,849 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Braitenberg Vehicle Simulator</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  #controls {
+    width: 260px;
+    padding: 20px;
+    background: #16213e;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    overflow-y: auto;
+  }
+
+  #controls h1 {
+    font-size: 18px;
+    color: #e0e0e0;
+    margin-bottom: 4px;
+  }
+
+  #controls h2 {
+    font-size: 13px;
+    color: #8888aa;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+
+  .control-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .vehicle-btn {
+    padding: 10px 12px;
+    border: 2px solid #333;
+    border-radius: 8px;
+    background: #1a1a2e;
+    color: #e0e0e0;
+    cursor: pointer;
+    text-align: left;
+    font-size: 13px;
+    transition: all 0.15s;
+  }
+
+  .vehicle-btn:hover {
+    border-color: #555;
+  }
+
+  .vehicle-btn.active {
+    border-color: #4fc3f7;
+    background: #1a2a4e;
+  }
+
+  .vehicle-btn .name {
+    font-weight: bold;
+    font-size: 14px;
+  }
+
+  .vehicle-btn .desc {
+    font-size: 11px;
+    color: #8888aa;
+    margin-top: 2px;
+  }
+
+  .switch-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 13px;
+    padding: 6px 0;
+    border-bottom: 1px solid #222;
+  }
+
+  .switch-label { color: #aaa; }
+  .switch-value { color: #4fc3f7; font-weight: bold; font-size: 12px; }
+
+  .slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .slider-row label {
+    font-size: 13px;
+    color: #aaa;
+    display: flex;
+    justify-content: space-between;
+  }
+
+  .slider-row label span { color: #4fc3f7; }
+
+  input[type="range"] {
+    width: 100%;
+    accent-color: #4fc3f7;
+  }
+
+  .btn {
+    padding: 10px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    transition: all 0.15s;
+  }
+
+  .btn-light-on {
+    background: #ffd54f;
+    color: #333;
+  }
+
+  .btn-light-off {
+    background: #333;
+    color: #888;
+  }
+
+  .btn-reset {
+    background: #333;
+    color: #aaa;
+  }
+
+  .btn-stop {
+    background: #c62828;
+    color: #fff;
+  }
+
+  .btn-stop.stopped {
+    background: #2e7d32;
+    color: #fff;
+  }
+
+  .btn-reset:hover { background: #444; }
+
+  #canvas-container {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  canvas {
+    border-radius: 12px;
+    cursor: crosshair;
+  }
+
+  .info-text {
+    font-size: 11px;
+    color: #666;
+    line-height: 1.5;
+  }
+
+  .sensor-readout {
+    display: flex;
+    gap: 12px;
+    font-size: 12px;
+  }
+
+  .sensor-readout div {
+    flex: 1;
+    padding: 6px 8px;
+    background: #1a1a2e;
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  .sensor-readout .label { color: #888; font-size: 10px; }
+  .sensor-readout .value { color: #4fc3f7; font-weight: bold; font-size: 16px; }
+  .motor-l .value { color: #ff8a65; }
+  .motor-r .value { color: #81c784; }
+</style>
+</head>
+<body>
+
+<div id="controls">
+  <h1>Braitenberg Vehicles</h1>
+
+  <h2>Controls</h2>
+  <button class="btn btn-stop" id="stop-btn">Stop Vehicle</button>
+  <button class="btn btn-reset" id="reset-btn">Reset Vehicle Position</button>
+  <div class="slider-row">
+    <label>Simulation Speed <span id="speed-value">1x</span></label>
+    <input type="range" id="speed-slider" min="1" max="5" value="1">
+  </div>
+  <div class="slider-row">
+    <label>Speed Contrast <span id="contrast-value">50%</span></label>
+    <input type="range" id="contrast-slider" min="0" max="100" value="50">
+  </div>
+
+  <h2>Light Source</h2>
+  <button class="btn btn-light-on" id="light-toggle">Light: ON</button>
+  <div class="slider-row">
+    <label>Intensity <span id="intensity-value">75%</span></label>
+    <input type="range" id="intensity-slider" min="10" max="100" value="75">
+  </div>
+  <p class="info-text">Click on the canvas to place the light source.</p>
+
+  <h2>Select Vehicle</h2>
+  <div class="control-group" id="vehicle-buttons"></div>
+
+  <h2>Switch State</h2>
+  <div id="switch-display">
+    <div class="switch-row">
+      <span class="switch-label">Sensors</span>
+      <span class="switch-value" id="sw-sensors">--</span>
+    </div>
+    <div class="switch-row">
+      <span class="switch-label">Wiring</span>
+      <span class="switch-value" id="sw-wiring">--</span>
+    </div>
+    <div class="switch-row">
+      <span class="switch-label">Polarity</span>
+      <span class="switch-value" id="sw-polarity">--</span>
+    </div>
+  </div>
+
+  <h2>Live Readout</h2>
+  <div class="sensor-readout">
+    <div>
+      <div class="label">Left Eye</div>
+      <div class="value" id="sensor-l">0</div>
+    </div>
+    <div>
+      <div class="label">Right Eye</div>
+      <div class="value" id="sensor-r">0</div>
+    </div>
+  </div>
+  <div class="sensor-readout" style="margin-top: 6px;">
+    <div class="motor-l">
+      <div class="label">Left Motor</div>
+      <div class="value" id="motor-l">0</div>
+    </div>
+    <div class="motor-r">
+      <div class="label">Right Motor</div>
+      <div class="value" id="motor-r">0</div>
+    </div>
+  </div>
+</div>
+
+<div id="canvas-container">
+  <canvas id="canvas"></canvas>
+</div>
+
+<script>
+// --- Vehicle definitions ---
+const VEHICLES = [
+  { id: 'v1',  name: 'V1 — Getting Around', desc: 'One eye, speeds up near light',
+    sensors: 1, crossed: false, inhibitory: false },
+  { id: 'v2a', name: 'V2a — Fear', desc: 'Turns away from light, accelerates',
+    sensors: 2, crossed: false, inhibitory: false },
+  { id: 'v2b', name: 'V2b — Aggression', desc: 'Charges toward light',
+    sensors: 2, crossed: true, inhibitory: false },
+  { id: 'v3a', name: 'V3a — Love', desc: 'Approaches light, slows to rest facing it',
+    sensors: 2, crossed: false, inhibitory: true },
+  { id: 'v3b', name: 'V3b — Explorer', desc: 'Approaches light, rests near it facing away',
+    sensors: 2, crossed: true, inhibitory: true },
+];
+
+// --- State ---
+let state = {
+  vehicle: VEHICLES[0],
+  // Vehicle physics
+  x: 0, y: 0, theta: 0,
+  // Light source
+  lightX: 0, lightY: 0,
+  lightOn: true,
+  lightIntensity: 75,
+  lightPlaced: false,
+  // Sim
+  simSpeed: 1,
+  speedContrast: 50,
+  stopped: false,
+  trail: [],
+  // Motor state for visualization
+  leftSpeed: 0,
+  rightSpeed: 0,
+  wheelRotation: 0,
+};
+
+// --- Canvas setup ---
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  const container = document.getElementById('canvas-container');
+  const size = Math.min(container.clientWidth - 40, container.clientHeight - 40, 800);
+  canvas.width = size;
+  canvas.height = size;
+}
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+// --- Vehicle geometry ---
+const VEHICLE_LENGTH = 50;
+const VEHICLE_WIDTH = 34;
+const SENSOR_SPREAD = 18; // distance from center to each sensor
+const SENSOR_FORWARD = 30; // how far forward sensors are from center
+const WHEEL_BASE = VEHICLE_WIDTH; // distance between wheels
+
+// --- Initialize ---
+function resetVehicle() {
+  state.x = canvas.width * 0.3;
+  state.y = canvas.height * 0.7;
+  state.theta = -Math.PI / 4; // facing upper-right
+  state.trail = [];
+}
+
+function initLight() {
+  state.lightX = canvas.width * 0.65;
+  state.lightY = canvas.height * 0.35;
+  state.lightPlaced = true;
+}
+
+// --- Sensor calculation ---
+function getSensorPositions() {
+  const cosT = Math.cos(state.theta);
+  const sinT = Math.sin(state.theta);
+
+  // In y-down canvas: left perpendicular to (cosT, sinT) is (sinT, -cosT)
+  const leftX = state.x + cosT * SENSOR_FORWARD + sinT * SENSOR_SPREAD;
+  const leftY = state.y + sinT * SENSOR_FORWARD - cosT * SENSOR_SPREAD;
+  const rightX = state.x + cosT * SENSOR_FORWARD - sinT * SENSOR_SPREAD;
+  const rightY = state.y + sinT * SENSOR_FORWARD + cosT * SENSOR_SPREAD;
+
+  return { leftX, leftY, rightX, rightY };
+}
+
+function lightIntensityAt(px, py) {
+  if (!state.lightOn || !state.lightPlaced) return 0;
+
+  const dx = px - state.lightX;
+  const dy = py - state.lightY;
+  const distSq = dx * dx + dy * dy;
+  const minDist = 20;
+  const effectiveDist = Math.max(distSq, minDist * minDist);
+
+  // Inverse square law, scaled by intensity
+  const raw = (state.lightIntensity / 75) * 80000 / effectiveDist;
+  return Math.min(raw, 1.0);
+}
+
+// Directional sensor reading: each sensor "sees" better on its own side.
+// This creates a meaningful differential even when close to the light,
+// which is critical for V3b (Explorer) to stop facing away from the source.
+// sensorSide: -1 for left sensor, +1 for right sensor
+function directionalLightReading(sensorX, sensorY, sensorSide) {
+  if (!state.lightOn || !state.lightPlaced) return 0;
+
+  // Base intensity from distance
+  const base = lightIntensityAt(sensorX, sensorY);
+
+  // Direction from sensor to light
+  const dx = state.lightX - sensorX;
+  const dy = state.lightY - sensorY;
+  const dist = Math.sqrt(dx * dx + dy * dy);
+  if (dist < 1) return base;
+
+  // Vehicle's forward direction
+  const fwdX = Math.cos(state.theta);
+  const fwdY = Math.sin(state.theta);
+
+  // Sensor's facing direction: forward + slight bias toward its own side
+  // Left sensor (sensorSide=-1) looks slightly left
+  // Right sensor (sensorSide=+1) looks slightly right
+  // In y-down canvas: left perpendicular is (sinT, -cosT)
+  const perpX = Math.sin(state.theta);
+  const perpY = -Math.cos(state.theta);
+  const sensorDirX = fwdX + sensorSide * perpX * 0.5;
+  const sensorDirY = fwdY + sensorSide * perpY * 0.5;
+  const sdLen = Math.sqrt(sensorDirX * sensorDirX + sensorDirY * sensorDirY);
+
+  // Cosine of angle between sensor direction and light direction
+  const cosAngle = (sensorDirX * dx / dist + sensorDirY * dy / dist) / sdLen;
+
+  // Map cosAngle to a directional factor:
+  // Light directly ahead/on-side: factor ~1.0
+  // Light behind: factor ~0.2 (still some light leaks through)
+  const dirFactor = 0.2 + 0.8 * Math.max(0, (cosAngle + 0.3) / 1.3);
+
+  return base * dirFactor;
+}
+
+// --- Physics step ---
+function step(dt) {
+  const sensors = getSensorPositions();
+
+  // Read light intensity at each sensor (directional)
+  let rawLeft = directionalLightReading(sensors.leftX, sensors.leftY, -1);
+  let rawRight = directionalLightReading(sensors.rightX, sensors.rightY, +1);
+
+  const v = state.vehicle;
+
+  // Determine motor inputs based on vehicle configuration
+  let leftInput, rightInput;
+
+  if (v.sensors === 1) {
+    // Vehicle 1: average both sensors
+    const combined = (rawLeft + rawRight) / 2;
+    leftInput = combined;
+    rightInput = combined;
+  } else if (v.crossed) {
+    // Crossed wiring: swap
+    leftInput = rawRight;
+    rightInput = rawLeft;
+  } else {
+    // Uncrossed: same side
+    leftInput = rawLeft;
+    rightInput = rawRight;
+  }
+
+  // Map to motor speed
+  let leftSpeed, rightSpeed;
+
+  if (v.inhibitory) {
+    // More light = slower, can reach full stop
+    leftSpeed = 1 - leftInput;
+    rightSpeed = 1 - rightInput;
+  } else {
+    // More light = faster, base speed so it still wanders in the dark
+    const baseSpeed = 0.15;
+    leftSpeed = baseSpeed + (1 - baseSpeed) * leftInput;
+    rightSpeed = baseSpeed + (1 - baseSpeed) * rightInput;
+  }
+
+  // Store for visualization
+  state.leftSpeed = leftSpeed;
+  state.rightSpeed = rightSpeed;
+  state.wheelRotation += (leftSpeed + rightSpeed) / 2 * dt * 10;
+
+  // Scale speeds — contrast slider controls the curve
+  // contrast 0 = linear (gentle), contrast 100 = cubic (extreme)
+  const maxPixelsPerSec = 180;
+  const exp = 1 + (state.speedContrast / 50); // range 1.0 (linear) to 3.0 (cubic)
+  const vl = Math.pow(leftSpeed, exp) * maxPixelsPerSec;
+  const vr = Math.pow(rightSpeed, exp) * maxPixelsPerSec;
+
+  // Differential drive kinematics (y-down canvas: positive theta = clockwise)
+  const linearV = (vl + vr) / 2;
+  const angularV = (vl - vr) / WHEEL_BASE;
+
+  state.x += linearV * Math.cos(state.theta) * dt;
+  state.y += linearV * Math.sin(state.theta) * dt;
+  state.theta += angularV * dt;
+
+  // Wrap around canvas edges
+  const margin = 10;
+  if (state.x < -margin) state.x = canvas.width + margin;
+  if (state.x > canvas.width + margin) state.x = -margin;
+  if (state.y < -margin) state.y = canvas.height + margin;
+  if (state.y > canvas.height + margin) state.y = -margin;
+
+  // Trail
+  state.trail.push({ x: state.x, y: state.y });
+  if (state.trail.length > 500) state.trail.shift();
+
+  // Update readout
+  document.getElementById('sensor-l').textContent = (rawLeft * 100).toFixed(0);
+  document.getElementById('sensor-r').textContent = (rawRight * 100).toFixed(0);
+  document.getElementById('motor-l').textContent = (leftSpeed * 100).toFixed(0);
+  document.getElementById('motor-r').textContent = (rightSpeed * 100).toFixed(0);
+}
+
+// --- Drawing ---
+function drawLightGradient() {
+  if (!state.lightPlaced) return;
+
+  const radius = 250 * (state.lightIntensity / 75);
+  const alpha = state.lightOn ? 0.15 : 0.03;
+  const grad = ctx.createRadialGradient(
+    state.lightX, state.lightY, 0,
+    state.lightX, state.lightY, radius
+  );
+  grad.addColorStop(0, `rgba(255, 235, 100, ${alpha})`);
+  grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
+function drawLight() {
+  if (!state.lightPlaced) return;
+
+  const glowRadius = state.lightOn ? 16 : 8;
+  const color = state.lightOn ? '#ffd54f' : '#555';
+
+  // Glow
+  if (state.lightOn) {
+    const grad = ctx.createRadialGradient(
+      state.lightX, state.lightY, 0,
+      state.lightX, state.lightY, glowRadius * 2
+    );
+    grad.addColorStop(0, 'rgba(255, 213, 79, 0.4)');
+    grad.addColorStop(1, 'rgba(255, 213, 79, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(state.lightX, state.lightY, glowRadius * 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Bulb
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(state.lightX, state.lightY, 8, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Rays
+  if (state.lightOn) {
+    ctx.strokeStyle = 'rgba(255, 213, 79, 0.5)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 8; i++) {
+      const angle = (i / 8) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.moveTo(
+        state.lightX + Math.cos(angle) * 12,
+        state.lightY + Math.sin(angle) * 12
+      );
+      ctx.lineTo(
+        state.lightX + Math.cos(angle) * 18,
+        state.lightY + Math.sin(angle) * 18
+      );
+      ctx.stroke();
+    }
+  }
+}
+
+function drawTrail() {
+  if (state.trail.length < 2) return;
+
+  ctx.lineWidth = 1.5;
+  for (let i = 1; i < state.trail.length; i++) {
+    const alpha = i / state.trail.length * 0.4;
+    ctx.strokeStyle = `rgba(100, 180, 255, ${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(state.trail[i - 1].x, state.trail[i - 1].y);
+    ctx.lineTo(state.trail[i].x, state.trail[i].y);
+    ctx.stroke();
+  }
+}
+
+function drawVehicle() {
+  ctx.save();
+  ctx.translate(state.x, state.y);
+  ctx.rotate(state.theta);
+
+  // Body
+  ctx.fillStyle = '#2a4a7f';
+  ctx.strokeStyle = '#4a7abf';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(
+    -VEHICLE_LENGTH / 2, -VEHICLE_WIDTH / 2,
+    VEHICLE_LENGTH, VEHICLE_WIDTH, 4
+  );
+  ctx.fill();
+  ctx.stroke();
+
+  // Direction indicator (front)
+  ctx.fillStyle = '#4a7abf';
+  ctx.beginPath();
+  ctx.moveTo(VEHICLE_LENGTH / 2, -6);
+  ctx.lineTo(VEHICLE_LENGTH / 2 + 10, 0);
+  ctx.lineTo(VEHICLE_LENGTH / 2, 6);
+  ctx.fill();
+
+  // Wheels — color-coded by speed
+  const wheelW = VEHICLE_LENGTH / 2.2;
+  const wheelH = 8;
+  const wheelXPos = -VEHICLE_LENGTH / 3;
+
+  // Speed to color: slow = dim blue, fast = bright orange/red
+  function wheelColor(speed) {
+    const r = Math.floor(80 + 175 * speed);
+    const g = Math.floor(60 + 100 * (1 - speed));
+    const b = Math.floor(40 + 60 * (1 - speed));
+    return `rgb(${r}, ${g}, ${b})`;
+  }
+
+  // Left wheel
+  const leftWheelY = -VEHICLE_WIDTH / 2 - wheelH;
+  ctx.fillStyle = wheelColor(state.leftSpeed);
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 1;
+  ctx.fillRect(wheelXPos, leftWheelY, wheelW, wheelH);
+  ctx.strokeRect(wheelXPos, leftWheelY, wheelW, wheelH);
+
+  // Left wheel spin ticks
+  const tickCount = 4;
+  const leftRotOffset = state.wheelRotation * state.leftSpeed;
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < tickCount; i++) {
+    const t = ((i / tickCount) + leftRotOffset) % 1;
+    const tx = wheelXPos + t * wheelW;
+    ctx.beginPath();
+    ctx.moveTo(tx, leftWheelY);
+    ctx.lineTo(tx, leftWheelY + wheelH);
+    ctx.stroke();
+  }
+
+  // Right wheel
+  const rightWheelY = VEHICLE_WIDTH / 2;
+  ctx.fillStyle = wheelColor(state.rightSpeed);
+  ctx.strokeStyle = '#888';
+  ctx.fillRect(wheelXPos, rightWheelY, wheelW, wheelH);
+  ctx.strokeRect(wheelXPos, rightWheelY, wheelW, wheelH);
+
+  // Right wheel spin ticks
+  const rightRotOffset = state.wheelRotation * state.rightSpeed;
+  ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < tickCount; i++) {
+    const t = ((i / tickCount) + rightRotOffset) % 1;
+    const tx = wheelXPos + t * wheelW;
+    ctx.beginPath();
+    ctx.moveTo(tx, rightWheelY);
+    ctx.lineTo(tx, rightWheelY + wheelH);
+    ctx.stroke();
+  }
+
+  // Sensor and wiring visualization
+  const sensorsPos = getSensorPositions();
+  const leftReading = directionalLightReading(sensorsPos.leftX, sensorsPos.leftY, -1);
+  const rightReading = directionalLightReading(sensorsPos.rightX, sensorsPos.rightY, +1);
+  const avgReading = (leftReading + rightReading) / 2;
+
+  // Wheel positions for wiring lines
+  const wheelY_left = -VEHICLE_WIDTH / 2 - 2;
+  const wheelY_right = VEHICLE_WIDTH / 2 + 2;
+  const wheelX = -VEHICLE_LENGTH / 4;
+
+  const wiringConfig = state.vehicle;
+
+  if (wiringConfig.sensors === 1) {
+    // ONE EYE mode: draw a single centered sensor
+    const bright = 0.3 + 0.7 * avgReading;
+    ctx.fillStyle = `rgba(255, 255, 255, ${bright})`;
+    ctx.beginPath();
+    ctx.arc(SENSOR_FORWARD, 0, 6, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // Single sensor feeds both motors — straight fork
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)';
+    ctx.beginPath();
+    ctx.moveTo(SENSOR_FORWARD, 0);
+    ctx.lineTo(2, 0);
+    ctx.moveTo(2, 0);
+    ctx.lineTo(wheelX, wheelY_left);
+    ctx.moveTo(2, 0);
+    ctx.lineTo(wheelX, wheelY_right);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  } else {
+    // TWO EYES mode: draw both sensors
+    const leftBright = 0.3 + 0.7 * leftReading;
+    const rightBright = 0.3 + 0.7 * rightReading;
+
+    ctx.fillStyle = `rgba(255, 255, 255, ${leftBright})`;
+    ctx.beginPath();
+    ctx.arc(SENSOR_FORWARD, -SENSOR_SPREAD, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = `rgba(255, 255, 255, ${rightBright})`;
+    ctx.beginPath();
+    ctx.arc(SENSOR_FORWARD, SENSOR_SPREAD, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.stroke();
+
+    // Wiring lines
+    ctx.lineWidth = 2;
+    ctx.setLineDash([4, 3]);
+    ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)';
+
+    if (wiringConfig.crossed) {
+      // Crossed: left sensor -> right motor, right sensor -> left motor
+      ctx.beginPath();
+      ctx.moveTo(SENSOR_FORWARD, -SENSOR_SPREAD);
+      ctx.lineTo(wheelX, wheelY_right);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(SENSOR_FORWARD, SENSOR_SPREAD);
+      ctx.lineTo(wheelX, wheelY_left);
+      ctx.stroke();
+    } else {
+      // Straight: left sensor -> left motor, right sensor -> right motor
+      ctx.beginPath();
+      ctx.moveTo(SENSOR_FORWARD, -SENSOR_SPREAD);
+      ctx.lineTo(wheelX, wheelY_left);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(SENSOR_FORWARD, SENSOR_SPREAD);
+      ctx.lineTo(wheelX, wheelY_right);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  ctx.restore();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  // Background
+  ctx.fillStyle = '#0f0f23';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Grid
+  ctx.strokeStyle = '#1a1a33';
+  ctx.lineWidth = 1;
+  const gridSize = 40;
+  for (let x = 0; x < canvas.width; x += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(x, 0);
+    ctx.lineTo(x, canvas.height);
+    ctx.stroke();
+  }
+  for (let y = 0; y < canvas.height; y += gridSize) {
+    ctx.beginPath();
+    ctx.moveTo(0, y);
+    ctx.lineTo(canvas.width, y);
+    ctx.stroke();
+  }
+
+  drawLightGradient();
+  drawTrail();
+  drawLight();
+  drawVehicle();
+}
+
+// --- Game loop ---
+let lastTime = 0;
+function loop(timestamp) {
+  if (!lastTime) lastTime = timestamp;
+  const rawDt = (timestamp - lastTime) / 1000;
+  lastTime = timestamp;
+
+  const dt = Math.min(rawDt, 0.05) * state.simSpeed;
+
+  if (!state.stopped) step(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// --- UI ---
+function buildUI() {
+  const container = document.getElementById('vehicle-buttons');
+  VEHICLES.forEach((v, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'vehicle-btn' + (i === 0 ? ' active' : '');
+    btn.innerHTML = `<div class="name">${v.name}</div><div class="desc">${v.desc}</div>`;
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.vehicle-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.vehicle = v;
+      updateSwitchDisplay();
+    });
+    container.appendChild(btn);
+  });
+}
+
+function updateSwitchDisplay() {
+  const v = state.vehicle;
+  document.getElementById('sw-sensors').textContent =
+    v.sensors === 1 ? 'ONE EYE' : 'TWO EYES';
+  document.getElementById('sw-wiring').textContent =
+    v.sensors === 1 ? '(n/a)' : (v.crossed ? 'CRISS-CROSS' : 'STRAIGHT');
+  document.getElementById('sw-polarity').textContent =
+    v.inhibitory ? 'SLOW DOWN' : 'SPEED UP';
+}
+
+// Light toggle
+document.getElementById('light-toggle').addEventListener('click', () => {
+  state.lightOn = !state.lightOn;
+  const btn = document.getElementById('light-toggle');
+  btn.textContent = state.lightOn ? 'Light: ON' : 'Light: OFF';
+  btn.className = 'btn ' + (state.lightOn ? 'btn-light-on' : 'btn-light-off');
+});
+
+// Intensity slider
+document.getElementById('intensity-slider').addEventListener('input', (e) => {
+  state.lightIntensity = parseInt(e.target.value);
+  document.getElementById('intensity-value').textContent = state.lightIntensity + '%';
+});
+
+// Speed slider
+document.getElementById('speed-slider').addEventListener('input', (e) => {
+  state.simSpeed = parseInt(e.target.value);
+  document.getElementById('speed-value').textContent = state.simSpeed + 'x';
+});
+
+// Contrast slider
+document.getElementById('contrast-slider').addEventListener('input', (e) => {
+  state.speedContrast = parseInt(e.target.value);
+  document.getElementById('contrast-value').textContent = state.speedContrast + '%';
+});
+
+// Canvas click — place light
+canvas.addEventListener('click', (e) => {
+  const rect = canvas.getBoundingClientRect();
+  state.lightX = e.clientX - rect.left;
+  state.lightY = e.clientY - rect.top;
+  state.lightPlaced = true;
+});
+
+// Stop/Start button
+document.getElementById('stop-btn').addEventListener('click', () => {
+  state.stopped = !state.stopped;
+  const btn = document.getElementById('stop-btn');
+  btn.textContent = state.stopped ? 'Start Vehicle' : 'Stop Vehicle';
+  btn.className = 'btn ' + (state.stopped ? 'btn-stop stopped' : 'btn-stop');
+});
+
+// Reset button
+document.getElementById('reset-btn').addEventListener('click', () => {
+  resetVehicle();
+});
+
+// --- Init ---
+buildUI();
+updateSwitchDisplay();
+resetVehicle();
+initLight();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
