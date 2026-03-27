@@ -119,16 +119,6 @@
     transition: all 0.15s;
   }
 
-  .btn-light-on {
-    background: #ffd54f;
-    color: #333;
-  }
-
-  .btn-light-off {
-    background: #333;
-    color: #888;
-  }
-
   .btn-reset {
     background: #333;
     color: #aaa;
@@ -152,6 +142,7 @@
     align-items: center;
     justify-content: center;
     padding: 20px;
+    position: relative;
   }
 
   canvas {
@@ -183,6 +174,46 @@
   .sensor-readout .value { color: #4fc3f7; font-weight: bold; font-size: 16px; }
   .motor-l .value { color: #ff8a65; }
   .motor-r .value { color: #81c784; }
+
+  /* Light intensity popup */
+  #intensity-popup {
+    display: none;
+    position: absolute;
+    background: #16213e;
+    border: 1px solid #4fc3f7;
+    border-radius: 8px;
+    padding: 10px 14px;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+
+  #intensity-popup label {
+    font-size: 12px;
+    color: #aaa;
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 4px;
+  }
+
+  #intensity-popup label span { color: #4fc3f7; font-weight: bold; }
+
+  #intensity-popup input[type="range"] {
+    width: 120px;
+  }
+
+  #intensity-popup .popup-delete {
+    margin-top: 8px;
+    padding: 4px 8px;
+    background: #c62828;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 11px;
+    width: 100%;
+  }
+
+  #intensity-popup .popup-delete:hover { background: #e53935; }
 </style>
 </head>
 <body>
@@ -201,14 +232,6 @@
     <label>Speed Contrast <span id="contrast-value">50%</span></label>
     <input type="range" id="contrast-slider" min="0" max="100" value="50">
   </div>
-
-  <h2>Light Source</h2>
-  <button class="btn btn-light-on" id="light-toggle">Light: ON</button>
-  <div class="slider-row">
-    <label>Intensity <span id="intensity-value">75%</span></label>
-    <input type="range" id="intensity-slider" min="10" max="100" value="75">
-  </div>
-  <p class="info-text">Click on the canvas to place the light source.</p>
 
   <h2>Select Vehicle</h2>
   <div class="control-group" id="vehicle-buttons"></div>
@@ -250,10 +273,23 @@
       <div class="value" id="motor-r">0</div>
     </div>
   </div>
+
+  <h2>Lights</h2>
+  <p class="info-text">
+    Double-click canvas to add a light.<br>
+    Click a light to toggle on/off.<br>
+    Drag a light to move it.<br>
+    Right-click a light for intensity/delete.
+  </p>
 </div>
 
 <div id="canvas-container">
   <canvas id="canvas"></canvas>
+  <div id="intensity-popup">
+    <label>Intensity <span id="popup-intensity-value">75%</span></label>
+    <input type="range" id="popup-intensity-slider" min="10" max="100" value="75">
+    <button class="popup-delete" id="popup-delete-btn">Delete Light</button>
+  </div>
 </div>
 
 <script>
@@ -271,22 +307,34 @@ const VEHICLES = [
     sensors: 2, crossed: true, inhibitory: true },
 ];
 
+// --- Light sources ---
+let nextLightId = 1;
+let lights = [];
+
+function createLight(x, y) {
+  const light = { id: nextLightId++, x, y, on: true, intensity: 75 };
+  lights.push(light);
+  return light;
+}
+
+function lightAt(x, y) {
+  const GRAB_RADIUS = 18;
+  for (let i = lights.length - 1; i >= 0; i--) {
+    const l = lights[i];
+    const dx = x - l.x, dy = y - l.y;
+    if (dx * dx + dy * dy < GRAB_RADIUS * GRAB_RADIUS) return l;
+  }
+  return null;
+}
+
 // --- State ---
 let state = {
   vehicle: VEHICLES[0],
-  // Vehicle physics
   x: 0, y: 0, theta: 0,
-  // Light source
-  lightX: 0, lightY: 0,
-  lightOn: true,
-  lightIntensity: 75,
-  lightPlaced: false,
-  // Sim
   simSpeed: 1,
   speedContrast: 50,
   stopped: false,
   trail: [],
-  // Motor state for visualization
   leftSpeed: 0,
   rightSpeed: 0,
   wheelRotation: 0,
@@ -308,120 +356,108 @@ resizeCanvas();
 // --- Vehicle geometry ---
 const VEHICLE_LENGTH = 50;
 const VEHICLE_WIDTH = 34;
-const SENSOR_SPREAD = 18; // distance from center to each sensor
-const SENSOR_FORWARD = 30; // how far forward sensors are from center
-const WHEEL_BASE = VEHICLE_WIDTH; // distance between wheels
+const SENSOR_SPREAD = 18;
+const SENSOR_FORWARD = 30;
+const WHEEL_BASE = VEHICLE_WIDTH;
 
 // --- Initialize ---
 function resetVehicle() {
   state.x = canvas.width * 0.3;
   state.y = canvas.height * 0.7;
-  state.theta = -Math.PI / 4; // facing upper-right
+  state.theta = -Math.PI / 4;
   state.trail = [];
 }
 
-function initLight() {
-  state.lightX = canvas.width * 0.65;
-  state.lightY = canvas.height * 0.35;
-  state.lightPlaced = true;
+function initLights() {
+  lights = [];
+  createLight(canvas.width * 0.65, canvas.height * 0.35);
 }
 
 // --- Sensor calculation ---
 function getSensorPositions() {
   const cosT = Math.cos(state.theta);
   const sinT = Math.sin(state.theta);
-
-  // In y-down canvas: left perpendicular to (cosT, sinT) is (sinT, -cosT)
   const leftX = state.x + cosT * SENSOR_FORWARD + sinT * SENSOR_SPREAD;
   const leftY = state.y + sinT * SENSOR_FORWARD - cosT * SENSOR_SPREAD;
   const rightX = state.x + cosT * SENSOR_FORWARD - sinT * SENSOR_SPREAD;
   const rightY = state.y + sinT * SENSOR_FORWARD + cosT * SENSOR_SPREAD;
-
   return { leftX, leftY, rightX, rightY };
 }
 
-function lightIntensityAt(px, py) {
-  if (!state.lightOn || !state.lightPlaced) return 0;
+// Combined intensity from all lights at a point, using soft saturation per light
+function totalIntensityAt(px, py) {
+  let sum = 0;
+  for (const light of lights) {
+    if (!light.on) continue;
+    const dx = px - light.x;
+    const dy = py - light.y;
+    const distSq = dx * dx + dy * dy;
+    const minDist = 20;
+    const effectiveDist = Math.max(distSq, minDist * minDist);
+    const raw = (light.intensity / 75) * 80000 / effectiveDist;
+    sum += raw / (1 + raw);
+  }
+  // Soft-cap the total so it approaches 1.0 but preserves differential
+  return sum / (1 + sum);
+}
 
-  const dx = px - state.lightX;
-  const dy = py - state.lightY;
+function sensorReading(sensorX, sensorY) {
+  return totalIntensityAt(sensorX, sensorY);
+}
+
+// Intensity from a single light (for drawing gradient)
+function singleLightIntensity(light, px, py) {
+  if (!light.on) return 0;
+  const dx = px - light.x;
+  const dy = py - light.y;
   const distSq = dx * dx + dy * dy;
   const minDist = 20;
   const effectiveDist = Math.max(distSq, minDist * minDist);
-
-  // Inverse square law, scaled by intensity.
-  // Soft saturation (raw / (1+raw)) instead of hard clamp to 1.0.
-  // This preserves the proportional difference between left and right
-  // sensors even at close range, which is essential for V3b Explorer:
-  // with hard clamp, both sensors hit 1.0 and the differential vanishes.
-  const raw = (state.lightIntensity / 75) * 80000 / effectiveDist;
+  const raw = (light.intensity / 75) * 80000 / effectiveDist;
   return raw / (1 + raw);
-}
-
-// Sensor reading at a given position. With soft saturation in lightIntensityAt,
-// the natural distance-based differential between left and right sensors is
-// preserved even at close range — no artificial directional bias needed.
-// The physical separation of the sensors (SENSOR_SPREAD) provides the
-// differential that distinguishes V3a from V3b at close range.
-function sensorReading(sensorX, sensorY) {
-  return lightIntensityAt(sensorX, sensorY);
 }
 
 // --- Physics step ---
 function step(dt) {
   const sensors = getSensorPositions();
-
-  // Read light intensity at each sensor
   let rawLeft = sensorReading(sensors.leftX, sensors.leftY);
   let rawRight = sensorReading(sensors.rightX, sensors.rightY);
 
   const v = state.vehicle;
-
-  // Determine motor inputs based on vehicle configuration
   let leftInput, rightInput;
 
   if (v.sensors === 1) {
-    // Vehicle 1: average both sensors
     const combined = (rawLeft + rawRight) / 2;
     leftInput = combined;
     rightInput = combined;
   } else if (v.crossed) {
-    // Crossed wiring: swap
     leftInput = rawRight;
     rightInput = rawLeft;
   } else {
-    // Uncrossed: same side
     leftInput = rawLeft;
     rightInput = rawRight;
   }
 
-  // Map to motor speed
   let leftSpeed, rightSpeed;
 
   if (v.inhibitory) {
-    // More light = slower, can reach full stop
     leftSpeed = 1 - leftInput;
     rightSpeed = 1 - rightInput;
   } else {
-    // More light = faster, base speed so it still wanders in the dark
     const baseSpeed = 0.15;
     leftSpeed = baseSpeed + (1 - baseSpeed) * leftInput;
     rightSpeed = baseSpeed + (1 - baseSpeed) * rightInput;
   }
 
-  // Store for visualization
   state.leftSpeed = leftSpeed;
   state.rightSpeed = rightSpeed;
   state.wheelRotation += (leftSpeed + rightSpeed) / 2 * dt * 10;
 
-  // Scale speeds — contrast slider controls the curve
-  // contrast 0 = linear (gentle), contrast 100 = cubic (extreme)
   const maxPixelsPerSec = 180;
-  const exp = 1 + (state.speedContrast / 50); // range 1.0 (linear) to 3.0 (cubic)
+  const exp = 1 + (state.speedContrast / 50);
   const vl = Math.pow(leftSpeed, exp) * maxPixelsPerSec;
   const vr = Math.pow(rightSpeed, exp) * maxPixelsPerSec;
 
-  // Differential drive kinematics (y-down canvas: positive theta = clockwise)
   const linearV = (vl + vr) / 2;
   const angularV = (vl - vr) / WHEEL_BASE;
 
@@ -429,18 +465,15 @@ function step(dt) {
   state.y += linearV * Math.sin(state.theta) * dt;
   state.theta += angularV * dt;
 
-  // Wrap around canvas edges
   const margin = 10;
   if (state.x < -margin) state.x = canvas.width + margin;
   if (state.x > canvas.width + margin) state.x = -margin;
   if (state.y < -margin) state.y = canvas.height + margin;
   if (state.y > canvas.height + margin) state.y = -margin;
 
-  // Trail
   state.trail.push({ x: state.x, y: state.y });
   if (state.trail.length > 500) state.trail.shift();
 
-  // Update readout
   document.getElementById('sensor-l').textContent = (rawLeft * 100).toFixed(0);
   document.getElementById('sensor-r').textContent = (rawRight * 100).toFixed(0);
   document.getElementById('motor-l').textContent = (leftSpeed * 100).toFixed(0);
@@ -448,70 +481,54 @@ function step(dt) {
 }
 
 // --- Drawing ---
-function drawLightGradient() {
-  if (!state.lightPlaced) return;
-
-  const radius = 250 * (state.lightIntensity / 75);
-  const alpha = state.lightOn ? 0.15 : 0.03;
-  const grad = ctx.createRadialGradient(
-    state.lightX, state.lightY, 0,
-    state.lightX, state.lightY, radius
-  );
-  grad.addColorStop(0, `rgba(255, 235, 100, ${alpha})`);
-  grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
+function drawLightGradients() {
+  for (const light of lights) {
+    const radius = 250 * (light.intensity / 75);
+    const alpha = light.on ? 0.15 : 0.03;
+    const grad = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, radius);
+    grad.addColorStop(0, `rgba(255, 235, 100, ${alpha})`);
+    grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 }
 
-function drawLight() {
-  if (!state.lightPlaced) return;
+function drawLights() {
+  for (const light of lights) {
+    const glowRadius = light.on ? 16 : 8;
+    const color = light.on ? '#ffd54f' : '#555';
 
-  const glowRadius = state.lightOn ? 16 : 8;
-  const color = state.lightOn ? '#ffd54f' : '#555';
-
-  // Glow
-  if (state.lightOn) {
-    const grad = ctx.createRadialGradient(
-      state.lightX, state.lightY, 0,
-      state.lightX, state.lightY, glowRadius * 2
-    );
-    grad.addColorStop(0, 'rgba(255, 213, 79, 0.4)');
-    grad.addColorStop(1, 'rgba(255, 213, 79, 0)');
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(state.lightX, state.lightY, glowRadius * 2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  // Bulb
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(state.lightX, state.lightY, 8, 0, Math.PI * 2);
-  ctx.fill();
-
-  // Rays
-  if (state.lightOn) {
-    ctx.strokeStyle = 'rgba(255, 213, 79, 0.5)';
-    ctx.lineWidth = 1.5;
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
+    if (light.on) {
+      const grad = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, glowRadius * 2);
+      grad.addColorStop(0, 'rgba(255, 213, 79, 0.4)');
+      grad.addColorStop(1, 'rgba(255, 213, 79, 0)');
+      ctx.fillStyle = grad;
       ctx.beginPath();
-      ctx.moveTo(
-        state.lightX + Math.cos(angle) * 12,
-        state.lightY + Math.sin(angle) * 12
-      );
-      ctx.lineTo(
-        state.lightX + Math.cos(angle) * 18,
-        state.lightY + Math.sin(angle) * 18
-      );
-      ctx.stroke();
+      ctx.arc(light.x, light.y, glowRadius * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(light.x, light.y, 8, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (light.on) {
+      ctx.strokeStyle = 'rgba(255, 213, 79, 0.5)';
+      ctx.lineWidth = 1.5;
+      for (let i = 0; i < 8; i++) {
+        const angle = (i / 8) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.moveTo(light.x + Math.cos(angle) * 12, light.y + Math.sin(angle) * 12);
+        ctx.lineTo(light.x + Math.cos(angle) * 18, light.y + Math.sin(angle) * 18);
+        ctx.stroke();
+      }
     }
   }
 }
 
 function drawTrail() {
   if (state.trail.length < 2) return;
-
   ctx.lineWidth = 1.5;
   for (let i = 1; i < state.trail.length; i++) {
     const alpha = i / state.trail.length * 0.4;
@@ -528,19 +545,14 @@ function drawVehicle() {
   ctx.translate(state.x, state.y);
   ctx.rotate(state.theta);
 
-  // Body
   ctx.fillStyle = '#2a4a7f';
   ctx.strokeStyle = '#4a7abf';
   ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.roundRect(
-    -VEHICLE_LENGTH / 2, -VEHICLE_WIDTH / 2,
-    VEHICLE_LENGTH, VEHICLE_WIDTH, 4
-  );
+  ctx.roundRect(-VEHICLE_LENGTH / 2, -VEHICLE_WIDTH / 2, VEHICLE_LENGTH, VEHICLE_WIDTH, 4);
   ctx.fill();
   ctx.stroke();
 
-  // Direction indicator (front)
   ctx.fillStyle = '#4a7abf';
   ctx.beginPath();
   ctx.moveTo(VEHICLE_LENGTH / 2, -6);
@@ -548,12 +560,10 @@ function drawVehicle() {
   ctx.lineTo(VEHICLE_LENGTH / 2, 6);
   ctx.fill();
 
-  // Wheels — color-coded by speed
   const wheelW = VEHICLE_LENGTH / 2.2;
   const wheelH = 8;
   const wheelXPos = -VEHICLE_LENGTH / 3;
 
-  // Speed to color: slow = dim blue, fast = bright orange/red
   function wheelColor(speed) {
     const r = Math.floor(80 + 175 * speed);
     const g = Math.floor(60 + 100 * (1 - speed));
@@ -561,7 +571,6 @@ function drawVehicle() {
     return `rgb(${r}, ${g}, ${b})`;
   }
 
-  // Left wheel
   const leftWheelY = -VEHICLE_WIDTH / 2 - wheelH;
   ctx.fillStyle = wheelColor(state.leftSpeed);
   ctx.strokeStyle = '#888';
@@ -569,7 +578,6 @@ function drawVehicle() {
   ctx.fillRect(wheelXPos, leftWheelY, wheelW, wheelH);
   ctx.strokeRect(wheelXPos, leftWheelY, wheelW, wheelH);
 
-  // Left wheel spin ticks
   const tickCount = 4;
   const leftRotOffset = state.wheelRotation * state.leftSpeed;
   ctx.strokeStyle = 'rgba(255,255,255,0.4)';
@@ -583,14 +591,12 @@ function drawVehicle() {
     ctx.stroke();
   }
 
-  // Right wheel
   const rightWheelY = VEHICLE_WIDTH / 2;
   ctx.fillStyle = wheelColor(state.rightSpeed);
   ctx.strokeStyle = '#888';
   ctx.fillRect(wheelXPos, rightWheelY, wheelW, wheelH);
   ctx.strokeRect(wheelXPos, rightWheelY, wheelW, wheelH);
 
-  // Right wheel spin ticks
   const rightRotOffset = state.wheelRotation * state.rightSpeed;
   ctx.strokeStyle = 'rgba(255,255,255,0.4)';
   ctx.lineWidth = 1;
@@ -609,15 +615,12 @@ function drawVehicle() {
   const rightReading = sensorReading(sensorsPos.rightX, sensorsPos.rightY);
   const avgReading = (leftReading + rightReading) / 2;
 
-  // Wheel positions for wiring lines
   const wheelY_left = -VEHICLE_WIDTH / 2 - 2;
   const wheelY_right = VEHICLE_WIDTH / 2 + 2;
   const wheelX = -VEHICLE_LENGTH / 4;
-
   const wiringConfig = state.vehicle;
 
   if (wiringConfig.sensors === 1) {
-    // ONE EYE mode: draw a single centered sensor
     const bright = 0.3 + 0.7 * avgReading;
     ctx.fillStyle = `rgba(255, 255, 255, ${bright})`;
     ctx.beginPath();
@@ -627,7 +630,6 @@ function drawVehicle() {
     ctx.lineWidth = 1;
     ctx.stroke();
 
-    // Single sensor feeds both motors — straight fork
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 3]);
     ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)';
@@ -641,7 +643,6 @@ function drawVehicle() {
     ctx.stroke();
     ctx.setLineDash([]);
   } else {
-    // TWO EYES mode: draw both sensors
     const leftBright = 0.3 + 0.7 * leftReading;
     const rightBright = 0.3 + 0.7 * rightReading;
 
@@ -660,13 +661,11 @@ function drawVehicle() {
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.stroke();
 
-    // Wiring lines
     ctx.lineWidth = 2;
     ctx.setLineDash([4, 3]);
     ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)';
 
     if (wiringConfig.crossed) {
-      // Crossed: left sensor -> right motor, right sensor -> left motor
       ctx.beginPath();
       ctx.moveTo(SENSOR_FORWARD, -SENSOR_SPREAD);
       ctx.lineTo(wheelX, wheelY_right);
@@ -676,7 +675,6 @@ function drawVehicle() {
       ctx.lineTo(wheelX, wheelY_left);
       ctx.stroke();
     } else {
-      // Straight: left sensor -> left motor, right sensor -> right motor
       ctx.beginPath();
       ctx.moveTo(SENSOR_FORWARD, -SENSOR_SPREAD);
       ctx.lineTo(wheelX, wheelY_left);
@@ -695,30 +693,22 @@ function drawVehicle() {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // Background
   ctx.fillStyle = '#0f0f23';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // Grid
   ctx.strokeStyle = '#1a1a33';
   ctx.lineWidth = 1;
   const gridSize = 40;
   for (let x = 0; x < canvas.width; x += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, canvas.height);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
   }
   for (let y = 0; y < canvas.height; y += gridSize) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(canvas.width, y);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
   }
 
-  drawLightGradient();
+  drawLightGradients();
   drawTrail();
-  drawLight();
+  drawLights();
   drawVehicle();
 }
 
@@ -728,9 +718,7 @@ function loop(timestamp) {
   if (!lastTime) lastTime = timestamp;
   const rawDt = (timestamp - lastTime) / 1000;
   lastTime = timestamp;
-
   const dt = Math.min(rawDt, 0.05) * state.simSpeed;
-
   if (!state.stopped) step(dt);
   draw();
   requestAnimationFrame(loop);
@@ -763,20 +751,6 @@ function updateSwitchDisplay() {
     v.inhibitory ? 'SLOW DOWN' : 'SPEED UP';
 }
 
-// Light toggle
-document.getElementById('light-toggle').addEventListener('click', () => {
-  state.lightOn = !state.lightOn;
-  const btn = document.getElementById('light-toggle');
-  btn.textContent = state.lightOn ? 'Light: ON' : 'Light: OFF';
-  btn.className = 'btn ' + (state.lightOn ? 'btn-light-on' : 'btn-light-off');
-});
-
-// Intensity slider
-document.getElementById('intensity-slider').addEventListener('input', (e) => {
-  state.lightIntensity = parseInt(e.target.value);
-  document.getElementById('intensity-value').textContent = state.lightIntensity + '%';
-});
-
 // Speed slider
 document.getElementById('speed-slider').addEventListener('input', (e) => {
   state.simSpeed = parseInt(e.target.value);
@@ -787,14 +761,6 @@ document.getElementById('speed-slider').addEventListener('input', (e) => {
 document.getElementById('contrast-slider').addEventListener('input', (e) => {
   state.speedContrast = parseInt(e.target.value);
   document.getElementById('contrast-value').textContent = state.speedContrast + '%';
-});
-
-// Canvas click — place light
-canvas.addEventListener('click', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  state.lightX = e.clientX - rect.left;
-  state.lightY = e.clientY - rect.top;
-  state.lightPlaced = true;
 });
 
 // Stop/Start button
@@ -810,11 +776,119 @@ document.getElementById('reset-btn').addEventListener('click', () => {
   resetVehicle();
 });
 
+// --- Canvas interaction: lights ---
+let dragging = null;       // light being dragged
+let dragStarted = false;   // did mouse actually move (distinguish click from drag)
+let mouseDownPos = null;   // position at mousedown
+let mouseDownTime = 0;
+
+const popup = document.getElementById('intensity-popup');
+const popupSlider = document.getElementById('popup-intensity-slider');
+const popupValue = document.getElementById('popup-intensity-value');
+const popupDeleteBtn = document.getElementById('popup-delete-btn');
+let popupLight = null;
+
+function canvasCoords(e) {
+  const rect = canvas.getBoundingClientRect();
+  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+}
+
+function closePopup() {
+  popup.style.display = 'none';
+  popupLight = null;
+}
+
+canvas.addEventListener('mousedown', (e) => {
+  if (e.button !== 0) return; // only left button
+  closePopup();
+  const pos = canvasCoords(e);
+  mouseDownPos = pos;
+  mouseDownTime = Date.now();
+  const hit = lightAt(pos.x, pos.y);
+  if (hit) {
+    dragging = hit;
+    dragStarted = false;
+  }
+});
+
+canvas.addEventListener('mousemove', (e) => {
+  if (!dragging) return;
+  const pos = canvasCoords(e);
+  const dx = pos.x - mouseDownPos.x;
+  const dy = pos.y - mouseDownPos.y;
+  if (!dragStarted && (dx * dx + dy * dy > 9)) {
+    dragStarted = true;
+  }
+  if (dragStarted) {
+    dragging.x = pos.x;
+    dragging.y = pos.y;
+  }
+});
+
+canvas.addEventListener('mouseup', (e) => {
+  if (e.button !== 0) return;
+  if (dragging && !dragStarted) {
+    // Click (no drag) on a light → toggle on/off
+    dragging.on = !dragging.on;
+  }
+  dragging = null;
+  dragStarted = false;
+});
+
+// Double-click on empty space → add new light
+canvas.addEventListener('dblclick', (e) => {
+  const pos = canvasCoords(e);
+  const hit = lightAt(pos.x, pos.y);
+  if (!hit) {
+    createLight(pos.x, pos.y);
+  }
+});
+
+// Right-click on light → intensity popup
+canvas.addEventListener('contextmenu', (e) => {
+  e.preventDefault();
+  const pos = canvasCoords(e);
+  const hit = lightAt(pos.x, pos.y);
+  if (hit) {
+    popupLight = hit;
+    popupSlider.value = hit.intensity;
+    popupValue.textContent = hit.intensity + '%';
+
+    // Position popup near the light
+    const rect = canvas.getBoundingClientRect();
+    const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+    popup.style.left = (rect.left - containerRect.left + pos.x + 20) + 'px';
+    popup.style.top = (rect.top - containerRect.top + pos.y - 30) + 'px';
+    popup.style.display = 'block';
+  } else {
+    closePopup();
+  }
+});
+
+popupSlider.addEventListener('input', () => {
+  if (!popupLight) return;
+  popupLight.intensity = parseInt(popupSlider.value);
+  popupValue.textContent = popupLight.intensity + '%';
+});
+
+popupDeleteBtn.addEventListener('click', () => {
+  if (!popupLight) return;
+  lights = lights.filter(l => l !== popupLight);
+  closePopup();
+});
+
+// Close popup when clicking elsewhere
+document.addEventListener('mousedown', (e) => {
+  if (!popup.contains(e.target) && e.target !== canvas) {
+    closePopup();
+  }
+});
+
 // --- Init ---
 buildUI();
 updateSwitchDisplay();
 resetVehicle();
-initLight();
+initLights();
 requestAnimationFrame(loop);
 </script>
 </body>
