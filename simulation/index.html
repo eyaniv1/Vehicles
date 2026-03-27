@@ -346,9 +346,8 @@ const ctx = canvas.getContext('2d');
 
 function resizeCanvas() {
   const container = document.getElementById('canvas-container');
-  const size = Math.min(container.clientWidth - 40, container.clientHeight - 40, 800);
-  canvas.width = size;
-  canvas.height = size;
+  canvas.width = Math.min(container.clientWidth - 40, 1200);
+  canvas.height = Math.min(container.clientHeight - 40, 800);
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
@@ -465,11 +464,22 @@ function step(dt) {
   state.y += linearV * Math.sin(state.theta) * dt;
   state.theta += angularV * dt;
 
-  const margin = 10;
-  if (state.x < -margin) state.x = canvas.width + margin;
-  if (state.x > canvas.width + margin) state.x = -margin;
-  if (state.y < -margin) state.y = canvas.height + margin;
-  if (state.y > canvas.height + margin) state.y = -margin;
+  // Bounce off walls like a ball reflecting off a surface
+  const margin = VEHICLE_LENGTH / 2;
+  if (state.x < margin) {
+    state.x = margin;
+    state.theta = Math.PI - state.theta;
+  } else if (state.x > canvas.width - margin) {
+    state.x = canvas.width - margin;
+    state.theta = Math.PI - state.theta;
+  }
+  if (state.y < margin) {
+    state.y = margin;
+    state.theta = -state.theta;
+  } else if (state.y > canvas.height - margin) {
+    state.y = canvas.height - margin;
+    state.theta = -state.theta;
+  }
 
   state.trail.push({ x: state.x, y: state.y });
   if (state.trail.length > 500) state.trail.shift();
