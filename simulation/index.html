@@ -299,6 +299,16 @@
       <div class="value" id="sensor-r">0</div>
     </div>
   </div>
+  <div class="sensor-readout" style="margin-top: 4px;" id="side-readout">
+    <div>
+      <div class="label">Side L</div>
+      <div class="value" id="sensor-sl">0</div>
+    </div>
+    <div>
+      <div class="label">Side R</div>
+      <div class="value" id="sensor-sr">0</div>
+    </div>
+  </div>
   <div class="sensor-readout" style="margin-top: 4px;">
     <div class="motor-l">
       <div class="label">Left Motor</div>
@@ -395,6 +405,7 @@ function createVehicle(typeIndex) {
     wheelRotation: 0,
     color: color,
     light: { on: false, intensity: 50 },
+    sidePair: { enabled: false, behaviorIndex: 0, weight: 50 },
     simSpeed: 1,
     speedContrast: 50,
   };
@@ -434,10 +445,19 @@ const VEHICLE_LENGTH = 50;
 const VEHICLE_WIDTH = 34;
 const SENSOR_SPREAD = 18;
 const SENSOR_FORWARD = 30;
+const SIDE_SENSOR_OFFSET = VEHICLE_WIDTH / 2 + 4; // how far out from center
 const WHEEL_BASE = VEHICLE_WIDTH;
 
+// Side pair behavior options
+const SIDE_BEHAVIORS = [
+  { name: 'Fear', crossed: false, inhibitory: false },
+  { name: 'Aggression', crossed: true, inhibitory: false },
+  { name: 'Love', crossed: false, inhibitory: true },
+  { name: 'Explorer', crossed: true, inhibitory: true },
+];
+
 // --- Sensor calculation ---
-function getSensorPositions(v) {
+function getFrontSensorPositions(v) {
   const cosT = Math.cos(v.theta);
   const sinT = Math.sin(v.theta);
   return {
@@ -445,6 +465,19 @@ function getSensorPositions(v) {
     leftY:  v.y + sinT * SENSOR_FORWARD - cosT * SENSOR_SPREAD,
     rightX: v.x + cosT * SENSOR_FORWARD - sinT * SENSOR_SPREAD,
     rightY: v.y + sinT * SENSOR_FORWARD + cosT * SENSOR_SPREAD,
+  };
+}
+
+function getSideSensorPositions(v) {
+  const cosT = Math.cos(v.theta);
+  const sinT = Math.sin(v.theta);
+  // Left side sensor: perpendicular left from vehicle center (y-down canvas)
+  // Right side sensor: perpendicular right
+  return {
+    leftX:  v.x + sinT * SIDE_SENSOR_OFFSET,
+    leftY:  v.y - cosT * SIDE_SENSOR_OFFSET,
+    rightX: v.x - sinT * SIDE_SENSOR_OFFSET,
+    rightY: v.y + cosT * SIDE_SENSOR_OFFSET,
   };
 }
 
@@ -478,36 +511,60 @@ function totalIntensityAt(px, py, excludeVehicleId) {
   return sum / (1 + sum);
 }
 
-// --- Physics step for one vehicle ---
-function stepVehicle(v, dt) {
-  const sensors = getSensorPositions(v);
-  const rawLeft = totalIntensityAt(sensors.leftX, sensors.leftY, v.id);
-  const rawRight = totalIntensityAt(sensors.rightX, sensors.rightY, v.id);
-
-  const type = getVehicleType(v);
+// Compute motor outputs for a sensor pair given wiring config
+function computePairMotors(rawL, rawR, sensorCount, crossed, inhibitory) {
   let leftInput, rightInput;
-
-  if (type.sensors === 1) {
-    const combined = (rawLeft + rawRight) / 2;
+  if (sensorCount === 1) {
+    const combined = (rawL + rawR) / 2;
     leftInput = combined;
     rightInput = combined;
-  } else if (type.crossed) {
-    leftInput = rawRight;
-    rightInput = rawLeft;
+  } else if (crossed) {
+    leftInput = rawR;
+    rightInput = rawL;
   } else {
-    leftInput = rawLeft;
-    rightInput = rawRight;
+    leftInput = rawL;
+    rightInput = rawR;
   }
+
+  if (inhibitory) {
+    return { left: 1 - leftInput, right: 1 - rightInput };
+  } else {
+    const baseSpeed = 0.15;
+    return {
+      left: baseSpeed + (1 - baseSpeed) * leftInput,
+      right: baseSpeed + (1 - baseSpeed) * rightInput,
+    };
+  }
+}
+
+// --- Physics step for one vehicle ---
+function stepVehicle(v, dt) {
+  const frontSensors = getFrontSensorPositions(v);
+  const rawFrontL = totalIntensityAt(frontSensors.leftX, frontSensors.leftY, v.id);
+  const rawFrontR = totalIntensityAt(frontSensors.rightX, frontSensors.rightY, v.id);
+
+  const type = getVehicleType(v);
+  const front = computePairMotors(rawFrontL, rawFrontR, type.sensors, type.crossed, type.inhibitory);
 
   let leftSpeed, rightSpeed;
 
-  if (type.inhibitory) {
-    leftSpeed = 1 - leftInput;
-    rightSpeed = 1 - rightInput;
+  if (v.sidePair.enabled) {
+    const sideSensors = getSideSensorPositions(v);
+    const rawSideL = totalIntensityAt(sideSensors.leftX, sideSensors.leftY, v.id);
+    const rawSideR = totalIntensityAt(sideSensors.rightX, sideSensors.rightY, v.id);
+    const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
+    const side = computePairMotors(rawSideL, rawSideR, 2, sideBeh.crossed, sideBeh.inhibitory);
+
+    const w = v.sidePair.weight / 100;
+    leftSpeed = (1 - w) * front.left + w * side.left;
+    rightSpeed = (1 - w) * front.right + w * side.right;
+
+    // Store side readings for readout
+    v._sideL = rawSideL;
+    v._sideR = rawSideR;
   } else {
-    const baseSpeed = 0.15;
-    leftSpeed = baseSpeed + (1 - baseSpeed) * leftInput;
-    rightSpeed = baseSpeed + (1 - baseSpeed) * rightInput;
+    leftSpeed = front.left;
+    rightSpeed = front.right;
   }
 
   v.leftSpeed = leftSpeed;
@@ -548,10 +605,18 @@ function stepVehicle(v, dt) {
 
   // Update readout for selected vehicle
   if (v.id === selectedVehicleId) {
-    document.getElementById('sensor-l').textContent = (rawLeft * 100).toFixed(0);
-    document.getElementById('sensor-r').textContent = (rawRight * 100).toFixed(0);
+    document.getElementById('sensor-l').textContent = (rawFrontL * 100).toFixed(0);
+    document.getElementById('sensor-r').textContent = (rawFrontR * 100).toFixed(0);
     document.getElementById('motor-l').textContent = (leftSpeed * 100).toFixed(0);
     document.getElementById('motor-r').textContent = (rightSpeed * 100).toFixed(0);
+    const sideReadout = document.getElementById('side-readout');
+    if (v.sidePair.enabled) {
+      sideReadout.style.display = '';
+      document.getElementById('sensor-sl').textContent = (v._sideL * 100).toFixed(0);
+      document.getElementById('sensor-sr').textContent = (v._sideR * 100).toFixed(0);
+    } else {
+      sideReadout.style.display = 'none';
+    }
   }
 }
 
@@ -711,10 +776,10 @@ function drawVehicle(v) {
     ctx.beginPath(); ctx.moveTo(tx, rightWheelY); ctx.lineTo(tx, rightWheelY + wheelH); ctx.stroke();
   }
 
-  // Sensors and wiring
-  const sensors = getSensorPositions(v);
-  const leftReading = totalIntensityAt(sensors.leftX, sensors.leftY, v.id);
-  const rightReading = totalIntensityAt(sensors.rightX, sensors.rightY, v.id);
+  // Front sensors and wiring
+  const frontSensors = getFrontSensorPositions(v);
+  const leftReading = totalIntensityAt(frontSensors.leftX, frontSensors.leftY, v.id);
+  const rightReading = totalIntensityAt(frontSensors.rightX, frontSensors.rightY, v.id);
   const avgReading = (leftReading + rightReading) / 2;
 
   const wheelY_left = -VEHICLE_WIDTH / 2 - 2;
@@ -782,6 +847,61 @@ function drawVehicle(v) {
       ctx.stroke();
       ctx.beginPath();
       ctx.moveTo(SENSOR_FORWARD, SENSOR_SPREAD);
+      ctx.lineTo(wheelX, wheelY_right);
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  // Side sensors (if enabled)
+  if (v.sidePair.enabled) {
+    const sideSensors = getSideSensorPositions(v);
+    const sideL = totalIntensityAt(sideSensors.leftX, sideSensors.leftY, v.id);
+    const sideR = totalIntensityAt(sideSensors.rightX, sideSensors.rightY, v.id);
+    const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
+
+    // Side sensor dots (on left and right sides of body)
+    const sideY_left = -SIDE_SENSOR_OFFSET;
+    const sideY_right = SIDE_SENSOR_OFFSET;
+
+    const sLeftBright = 0.3 + 0.7 * sideL;
+    ctx.fillStyle = `rgba(180, 255, 180, ${sLeftBright})`;
+    ctx.beginPath();
+    ctx.arc(0, sideY_left, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(180, 255, 180, 0.5)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    const sRightBright = 0.3 + 0.7 * sideR;
+    ctx.fillStyle = `rgba(180, 255, 180, ${sRightBright})`;
+    ctx.beginPath();
+    ctx.arc(0, sideY_right, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(180, 255, 180, 0.5)';
+    ctx.stroke();
+
+    // Side wiring lines (green-tinted)
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.strokeStyle = 'rgba(100, 255, 150, 0.4)';
+
+    if (sideBeh.crossed) {
+      ctx.beginPath();
+      ctx.moveTo(0, sideY_left);
+      ctx.lineTo(wheelX, wheelY_right);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, sideY_right);
+      ctx.lineTo(wheelX, wheelY_left);
+      ctx.stroke();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(0, sideY_left);
+      ctx.lineTo(wheelX, wheelY_left);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(0, sideY_right);
       ctx.lineTo(wheelX, wheelY_right);
       ctx.stroke();
     }
@@ -952,10 +1072,63 @@ function buildVehicleCards() {
     contrastRow.appendChild(contrastSlider);
     contrastRow.appendChild(contrastVal);
 
+    // Side pair row: enable checkbox + behavior select
+    const sideRow = document.createElement('div');
+    sideRow.className = 'card-light';
+    const sideLabel = document.createElement('span');
+    sideLabel.textContent = 'Side';
+    const sideCheck = document.createElement('input');
+    sideCheck.type = 'checkbox';
+    sideCheck.checked = v.sidePair.enabled;
+    const sideSelect = document.createElement('select');
+    sideSelect.style.cssText = 'flex:1; background:#16213e; color:#e0e0e0; border:1px solid #444; border-radius:4px; padding:2px 3px; font-size:11px;';
+    SIDE_BEHAVIORS.forEach((beh, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = beh.name;
+      if (i === v.sidePair.behaviorIndex) opt.selected = true;
+      sideSelect.appendChild(opt);
+    });
+    sideCheck.addEventListener('change', (e) => {
+      e.stopPropagation();
+      v.sidePair.enabled = e.target.checked;
+    });
+    sideSelect.addEventListener('change', (e) => {
+      e.stopPropagation();
+      v.sidePair.behaviorIndex = parseInt(e.target.value);
+    });
+    sideRow.appendChild(sideLabel);
+    sideRow.appendChild(sideCheck);
+    sideRow.appendChild(sideSelect);
+
+    // Side blend weight row
+    const blendRow = document.createElement('div');
+    blendRow.className = 'card-slider';
+    const blendLabel = document.createElement('span');
+    blendLabel.textContent = 'Blend';
+    const blendSlider = document.createElement('input');
+    blendSlider.type = 'range';
+    blendSlider.min = 0;
+    blendSlider.max = 100;
+    blendSlider.value = v.sidePair.weight;
+    const blendVal = document.createElement('span');
+    blendVal.className = 'slider-val';
+    blendVal.textContent = v.sidePair.weight + '%';
+    blendSlider.addEventListener('input', (e) => {
+      e.stopPropagation();
+      v.sidePair.weight = parseInt(e.target.value);
+      blendVal.textContent = v.sidePair.weight + '%';
+    });
+    blendRow.appendChild(blendLabel);
+    blendRow.appendChild(blendSlider);
+    blendRow.appendChild(blendVal);
+
     card.appendChild(header);
     card.appendChild(lightRow);
     card.appendChild(speedRow);
     card.appendChild(contrastRow);
+    card.appendChild(sideRow);
+    card.appendChild(blendRow);
 
     // Click card to select vehicle
     card.addEventListener('click', () => {
