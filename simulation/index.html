@@ -16,87 +16,33 @@
   }
 
   #controls {
-    width: 260px;
-    padding: 20px;
+    width: 280px;
+    padding: 16px;
     background: #16213e;
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     overflow-y: auto;
   }
 
-  #controls h1 {
-    font-size: 18px;
-    color: #e0e0e0;
-    margin-bottom: 4px;
-  }
+  #controls h1 { font-size: 18px; color: #e0e0e0; margin-bottom: 2px; }
 
   #controls h2 {
-    font-size: 13px;
+    font-size: 12px;
     color: #8888aa;
     text-transform: uppercase;
     letter-spacing: 1px;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
   }
-
-  .control-group {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .vehicle-btn {
-    padding: 10px 12px;
-    border: 2px solid #333;
-    border-radius: 8px;
-    background: #1a1a2e;
-    color: #e0e0e0;
-    cursor: pointer;
-    text-align: left;
-    font-size: 13px;
-    transition: all 0.15s;
-  }
-
-  .vehicle-btn:hover {
-    border-color: #555;
-  }
-
-  .vehicle-btn.active {
-    border-color: #4fc3f7;
-    background: #1a2a4e;
-  }
-
-  .vehicle-btn .name {
-    font-weight: bold;
-    font-size: 14px;
-  }
-
-  .vehicle-btn .desc {
-    font-size: 11px;
-    color: #8888aa;
-    margin-top: 2px;
-  }
-
-  .switch-row {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 13px;
-    padding: 6px 0;
-    border-bottom: 1px solid #222;
-  }
-
-  .switch-label { color: #aaa; }
-  .switch-value { color: #4fc3f7; font-weight: bold; font-size: 12px; }
 
   .slider-row {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 3px;
   }
 
   .slider-row label {
-    font-size: 13px;
+    font-size: 12px;
     color: #aaa;
     display: flex;
     justify-content: space-between;
@@ -110,31 +56,142 @@
   }
 
   .btn {
-    padding: 10px;
+    padding: 8px;
     border: none;
-    border-radius: 8px;
+    border-radius: 6px;
     cursor: pointer;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: bold;
     transition: all 0.15s;
   }
 
-  .btn-reset {
-    background: #333;
+  .btn-reset { background: #333; color: #aaa; }
+  .btn-reset:hover { background: #444; }
+  .btn-stop { background: #c62828; color: #fff; }
+  .btn-stop.stopped { background: #2e7d32; color: #fff; }
+
+  .btn-add {
+    background: #1565c0;
+    color: #fff;
+    width: 100%;
+  }
+  .btn-add:hover { background: #1976d2; }
+
+  .btn-row {
+    display: flex;
+    gap: 6px;
+  }
+  .btn-row .btn { flex: 1; }
+
+  /* Vehicle cards */
+  .vehicle-card {
+    background: #1a1a2e;
+    border: 2px solid #333;
+    border-radius: 8px;
+    padding: 8px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+
+  .vehicle-card:hover { border-color: #555; }
+  .vehicle-card.selected { border-color: #4fc3f7; background: #1a2a4e; }
+
+  .card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 6px;
+  }
+
+  .color-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .card-header select {
+    flex: 1;
+    background: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 3px 4px;
+    font-size: 12px;
+    cursor: pointer;
+  }
+
+  .card-delete {
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 16px;
+    cursor: pointer;
+    padding: 0 4px;
+    line-height: 1;
+  }
+  .card-delete:hover { color: #c62828; }
+
+  .card-light {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 11px;
     color: #aaa;
   }
 
-  .btn-stop {
-    background: #c62828;
-    color: #fff;
+  .card-light input[type="checkbox"] {
+    accent-color: #ffd54f;
+    cursor: pointer;
   }
 
-  .btn-stop.stopped {
-    background: #2e7d32;
-    color: #fff;
+  .card-light input[type="range"] {
+    flex: 1;
+    accent-color: #ffd54f;
+    height: 14px;
   }
 
-  .btn-reset:hover { background: #444; }
+  .card-light .light-val {
+    color: #ffd54f;
+    font-weight: bold;
+    width: 30px;
+    text-align: right;
+    font-size: 11px;
+  }
+
+  #vehicle-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  /* Readout */
+  .sensor-readout {
+    display: flex;
+    gap: 8px;
+    font-size: 11px;
+  }
+
+  .sensor-readout div {
+    flex: 1;
+    padding: 4px 6px;
+    background: #1a1a2e;
+    border-radius: 6px;
+    text-align: center;
+  }
+
+  .sensor-readout .label { color: #888; font-size: 9px; }
+  .sensor-readout .value { color: #4fc3f7; font-weight: bold; font-size: 14px; }
+  .motor-l .value { color: #ff8a65; }
+  .motor-r .value { color: #81c784; }
+
+  .readout-vehicle-name {
+    font-size: 11px;
+    color: #666;
+    text-align: center;
+    margin-bottom: 4px;
+  }
 
   #canvas-container {
     flex: 1;
@@ -151,29 +208,10 @@
   }
 
   .info-text {
-    font-size: 11px;
-    color: #666;
-    line-height: 1.5;
+    font-size: 10px;
+    color: #555;
+    line-height: 1.4;
   }
-
-  .sensor-readout {
-    display: flex;
-    gap: 12px;
-    font-size: 12px;
-  }
-
-  .sensor-readout div {
-    flex: 1;
-    padding: 6px 8px;
-    background: #1a1a2e;
-    border-radius: 6px;
-    text-align: center;
-  }
-
-  .sensor-readout .label { color: #888; font-size: 10px; }
-  .sensor-readout .value { color: #4fc3f7; font-weight: bold; font-size: 16px; }
-  .motor-l .value { color: #ff8a65; }
-  .motor-r .value { color: #81c784; }
 
   /* Light intensity popup */
   #intensity-popup {
@@ -197,9 +235,7 @@
 
   #intensity-popup label span { color: #4fc3f7; font-weight: bold; }
 
-  #intensity-popup input[type="range"] {
-    width: 120px;
-  }
+  #intensity-popup input[type="range"] { width: 120px; }
 
   #intensity-popup .popup-delete {
     margin-top: 8px;
@@ -212,7 +248,6 @@
     font-size: 11px;
     width: 100%;
   }
-
   #intensity-popup .popup-delete:hover { background: #e53935; }
 </style>
 </head>
@@ -221,9 +256,11 @@
 <div id="controls">
   <h1>Braitenberg Vehicles</h1>
 
-  <h2>Controls</h2>
-  <button class="btn btn-stop" id="stop-btn">Stop Vehicle</button>
-  <button class="btn btn-reset" id="reset-btn">Reset Vehicle Position</button>
+  <h2>Simulation</h2>
+  <div class="btn-row">
+    <button class="btn btn-stop" id="stop-btn">Stop All</button>
+    <button class="btn btn-reset" id="reset-btn">Reset All</button>
+  </div>
   <div class="slider-row">
     <label>Simulation Speed <span id="speed-value">1x</span></label>
     <input type="range" id="speed-slider" min="1" max="5" value="1">
@@ -233,26 +270,12 @@
     <input type="range" id="contrast-slider" min="0" max="100" value="50">
   </div>
 
-  <h2>Select Vehicle</h2>
-  <div class="control-group" id="vehicle-buttons"></div>
+  <h2>Vehicles</h2>
+  <button class="btn btn-add" id="add-vehicle-btn">+ Add Vehicle</button>
+  <div id="vehicle-list"></div>
 
-  <h2>Switch State</h2>
-  <div id="switch-display">
-    <div class="switch-row">
-      <span class="switch-label">Sensors</span>
-      <span class="switch-value" id="sw-sensors">--</span>
-    </div>
-    <div class="switch-row">
-      <span class="switch-label">Wiring</span>
-      <span class="switch-value" id="sw-wiring">--</span>
-    </div>
-    <div class="switch-row">
-      <span class="switch-label">Polarity</span>
-      <span class="switch-value" id="sw-polarity">--</span>
-    </div>
-  </div>
-
-  <h2>Live Readout</h2>
+  <h2>Selected Vehicle</h2>
+  <div class="readout-vehicle-name" id="readout-name">--</div>
   <div class="sensor-readout">
     <div>
       <div class="label">Left Eye</div>
@@ -263,7 +286,7 @@
       <div class="value" id="sensor-r">0</div>
     </div>
   </div>
-  <div class="sensor-readout" style="margin-top: 6px;">
+  <div class="sensor-readout" style="margin-top: 4px;">
     <div class="motor-l">
       <div class="label">Left Motor</div>
       <div class="value" id="motor-l">0</div>
@@ -274,12 +297,11 @@
     </div>
   </div>
 
-  <h2>Lights</h2>
+  <h2>Static Lights</h2>
   <p class="info-text">
     Double-click canvas to add a light.<br>
-    Click a light to toggle on/off.<br>
-    Drag a light to move it.<br>
-    Right-click a light for intensity/delete.
+    Click light to toggle. Drag to move.<br>
+    Right-click for intensity / delete.
   </p>
 </div>
 
@@ -293,52 +315,94 @@
 </div>
 
 <script>
-// --- Vehicle definitions ---
-const VEHICLES = [
-  { id: 'v1',  name: 'V1 — Getting Around', desc: 'One eye, speeds up near light',
+// --- Vehicle type definitions ---
+const VEHICLE_TYPES = [
+  { id: 'v1',  name: 'V1 — Getting Around', shortName: 'V1 Wander',
     sensors: 1, crossed: false, inhibitory: false },
-  { id: 'v2a', name: 'V2a — Fear', desc: 'Turns away from light, accelerates',
+  { id: 'v2a', name: 'V2a — Fear', shortName: 'V2a Fear',
     sensors: 2, crossed: false, inhibitory: false },
-  { id: 'v2b', name: 'V2b — Aggression', desc: 'Charges toward light',
+  { id: 'v2b', name: 'V2b — Aggression', shortName: 'V2b Aggression',
     sensors: 2, crossed: true, inhibitory: false },
-  { id: 'v3a', name: 'V3a — Love', desc: 'Approaches light, slows to rest facing it',
+  { id: 'v3a', name: 'V3a — Love', shortName: 'V3a Love',
     sensors: 2, crossed: false, inhibitory: true },
-  { id: 'v3b', name: 'V3b — Explorer', desc: 'Approaches light, rests near it facing away',
+  { id: 'v3b', name: 'V3b — Explorer', shortName: 'V3b Explorer',
     sensors: 2, crossed: true, inhibitory: true },
 ];
 
-// --- Light sources ---
-let nextLightId = 1;
-let lights = [];
+// --- Color palette for vehicles ---
+const VEHICLE_COLORS = [
+  { body: '#2a4a7f', stroke: '#4a7abf', r: 100, g: 180, b: 255 },
+  { body: '#7f2a4a', stroke: '#bf4a7a', r: 255, g: 100, b: 180 },
+  { body: '#2a7f4a', stroke: '#4abf7a', r: 100, g: 255, b: 180 },
+  { body: '#7f6a2a', stroke: '#bfa04a', r: 255, g: 220, b: 100 },
+  { body: '#5a2a7f', stroke: '#8a4abf', r: 180, g: 100, b: 255 },
+  { body: '#2a6a7f', stroke: '#4aafbf', r: 100, g: 220, b: 255 },
+  { body: '#7f4a2a', stroke: '#bf7a4a', r: 255, g: 160, b: 100 },
+  { body: '#4a7f2a', stroke: '#7abf4a', r: 180, g: 255, b: 100 },
+];
 
-function createLight(x, y) {
+// --- Static light sources ---
+let nextLightId = 1;
+let staticLights = [];
+
+function createStaticLight(x, y) {
   const light = { id: nextLightId++, x, y, on: true, intensity: 75 };
-  lights.push(light);
+  staticLights.push(light);
   return light;
 }
 
-function lightAt(x, y) {
+function staticLightAt(x, y) {
   const GRAB_RADIUS = 18;
-  for (let i = lights.length - 1; i >= 0; i--) {
-    const l = lights[i];
+  for (let i = staticLights.length - 1; i >= 0; i--) {
+    const l = staticLights[i];
     const dx = x - l.x, dy = y - l.y;
     if (dx * dx + dy * dy < GRAB_RADIUS * GRAB_RADIUS) return l;
   }
   return null;
 }
 
-// --- State ---
-let state = {
-  vehicle: VEHICLES[0],
-  x: 0, y: 0, theta: 0,
-  simSpeed: 1,
-  speedContrast: 50,
-  stopped: false,
-  trail: [],
-  leftSpeed: 0,
-  rightSpeed: 0,
-  wheelRotation: 0,
-};
+// --- Vehicle instances ---
+let nextVehicleId = 1;
+let vehicles = [];
+let selectedVehicleId = null;
+let colorIndex = 0;
+
+function createVehicle(typeIndex) {
+  const color = VEHICLE_COLORS[colorIndex % VEHICLE_COLORS.length];
+  colorIndex++;
+  const v = {
+    id: nextVehicleId++,
+    typeIndex: typeIndex || 0,
+    x: 100 + Math.random() * (canvas.width - 200),
+    y: 100 + Math.random() * (canvas.height - 200),
+    theta: Math.random() * Math.PI * 2,
+    trail: [],
+    leftSpeed: 0,
+    rightSpeed: 0,
+    wheelRotation: 0,
+    color: color,
+    light: { on: false, intensity: 50 },
+  };
+  vehicles.push(v);
+  if (!selectedVehicleId) selectedVehicleId = v.id;
+  return v;
+}
+
+function removeVehicle(id) {
+  vehicles = vehicles.filter(v => v.id !== id);
+  if (selectedVehicleId === id) {
+    selectedVehicleId = vehicles.length > 0 ? vehicles[0].id : null;
+  }
+}
+
+function getVehicleType(v) {
+  return VEHICLE_TYPES[v.typeIndex];
+}
+
+// --- Global state ---
+let simSpeed = 1;
+let speedContrast = 50;
+let stopped = false;
 
 // --- Canvas setup ---
 const canvas = document.getElementById('canvas');
@@ -359,36 +423,24 @@ const SENSOR_SPREAD = 18;
 const SENSOR_FORWARD = 30;
 const WHEEL_BASE = VEHICLE_WIDTH;
 
-// --- Initialize ---
-function resetVehicle() {
-  state.x = canvas.width * 0.3;
-  state.y = canvas.height * 0.7;
-  state.theta = -Math.PI / 4;
-  state.trail = [];
-}
-
-function initLights() {
-  lights = [];
-  createLight(canvas.width * 0.65, canvas.height * 0.35);
-}
-
 // --- Sensor calculation ---
-function getSensorPositions() {
-  const cosT = Math.cos(state.theta);
-  const sinT = Math.sin(state.theta);
-  const leftX = state.x + cosT * SENSOR_FORWARD + sinT * SENSOR_SPREAD;
-  const leftY = state.y + sinT * SENSOR_FORWARD - cosT * SENSOR_SPREAD;
-  const rightX = state.x + cosT * SENSOR_FORWARD - sinT * SENSOR_SPREAD;
-  const rightY = state.y + sinT * SENSOR_FORWARD + cosT * SENSOR_SPREAD;
-  return { leftX, leftY, rightX, rightY };
+function getSensorPositions(v) {
+  const cosT = Math.cos(v.theta);
+  const sinT = Math.sin(v.theta);
+  return {
+    leftX:  v.x + cosT * SENSOR_FORWARD + sinT * SENSOR_SPREAD,
+    leftY:  v.y + sinT * SENSOR_FORWARD - cosT * SENSOR_SPREAD,
+    rightX: v.x + cosT * SENSOR_FORWARD - sinT * SENSOR_SPREAD,
+    rightY: v.y + sinT * SENSOR_FORWARD + cosT * SENSOR_SPREAD,
+  };
 }
 
-// Combined intensity from all lights at a point
-// Sum raw (unsaturated) contributions, then apply soft saturation once
-// This lets a single light reach ~1.0 at close range (so inhibitory vehicles can stop)
-function totalIntensityAt(px, py) {
+// Combined intensity from all light sources at a point, excluding a specific vehicle's own light
+function totalIntensityAt(px, py, excludeVehicleId) {
   let sum = 0;
-  for (const light of lights) {
+
+  // Static lights
+  for (const light of staticLights) {
     if (!light.on) continue;
     const dx = px - light.x;
     const dy = py - light.y;
@@ -397,39 +449,36 @@ function totalIntensityAt(px, py) {
     const effectiveDist = Math.max(distSq, minDist * minDist);
     sum += (light.intensity / 75) * 80000 / effectiveDist;
   }
+
+  // Vehicle-mounted lights (exclude self)
+  for (const v of vehicles) {
+    if (v.id === excludeVehicleId) continue;
+    if (!v.light.on) continue;
+    const dx = px - v.x;
+    const dy = py - v.y;
+    const distSq = dx * dx + dy * dy;
+    const minDist = 20;
+    const effectiveDist = Math.max(distSq, minDist * minDist);
+    sum += (v.light.intensity / 75) * 80000 / effectiveDist;
+  }
+
   return sum / (1 + sum);
 }
 
-function sensorReading(sensorX, sensorY) {
-  return totalIntensityAt(sensorX, sensorY);
-}
+// --- Physics step for one vehicle ---
+function stepVehicle(v, dt) {
+  const sensors = getSensorPositions(v);
+  const rawLeft = totalIntensityAt(sensors.leftX, sensors.leftY, v.id);
+  const rawRight = totalIntensityAt(sensors.rightX, sensors.rightY, v.id);
 
-// Intensity from a single light (for drawing gradient)
-function singleLightIntensity(light, px, py) {
-  if (!light.on) return 0;
-  const dx = px - light.x;
-  const dy = py - light.y;
-  const distSq = dx * dx + dy * dy;
-  const minDist = 20;
-  const effectiveDist = Math.max(distSq, minDist * minDist);
-  const raw = (light.intensity / 75) * 80000 / effectiveDist;
-  return raw / (1 + raw);
-}
-
-// --- Physics step ---
-function step(dt) {
-  const sensors = getSensorPositions();
-  let rawLeft = sensorReading(sensors.leftX, sensors.leftY);
-  let rawRight = sensorReading(sensors.rightX, sensors.rightY);
-
-  const v = state.vehicle;
+  const type = getVehicleType(v);
   let leftInput, rightInput;
 
-  if (v.sensors === 1) {
+  if (type.sensors === 1) {
     const combined = (rawLeft + rawRight) / 2;
     leftInput = combined;
     rightInput = combined;
-  } else if (v.crossed) {
+  } else if (type.crossed) {
     leftInput = rawRight;
     rightInput = rawLeft;
   } else {
@@ -439,7 +488,7 @@ function step(dt) {
 
   let leftSpeed, rightSpeed;
 
-  if (v.inhibitory) {
+  if (type.inhibitory) {
     leftSpeed = 1 - leftInput;
     rightSpeed = 1 - rightInput;
   } else {
@@ -448,51 +497,55 @@ function step(dt) {
     rightSpeed = baseSpeed + (1 - baseSpeed) * rightInput;
   }
 
-  state.leftSpeed = leftSpeed;
-  state.rightSpeed = rightSpeed;
-  state.wheelRotation += (leftSpeed + rightSpeed) / 2 * dt * 10;
+  v.leftSpeed = leftSpeed;
+  v.rightSpeed = rightSpeed;
+  v.wheelRotation += (leftSpeed + rightSpeed) / 2 * dt * 10;
 
   const maxPixelsPerSec = 180;
-  const exp = 1 + (state.speedContrast / 50);
+  const exp = 1 + (speedContrast / 50);
   const vl = Math.pow(leftSpeed, exp) * maxPixelsPerSec;
   const vr = Math.pow(rightSpeed, exp) * maxPixelsPerSec;
 
   const linearV = (vl + vr) / 2;
   const angularV = (vl - vr) / WHEEL_BASE;
 
-  state.x += linearV * Math.cos(state.theta) * dt;
-  state.y += linearV * Math.sin(state.theta) * dt;
-  state.theta += angularV * dt;
+  v.x += linearV * Math.cos(v.theta) * dt;
+  v.y += linearV * Math.sin(v.theta) * dt;
+  v.theta += angularV * dt;
 
-  // Bounce off walls like a ball reflecting off a surface
+  // Bounce off walls
   const margin = VEHICLE_LENGTH / 2;
-  if (state.x < margin) {
-    state.x = margin;
-    state.theta = Math.PI - state.theta;
-  } else if (state.x > canvas.width - margin) {
-    state.x = canvas.width - margin;
-    state.theta = Math.PI - state.theta;
+  if (v.x < margin) {
+    v.x = margin;
+    v.theta = Math.PI - v.theta;
+  } else if (v.x > canvas.width - margin) {
+    v.x = canvas.width - margin;
+    v.theta = Math.PI - v.theta;
   }
-  if (state.y < margin) {
-    state.y = margin;
-    state.theta = -state.theta;
-  } else if (state.y > canvas.height - margin) {
-    state.y = canvas.height - margin;
-    state.theta = -state.theta;
+  if (v.y < margin) {
+    v.y = margin;
+    v.theta = -v.theta;
+  } else if (v.y > canvas.height - margin) {
+    v.y = canvas.height - margin;
+    v.theta = -v.theta;
   }
 
-  state.trail.push({ x: state.x, y: state.y });
-  if (state.trail.length > 500) state.trail.shift();
+  v.trail.push({ x: v.x, y: v.y });
+  if (v.trail.length > 500) v.trail.shift();
 
-  document.getElementById('sensor-l').textContent = (rawLeft * 100).toFixed(0);
-  document.getElementById('sensor-r').textContent = (rawRight * 100).toFixed(0);
-  document.getElementById('motor-l').textContent = (leftSpeed * 100).toFixed(0);
-  document.getElementById('motor-r').textContent = (rightSpeed * 100).toFixed(0);
+  // Update readout for selected vehicle
+  if (v.id === selectedVehicleId) {
+    document.getElementById('sensor-l').textContent = (rawLeft * 100).toFixed(0);
+    document.getElementById('sensor-r').textContent = (rawRight * 100).toFixed(0);
+    document.getElementById('motor-l').textContent = (leftSpeed * 100).toFixed(0);
+    document.getElementById('motor-r').textContent = (rightSpeed * 100).toFixed(0);
+  }
 }
 
 // --- Drawing ---
 function drawLightGradients() {
-  for (const light of lights) {
+  // Static lights
+  for (const light of staticLights) {
     const radius = 250 * (light.intensity / 75);
     const alpha = light.on ? 0.15 : 0.03;
     const grad = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, radius);
@@ -501,10 +554,20 @@ function drawLightGradients() {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
+  // Vehicle-mounted lights
+  for (const v of vehicles) {
+    if (!v.light.on) continue;
+    const radius = 200 * (v.light.intensity / 75);
+    const grad = ctx.createRadialGradient(v.x, v.y, 0, v.x, v.y, radius);
+    grad.addColorStop(0, 'rgba(255, 235, 100, 0.1)');
+    grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
 }
 
-function drawLights() {
-  for (const light of lights) {
+function drawStaticLights() {
+  for (const light of staticLights) {
     const glowRadius = light.on ? 16 : 8;
     const color = light.on ? '#ffd54f' : '#555';
 
@@ -537,39 +600,62 @@ function drawLights() {
   }
 }
 
-function drawTrail() {
-  if (state.trail.length < 2) return;
+function drawTrail(v) {
+  if (v.trail.length < 2) return;
+  const c = v.color;
   ctx.lineWidth = 1.5;
-  for (let i = 1; i < state.trail.length; i++) {
-    const alpha = i / state.trail.length * 0.4;
-    ctx.strokeStyle = `rgba(100, 180, 255, ${alpha})`;
+  for (let i = 1; i < v.trail.length; i++) {
+    const alpha = i / v.trail.length * 0.4;
+    ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
     ctx.beginPath();
-    ctx.moveTo(state.trail[i - 1].x, state.trail[i - 1].y);
-    ctx.lineTo(state.trail[i].x, state.trail[i].y);
+    ctx.moveTo(v.trail[i - 1].x, v.trail[i - 1].y);
+    ctx.lineTo(v.trail[i].x, v.trail[i].y);
     ctx.stroke();
   }
 }
 
-function drawVehicle() {
-  ctx.save();
-  ctx.translate(state.x, state.y);
-  ctx.rotate(state.theta);
+function drawVehicle(v) {
+  const type = getVehicleType(v);
+  const isSelected = v.id === selectedVehicleId;
 
-  ctx.fillStyle = '#2a4a7f';
-  ctx.strokeStyle = '#4a7abf';
-  ctx.lineWidth = 2;
+  ctx.save();
+  ctx.translate(v.x, v.y);
+  ctx.rotate(v.theta);
+
+  // Body
+  ctx.fillStyle = v.color.body;
+  ctx.strokeStyle = isSelected ? '#fff' : v.color.stroke;
+  ctx.lineWidth = isSelected ? 3 : 2;
   ctx.beginPath();
   ctx.roundRect(-VEHICLE_LENGTH / 2, -VEHICLE_WIDTH / 2, VEHICLE_LENGTH, VEHICLE_WIDTH, 4);
   ctx.fill();
   ctx.stroke();
 
-  ctx.fillStyle = '#4a7abf';
+  // Direction arrow
+  ctx.fillStyle = v.color.stroke;
   ctx.beginPath();
   ctx.moveTo(VEHICLE_LENGTH / 2, -6);
   ctx.lineTo(VEHICLE_LENGTH / 2 + 10, 0);
   ctx.lineTo(VEHICLE_LENGTH / 2, 6);
   ctx.fill();
 
+  // Mounted light indicator
+  if (v.light.on) {
+    const glow = ctx.createRadialGradient(0, 0, 0, 0, 0, 16);
+    glow.addColorStop(0, `rgba(255, 213, 79, ${0.2 + 0.3 * v.light.intensity / 100})`);
+    glow.addColorStop(1, 'rgba(255, 213, 79, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(0, 0, 16, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = '#ffd54f';
+    ctx.beginPath();
+    ctx.arc(0, 0, 4, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Wheels
   const wheelW = VEHICLE_LENGTH / 2.2;
   const wheelH = 8;
   const wheelXPos = -VEHICLE_LENGTH / 3;
@@ -581,56 +667,48 @@ function drawVehicle() {
     return `rgb(${r}, ${g}, ${b})`;
   }
 
+  const tickCount = 4;
+
+  // Left wheel
   const leftWheelY = -VEHICLE_WIDTH / 2 - wheelH;
-  ctx.fillStyle = wheelColor(state.leftSpeed);
+  ctx.fillStyle = wheelColor(v.leftSpeed);
   ctx.strokeStyle = '#888';
   ctx.lineWidth = 1;
   ctx.fillRect(wheelXPos, leftWheelY, wheelW, wheelH);
   ctx.strokeRect(wheelXPos, leftWheelY, wheelW, wheelH);
-
-  const tickCount = 4;
-  const leftRotOffset = state.wheelRotation * state.leftSpeed;
+  const leftRotOffset = v.wheelRotation * v.leftSpeed;
   ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-  ctx.lineWidth = 1;
   for (let i = 0; i < tickCount; i++) {
     const t = ((i / tickCount) + leftRotOffset) % 1;
     const tx = wheelXPos + t * wheelW;
-    ctx.beginPath();
-    ctx.moveTo(tx, leftWheelY);
-    ctx.lineTo(tx, leftWheelY + wheelH);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tx, leftWheelY); ctx.lineTo(tx, leftWheelY + wheelH); ctx.stroke();
   }
 
+  // Right wheel
   const rightWheelY = VEHICLE_WIDTH / 2;
-  ctx.fillStyle = wheelColor(state.rightSpeed);
+  ctx.fillStyle = wheelColor(v.rightSpeed);
   ctx.strokeStyle = '#888';
   ctx.fillRect(wheelXPos, rightWheelY, wheelW, wheelH);
   ctx.strokeRect(wheelXPos, rightWheelY, wheelW, wheelH);
-
-  const rightRotOffset = state.wheelRotation * state.rightSpeed;
+  const rightRotOffset = v.wheelRotation * v.rightSpeed;
   ctx.strokeStyle = 'rgba(255,255,255,0.4)';
-  ctx.lineWidth = 1;
   for (let i = 0; i < tickCount; i++) {
     const t = ((i / tickCount) + rightRotOffset) % 1;
     const tx = wheelXPos + t * wheelW;
-    ctx.beginPath();
-    ctx.moveTo(tx, rightWheelY);
-    ctx.lineTo(tx, rightWheelY + wheelH);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(tx, rightWheelY); ctx.lineTo(tx, rightWheelY + wheelH); ctx.stroke();
   }
 
-  // Sensor and wiring visualization
-  const sensorsPos = getSensorPositions();
-  const leftReading = sensorReading(sensorsPos.leftX, sensorsPos.leftY);
-  const rightReading = sensorReading(sensorsPos.rightX, sensorsPos.rightY);
+  // Sensors and wiring
+  const sensors = getSensorPositions(v);
+  const leftReading = totalIntensityAt(sensors.leftX, sensors.leftY, v.id);
+  const rightReading = totalIntensityAt(sensors.rightX, sensors.rightY, v.id);
   const avgReading = (leftReading + rightReading) / 2;
 
   const wheelY_left = -VEHICLE_WIDTH / 2 - 2;
   const wheelY_right = VEHICLE_WIDTH / 2 + 2;
   const wheelX = -VEHICLE_LENGTH / 4;
-  const wiringConfig = state.vehicle;
 
-  if (wiringConfig.sensors === 1) {
+  if (type.sensors === 1) {
     const bright = 0.3 + 0.7 * avgReading;
     ctx.fillStyle = `rgba(255, 255, 255, ${bright})`;
     ctx.beginPath();
@@ -675,7 +753,7 @@ function drawVehicle() {
     ctx.setLineDash([4, 3]);
     ctx.strokeStyle = 'rgba(255, 200, 100, 0.5)';
 
-    if (wiringConfig.crossed) {
+    if (type.crossed) {
       ctx.beginPath();
       ctx.moveTo(SENSOR_FORWARD, -SENSOR_SPREAD);
       ctx.lineTo(wheelX, wheelY_right);
@@ -717,9 +795,9 @@ function draw() {
   }
 
   drawLightGradients();
-  drawTrail();
-  drawLights();
-  drawVehicle();
+  for (const v of vehicles) drawTrail(v);
+  drawStaticLights();
+  for (const v of vehicles) drawVehicle(v);
 }
 
 // --- Game loop ---
@@ -728,69 +806,160 @@ function loop(timestamp) {
   if (!lastTime) lastTime = timestamp;
   const rawDt = (timestamp - lastTime) / 1000;
   lastTime = timestamp;
-  const dt = Math.min(rawDt, 0.05) * state.simSpeed;
-  if (!state.stopped) step(dt);
+  const dt = Math.min(rawDt, 0.05) * simSpeed;
+  if (!stopped) {
+    for (const v of vehicles) stepVehicle(v, dt);
+  }
   draw();
   requestAnimationFrame(loop);
 }
 
-// --- UI ---
-function buildUI() {
-  const container = document.getElementById('vehicle-buttons');
-  VEHICLES.forEach((v, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'vehicle-btn' + (i === 0 ? ' active' : '');
-    btn.innerHTML = `<div class="name">${v.name}</div><div class="desc">${v.desc}</div>`;
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('.vehicle-btn').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-      state.vehicle = v;
-      updateSwitchDisplay();
+// --- UI: Vehicle list ---
+function buildVehicleCards() {
+  const container = document.getElementById('vehicle-list');
+  container.innerHTML = '';
+
+  for (const v of vehicles) {
+    const card = document.createElement('div');
+    card.className = 'vehicle-card' + (v.id === selectedVehicleId ? ' selected' : '');
+    card.dataset.vehicleId = v.id;
+
+    // Header row: color dot + type select + delete
+    const header = document.createElement('div');
+    header.className = 'card-header';
+
+    const dot = document.createElement('span');
+    dot.className = 'color-dot';
+    dot.style.background = v.color.stroke;
+
+    const select = document.createElement('select');
+    VEHICLE_TYPES.forEach((type, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = type.shortName;
+      if (i === v.typeIndex) opt.selected = true;
+      select.appendChild(opt);
     });
-    container.appendChild(btn);
-  });
+    select.addEventListener('change', (e) => {
+      e.stopPropagation();
+      v.typeIndex = parseInt(e.target.value);
+      updateReadoutName();
+    });
+
+    const del = document.createElement('button');
+    del.className = 'card-delete';
+    del.textContent = '\u00d7';
+    del.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removeVehicle(v.id);
+      buildVehicleCards();
+      updateReadoutName();
+    });
+
+    header.appendChild(dot);
+    header.appendChild(select);
+    header.appendChild(del);
+
+    // Light row: checkbox + slider + value
+    const lightRow = document.createElement('div');
+    lightRow.className = 'card-light';
+
+    const lightLabel = document.createElement('span');
+    lightLabel.textContent = 'Light';
+
+    const lightCheck = document.createElement('input');
+    lightCheck.type = 'checkbox';
+    lightCheck.checked = v.light.on;
+    lightCheck.addEventListener('change', (e) => {
+      e.stopPropagation();
+      v.light.on = e.target.checked;
+    });
+
+    const lightSlider = document.createElement('input');
+    lightSlider.type = 'range';
+    lightSlider.min = 10;
+    lightSlider.max = 100;
+    lightSlider.value = v.light.intensity;
+    lightSlider.addEventListener('input', (e) => {
+      e.stopPropagation();
+      v.light.intensity = parseInt(e.target.value);
+      lightVal.textContent = v.light.intensity + '%';
+    });
+
+    const lightVal = document.createElement('span');
+    lightVal.className = 'light-val';
+    lightVal.textContent = v.light.intensity + '%';
+
+    lightRow.appendChild(lightLabel);
+    lightRow.appendChild(lightCheck);
+    lightRow.appendChild(lightSlider);
+    lightRow.appendChild(lightVal);
+
+    card.appendChild(header);
+    card.appendChild(lightRow);
+
+    // Click card to select vehicle
+    card.addEventListener('click', () => {
+      selectedVehicleId = v.id;
+      document.querySelectorAll('.vehicle-card').forEach(c => c.classList.remove('selected'));
+      card.classList.add('selected');
+      updateReadoutName();
+    });
+
+    container.appendChild(card);
+  }
 }
 
-function updateSwitchDisplay() {
-  const v = state.vehicle;
-  document.getElementById('sw-sensors').textContent =
-    v.sensors === 1 ? 'ONE EYE' : 'TWO EYES';
-  document.getElementById('sw-wiring').textContent =
-    v.sensors === 1 ? '(n/a)' : (v.crossed ? 'CRISS-CROSS' : 'STRAIGHT');
-  document.getElementById('sw-polarity').textContent =
-    v.inhibitory ? 'SLOW DOWN' : 'SPEED UP';
+function updateReadoutName() {
+  const el = document.getElementById('readout-name');
+  const v = vehicles.find(v => v.id === selectedVehicleId);
+  if (v) {
+    const type = getVehicleType(v);
+    el.textContent = type.shortName;
+    el.style.color = v.color.stroke;
+  } else {
+    el.textContent = '--';
+    el.style.color = '#666';
+  }
 }
 
-// Speed slider
+// --- UI: Controls ---
 document.getElementById('speed-slider').addEventListener('input', (e) => {
-  state.simSpeed = parseInt(e.target.value);
-  document.getElementById('speed-value').textContent = state.simSpeed + 'x';
+  simSpeed = parseInt(e.target.value);
+  document.getElementById('speed-value').textContent = simSpeed + 'x';
 });
 
-// Contrast slider
 document.getElementById('contrast-slider').addEventListener('input', (e) => {
-  state.speedContrast = parseInt(e.target.value);
-  document.getElementById('contrast-value').textContent = state.speedContrast + '%';
+  speedContrast = parseInt(e.target.value);
+  document.getElementById('contrast-value').textContent = speedContrast + '%';
 });
 
-// Stop/Start button
 document.getElementById('stop-btn').addEventListener('click', () => {
-  state.stopped = !state.stopped;
+  stopped = !stopped;
   const btn = document.getElementById('stop-btn');
-  btn.textContent = state.stopped ? 'Start Vehicle' : 'Stop Vehicle';
-  btn.className = 'btn ' + (state.stopped ? 'btn-stop stopped' : 'btn-stop');
+  btn.textContent = stopped ? 'Start All' : 'Stop All';
+  btn.className = 'btn ' + (stopped ? 'btn-stop stopped' : 'btn-stop');
 });
 
-// Reset button
 document.getElementById('reset-btn').addEventListener('click', () => {
-  resetVehicle();
+  for (const v of vehicles) {
+    v.x = 100 + Math.random() * (canvas.width - 200);
+    v.y = 100 + Math.random() * (canvas.height - 200);
+    v.theta = Math.random() * Math.PI * 2;
+    v.trail = [];
+  }
 });
 
-// --- Canvas interaction: lights ---
-let dragging = null;       // light being dragged
-let dragStarted = false;   // did mouse actually move (distinguish click from drag)
-let mouseDownPos = null;   // position at mousedown
-let mouseDownTime = 0;
+document.getElementById('add-vehicle-btn').addEventListener('click', () => {
+  createVehicle(0);
+  buildVehicleCards();
+  updateReadoutName();
+});
+
+// --- Canvas interaction: static lights ---
+let dragging = null;
+let dragStarted = false;
+let mouseDownPos = null;
 
 const popup = document.getElementById('intensity-popup');
 const popupSlider = document.getElementById('popup-intensity-slider');
@@ -809,12 +978,11 @@ function closePopup() {
 }
 
 canvas.addEventListener('mousedown', (e) => {
-  if (e.button !== 0) return; // only left button
+  if (e.button !== 0) return;
   closePopup();
   const pos = canvasCoords(e);
   mouseDownPos = pos;
-  mouseDownTime = Date.now();
-  const hit = lightAt(pos.x, pos.y);
+  const hit = staticLightAt(pos.x, pos.y);
   if (hit) {
     dragging = hit;
     dragStarted = false;
@@ -826,9 +994,7 @@ canvas.addEventListener('mousemove', (e) => {
   const pos = canvasCoords(e);
   const dx = pos.x - mouseDownPos.x;
   const dy = pos.y - mouseDownPos.y;
-  if (!dragStarted && (dx * dx + dy * dy > 9)) {
-    dragStarted = true;
-  }
+  if (!dragStarted && (dx * dx + dy * dy > 9)) dragStarted = true;
   if (dragStarted) {
     dragging.x = pos.x;
     dragging.y = pos.y;
@@ -838,33 +1004,27 @@ canvas.addEventListener('mousemove', (e) => {
 canvas.addEventListener('mouseup', (e) => {
   if (e.button !== 0) return;
   if (dragging && !dragStarted) {
-    // Click (no drag) on a light → toggle on/off
     dragging.on = !dragging.on;
   }
   dragging = null;
   dragStarted = false;
 });
 
-// Double-click on empty space → add new light
 canvas.addEventListener('dblclick', (e) => {
   const pos = canvasCoords(e);
-  const hit = lightAt(pos.x, pos.y);
-  if (!hit) {
-    createLight(pos.x, pos.y);
+  if (!staticLightAt(pos.x, pos.y)) {
+    createStaticLight(pos.x, pos.y);
   }
 });
 
-// Right-click on light → intensity popup
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
   const pos = canvasCoords(e);
-  const hit = lightAt(pos.x, pos.y);
+  const hit = staticLightAt(pos.x, pos.y);
   if (hit) {
     popupLight = hit;
     popupSlider.value = hit.intensity;
     popupValue.textContent = hit.intensity + '%';
-
-    // Position popup near the light
     const rect = canvas.getBoundingClientRect();
     const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
     popup.style.left = (rect.left - containerRect.left + pos.x + 20) + 'px';
@@ -883,22 +1043,25 @@ popupSlider.addEventListener('input', () => {
 
 popupDeleteBtn.addEventListener('click', () => {
   if (!popupLight) return;
-  lights = lights.filter(l => l !== popupLight);
+  staticLights = staticLights.filter(l => l !== popupLight);
   closePopup();
 });
 
-// Close popup when clicking elsewhere
 document.addEventListener('mousedown', (e) => {
-  if (!popup.contains(e.target) && e.target !== canvas) {
-    closePopup();
-  }
+  if (!popup.contains(e.target) && e.target !== canvas) closePopup();
 });
 
 // --- Init ---
-buildUI();
-updateSwitchDisplay();
-resetVehicle();
-initLights();
+createStaticLight(canvas.width * 0.65, canvas.height * 0.35);
+
+// Create one default vehicle (V2b Aggression)
+const defaultV = createVehicle(2);
+defaultV.x = canvas.width * 0.3;
+defaultV.y = canvas.height * 0.7;
+defaultV.theta = -Math.PI / 4;
+
+buildVehicleCards();
+updateReadoutName();
 requestAnimationFrame(loop);
 </script>
 </body>
