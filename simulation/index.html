@@ -349,64 +349,31 @@ function lightIntensityAt(px, py) {
   const minDist = 20;
   const effectiveDist = Math.max(distSq, minDist * minDist);
 
-  // Inverse square law, scaled by intensity
+  // Inverse square law, scaled by intensity.
+  // Soft saturation (raw / (1+raw)) instead of hard clamp to 1.0.
+  // This preserves the proportional difference between left and right
+  // sensors even at close range, which is essential for V3b Explorer:
+  // with hard clamp, both sensors hit 1.0 and the differential vanishes.
   const raw = (state.lightIntensity / 75) * 80000 / effectiveDist;
-  return Math.min(raw, 1.0);
+  return raw / (1 + raw);
 }
 
-// Directional sensor reading: base intensity from distance (omnidirectional)
-// plus a small additive correction that biases each sensor toward its own side.
-//
-// The additive approach is critical: it means the base reading (which determines
-// how much V3a/V3b slow down near light) is unaffected by orientation. Only
-// the L/R differential gets a small nudge — enough for V3b to not fully stop
-// (unlike V3a), without causing speed jumps when the vehicle turns away.
-//
-// sensorSide: -1 for left sensor, +1 for right sensor
-function directionalLightReading(sensorX, sensorY, sensorSide) {
-  if (!state.lightOn || !state.lightPlaced) return 0;
-
-  // Base intensity from distance alone (omnidirectional)
-  const base = lightIntensityAt(sensorX, sensorY);
-
-  // Direction from sensor to light
-  const dx = state.lightX - sensorX;
-  const dy = state.lightY - sensorY;
-  const dist = Math.sqrt(dx * dx + dy * dy);
-  if (dist < 1) return base;
-
-  // Vehicle's left perpendicular in y-down canvas: (sinT, -cosT)
-  const perpX = Math.sin(state.theta);
-  const perpY = -Math.cos(state.theta);
-
-  // How much the light is on this sensor's side:
-  // Dot product of (light direction) with (left perpendicular)
-  // Positive when light is to the left
-  const lightDirX = dx / dist;
-  const lightDirY = dy / dist;
-  const leftDot = perpX * lightDirX + perpY * lightDirY;
-
-  // For left sensor (sensorSide=-1): positive when light is left → +leftDot
-  // For right sensor (sensorSide=+1): positive when light is right → -leftDot
-  const sideComponent = -sensorSide * leftDot;
-
-  // Small additive correction, stronger when close to the light.
-  // This creates just enough differential for V3b's crossed wiring to
-  // prevent full stop, while keeping the base speed (from distance) intact.
-  const correctionStrength = 0.06;
-  const proximityScale = Math.min(1, base * 2);
-  const correction = sideComponent * correctionStrength * proximityScale;
-
-  return Math.max(0, Math.min(1, base + correction));
+// Sensor reading at a given position. With soft saturation in lightIntensityAt,
+// the natural distance-based differential between left and right sensors is
+// preserved even at close range — no artificial directional bias needed.
+// The physical separation of the sensors (SENSOR_SPREAD) provides the
+// differential that distinguishes V3a from V3b at close range.
+function sensorReading(sensorX, sensorY) {
+  return lightIntensityAt(sensorX, sensorY);
 }
 
 // --- Physics step ---
 function step(dt) {
   const sensors = getSensorPositions();
 
-  // Read light intensity at each sensor (directional)
-  let rawLeft = directionalLightReading(sensors.leftX, sensors.leftY, -1);
-  let rawRight = directionalLightReading(sensors.rightX, sensors.rightY, +1);
+  // Read light intensity at each sensor
+  let rawLeft = sensorReading(sensors.leftX, sensors.leftY);
+  let rawRight = sensorReading(sensors.rightX, sensors.rightY);
 
   const v = state.vehicle;
 
@@ -638,8 +605,8 @@ function drawVehicle() {
 
   // Sensor and wiring visualization
   const sensorsPos = getSensorPositions();
-  const leftReading = directionalLightReading(sensorsPos.leftX, sensorsPos.leftY, -1);
-  const rightReading = directionalLightReading(sensorsPos.rightX, sensorsPos.rightY, +1);
+  const leftReading = sensorReading(sensorsPos.leftX, sensorsPos.leftY);
+  const rightReading = sensorReading(sensorsPos.rightX, sensorsPos.rightY);
   const avgReading = (leftReading + rightReading) / 2;
 
   // Wheel positions for wiring lines
