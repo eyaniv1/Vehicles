@@ -380,8 +380,11 @@ function directionalLightReading(sensorX, sensorY, sensorSide) {
   // In y-down canvas: left perpendicular is (sinT, -cosT)
   const perpX = Math.sin(state.theta);
   const perpY = -Math.cos(state.theta);
-  const sensorDirX = fwdX + sensorSide * perpX * 0.5;
-  const sensorDirY = fwdY + sensorSide * perpY * 0.5;
+  // perp points LEFT in y-down canvas, so negate sensorSide:
+  // left sensor (sensorSide=-1) → subtract LEFT perp → bias LEFT ✓
+  // right sensor (sensorSide=+1) → add LEFT perp inverted → bias RIGHT ✓
+  const sensorDirX = fwdX - sensorSide * perpX * 0.5;
+  const sensorDirY = fwdY - sensorSide * perpY * 0.5;
   const sdLen = Math.sqrt(sensorDirX * sensorDirX + sensorDirY * sensorDirY);
 
   // Cosine of angle between sensor direction and light direction
