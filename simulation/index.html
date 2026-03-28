@@ -70,6 +70,15 @@
   .btn-stop { background: #c62828; color: #fff; }
   .btn-stop.stopped { background: #2e7d32; color: #fff; }
 
+  .btn-record { background: #b71c1c; color: #fff; width: 100%; }
+  .btn-record:hover { background: #c62828; }
+  .btn-record.recording { background: #d32f2f; animation: pulse-record 1s infinite; }
+
+  @keyframes pulse-record {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+  }
+
   .btn-add {
     background: #1565c0;
     color: #fff;
@@ -290,6 +299,7 @@
     <button class="btn btn-stop" id="stop-btn">Stop All</button>
     <button class="btn btn-reset" id="reset-btn">Reset All</button>
   </div>
+  <button class="btn btn-record" id="record-btn">Record Video</button>
 
   <h2>Vehicles</h2>
   <button class="btn btn-add" id="add-vehicle-btn">+ Add Vehicle</button>
@@ -1284,6 +1294,43 @@ popupDeleteBtn.addEventListener('click', () => {
 
 document.addEventListener('mousedown', (e) => {
   if (!popup.contains(e.target) && e.target !== canvas) closePopup();
+});
+
+// --- Video recording ---
+let mediaRecorder = null;
+let recordedChunks = [];
+
+document.getElementById('record-btn').addEventListener('click', () => {
+  const btn = document.getElementById('record-btn');
+
+  if (mediaRecorder && mediaRecorder.state === 'recording') {
+    mediaRecorder.stop();
+    return;
+  }
+
+  recordedChunks = [];
+  const stream = canvas.captureStream(30);
+  mediaRecorder = new MediaRecorder(stream, { mimeType: 'video/webm; codecs=vp9' });
+
+  mediaRecorder.ondataavailable = (e) => {
+    if (e.data.size > 0) recordedChunks.push(e.data);
+  };
+
+  mediaRecorder.onstop = () => {
+    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'braitenberg-' + new Date().toISOString().slice(0, 19).replace(/[T:]/g, '-') + '.webm';
+    a.click();
+    URL.revokeObjectURL(url);
+    btn.textContent = 'Record Video';
+    btn.classList.remove('recording');
+  };
+
+  mediaRecorder.start();
+  btn.textContent = 'Stop Recording';
+  btn.classList.add('recording');
 });
 
 // --- Init ---
