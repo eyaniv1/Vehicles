@@ -592,22 +592,12 @@ function stepVehicle(v, dt) {
   v.y += linearV * Math.sin(v.theta) * dt;
   v.theta += angularV * dt;
 
-  // Bounce off walls
-  const margin = VEHICLE_LENGTH / 2;
-  if (v.x < margin) {
-    v.x = margin;
-    v.theta = Math.PI - v.theta;
-  } else if (v.x > canvas.width - margin) {
-    v.x = canvas.width - margin;
-    v.theta = Math.PI - v.theta;
-  }
-  if (v.y < margin) {
-    v.y = margin;
-    v.theta = -v.theta;
-  } else if (v.y > canvas.height - margin) {
-    v.y = canvas.height - margin;
-    v.theta = -v.theta;
-  }
+  // Wrap around edges
+  const margin = 10;
+  if (v.x < -margin) v.x = canvas.width + margin;
+  if (v.x > canvas.width + margin) v.x = -margin;
+  if (v.y < -margin) v.y = canvas.height + margin;
+  if (v.y > canvas.height + margin) v.y = -margin;
 
   v.trail.push({ x: v.x, y: v.y });
   if (v.trail.length > 500) v.trail.shift();
