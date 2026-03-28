@@ -77,6 +77,14 @@
   }
   .btn-add:hover { background: #1976d2; }
 
+  .btn-preset {
+    background: #6a1b9a;
+    color: #fff;
+    width: 100%;
+    font-size: 12px;
+  }
+  .btn-preset:hover { background: #7b1fa2; }
+
   .btn-row {
     display: flex;
     gap: 6px;
@@ -285,6 +293,7 @@
 
   <h2>Vehicles</h2>
   <button class="btn btn-add" id="add-vehicle-btn">+ Add Vehicle</button>
+  <button class="btn btn-preset" id="social-btn">Social Mode: Lights + Side Fear</button>
   <div id="vehicle-list"></div>
 
   <h2>Selected Vehicle</h2>
@@ -1176,6 +1185,17 @@ document.getElementById('add-vehicle-btn').addEventListener('click', () => {
   createVehicle(0);
   buildVehicleCards();
   updateReadoutName();
+});
+
+document.getElementById('social-btn').addEventListener('click', () => {
+  for (const v of vehicles) {
+    v.light.on = true;
+    v.light.intensity = 50;
+    v.sidePair.enabled = true;
+    v.sidePair.behaviorIndex = 0; // Fear
+    v.sidePair.weight = 25;
+  }
+  buildVehicleCards();
 });
 
 // --- Canvas interaction: static lights ---
