@@ -533,7 +533,7 @@ let nextLightId = 1;
 let staticLights = [];
 
 function createStaticLight(x, y) {
-  const light = { id: nextLightId++, x, y, on: true, intensity: 75 };
+  const light = { id: nextLightId++, x: wrapCoord(x, WORLD_W), y: wrapCoord(y, WORLD_H), on: true, intensity: 75 };
   staticLights.push(light);
   return light;
 }
@@ -542,8 +542,7 @@ function staticLightAt(x, y) {
   const GRAB_RADIUS = 18;
   for (let i = staticLights.length - 1; i >= 0; i--) {
     const l = staticLights[i];
-    const dx = x - l.x, dy = y - l.y;
-    if (dx * dx + dy * dy < GRAB_RADIUS * GRAB_RADIUS) return l;
+    if (toroidalDistSq(x, y, l.x, l.y) < GRAB_RADIUS * GRAB_RADIUS) return l;
   }
   return null;
 }
@@ -564,8 +563,8 @@ function createVehicle(typeIndex) {
   const v = {
     id: nextVehicleId++,
     typeIndex: typeIndex || 0,
-    x: 100 + Math.random() * (canvas.width - 200),
-    y: 100 + Math.random() * (canvas.height - 200),
+    x: Math.random() * WORLD_W,
+    y: Math.random() * WORLD_H,
     theta: Math.random() * Math.PI * 2,
     trail: [],
     leftSpeed: 0,
@@ -649,6 +648,30 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
+// --- World size (fixed torus) ---
+const WORLD_W = 1200;
+const WORLD_H = 800;
+
+// Wrap a coordinate into [0, size)
+function wrapCoord(val, size) {
+  return ((val % size) + size) % size;
+}
+
+// Shortest signed delta on a torus axis
+function wrapDelta(from, to, size) {
+  let d = to - from;
+  if (d > size / 2) d -= size;
+  if (d < -size / 2) d += size;
+  return d;
+}
+
+// Squared toroidal distance between two points
+function toroidalDistSq(x1, y1, x2, y2) {
+  const dx = wrapDelta(x1, x2, WORLD_W);
+  const dy = wrapDelta(y1, y2, WORLD_H);
+  return dx * dx + dy * dy;
+}
+
 // --- Vehicle geometry ---
 const VEHICLE_LENGTH = 50;
 const VEHICLE_WIDTH = 34;
@@ -730,26 +753,20 @@ function getSideSensorPositions(v) {
 // Combined intensity from all light sources at a point, excluding a specific vehicle's own light
 function totalIntensityAt(px, py, excludeVehicleId) {
   let sum = 0;
+  const minDist = 20;
+  const minDistSq = minDist * minDist;
 
   for (const light of staticLights) {
     if (!light.on) continue;
-    const dx = px - light.x;
-    const dy = py - light.y;
-    const distSq = dx * dx + dy * dy;
-    const minDist = 20;
-    const effectiveDist = Math.max(distSq, minDist * minDist);
-    sum += (light.intensity / 75) * 80000 / effectiveDist;
+    const distSq = toroidalDistSq(px, py, light.x, light.y);
+    sum += (light.intensity / 75) * 80000 / Math.max(distSq, minDistSq);
   }
 
   for (const v of vehicles) {
     if (v.id === excludeVehicleId) continue;
     if (!v.light.on) continue;
-    const dx = px - v.x;
-    const dy = py - v.y;
-    const distSq = dx * dx + dy * dy;
-    const minDist = 20;
-    const effectiveDist = Math.max(distSq, minDist * minDist);
-    sum += (v.light.intensity / 75) * 80000 / effectiveDist;
+    const distSq = toroidalDistSq(px, py, v.x, v.y);
+    sum += (v.light.intensity / 75) * 80000 / Math.max(distSq, minDistSq);
   }
 
   return sum / (1 + sum);
@@ -845,16 +862,10 @@ function stepVehicle(v, dt) {
   v.y += linearV * Math.sin(v.theta) * dt;
   v.theta += angularV * dt;
 
-  // Wrap around visible world edges
-  const vw = visibleWorld();
-  const margin = 10;
-  let wrapped = false;
-  if (v.x < vw.x - margin) { v.x = vw.x + vw.w + margin; wrapped = true; }
-  if (v.x > vw.x + vw.w + margin) { v.x = vw.x - margin; wrapped = true; }
-  if (v.y < vw.y - margin) { v.y = vw.y + vw.h + margin; wrapped = true; }
-  if (v.y > vw.y + vw.h + margin) { v.y = vw.y - margin; wrapped = true; }
+  // Wrap around fixed world (torus)
+  v.x = wrapCoord(v.x, WORLD_W);
+  v.y = wrapCoord(v.y, WORLD_H);
 
-  if (wrapped) v.trail.push(null);
   v.trail.push({ x: v.x, y: v.y });
   if (v.trail.length > 500) v.trail.shift();
 
@@ -877,7 +888,6 @@ function stepVehicle(v, dt) {
 
 // --- Drawing ---
 function drawLightGradients() {
-  const vw = visibleWorld();
   for (const light of staticLights) {
     const radius = 250 * (light.intensity / 75);
     const alpha = light.on ? 0.15 : 0.03;
@@ -885,7 +895,7 @@ function drawLightGradients() {
     grad.addColorStop(0, `rgba(255, 235, 100, ${alpha})`);
     grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(vw.x, vw.y, vw.w, vw.h);
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
   }
   for (const v of vehicles) {
     if (!v.light.on) continue;
@@ -894,7 +904,7 @@ function drawLightGradients() {
     grad.addColorStop(0, 'rgba(255, 235, 100, 0.1)');
     grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(vw.x, vw.y, vw.w, vw.h);
+    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
   }
 }
 
@@ -938,6 +948,10 @@ function drawTrail(v) {
   ctx.lineWidth = 1.5;
   for (let i = 1; i < v.trail.length; i++) {
     if (!v.trail[i] || !v.trail[i - 1]) continue;
+    // Skip segments that wrapped (large jump means it crossed an edge)
+    const dx = Math.abs(v.trail[i].x - v.trail[i - 1].x);
+    const dy = Math.abs(v.trail[i].y - v.trail[i - 1].y);
+    if (dx > WORLD_W / 2 || dy > WORLD_H / 2) continue;
     const alpha = i / v.trail.length * 0.4;
     ctx.strokeStyle = `rgba(${c.r}, ${c.g}, ${c.b}, ${alpha})`;
     ctx.beginPath();
@@ -1197,10 +1211,37 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(vw.x, y); ctx.lineTo(vw.x + vw.w, y); ctx.stroke();
   }
 
-  drawLightGradients();
-  for (const v of vehicles) drawTrail(v);
-  drawStaticLights();
-  for (const v of vehicles) drawVehicle(v);
+  // Draw world content at all torus offsets visible in the viewport
+  const vwRight = vw.x + vw.w;
+  const vwBottom = vw.y + vw.h;
+  const ox0 = Math.floor(vw.x / WORLD_W);
+  const ox1 = Math.floor(vwRight / WORLD_W);
+  const oy0 = Math.floor(vw.y / WORLD_H);
+  const oy1 = Math.floor(vwBottom / WORLD_H);
+
+  for (let oy = oy0; oy <= oy1; oy++) {
+    for (let ox = ox0; ox <= ox1; ox++) {
+      ctx.save();
+      ctx.translate(ox * WORLD_W, oy * WORLD_H);
+      drawLightGradients();
+      for (const v of vehicles) drawTrail(v);
+      drawStaticLights();
+      for (const v of vehicles) drawVehicle(v);
+      ctx.restore();
+    }
+  }
+
+  // World boundary outline (subtle)
+  ctx.strokeStyle = 'rgba(79, 195, 247, 0.15)';
+  ctx.lineWidth = 1 / camZoom;
+  for (let oy = oy0; oy <= oy1 + 1; oy++) {
+    const wy = oy * WORLD_H;
+    ctx.beginPath(); ctx.moveTo(vw.x, wy); ctx.lineTo(vwRight, wy); ctx.stroke();
+  }
+  for (let ox = ox0; ox <= ox1 + 1; ox++) {
+    const wx = ox * WORLD_W;
+    ctx.beginPath(); ctx.moveTo(wx, vw.y); ctx.lineTo(wx, vwBottom); ctx.stroke();
+  }
 
   ctx.restore();
 
@@ -1308,9 +1349,11 @@ function drawInlineSchematic(v, vc) {
     const _oY = _bY + 10 + 30;
     contentBottom = _oY + 16;
   }
-  const scale = Math.min(W / refW, H / contentBottom);
+  // Content spans ~cx±60 plus labels/glow → ~170px wide
+  const contentW = 170;
+  const scale = Math.min(W / contentW, H / contentBottom);
   c.save();
-  c.translate((W - refW * scale) / 2, (H - contentBottom * scale) / 2);
+  c.translate(W / 2 - cx * scale, (H - contentBottom * scale) / 2);
   c.scale(scale, scale);
 
   // ===== Layout =====
@@ -1850,8 +1893,8 @@ document.getElementById('stop-btn').addEventListener('click', () => {
 
 document.getElementById('reset-btn').addEventListener('click', () => {
   for (const v of vehicles) {
-    v.x = 100 + Math.random() * (canvas.width - 200);
-    v.y = 100 + Math.random() * (canvas.height - 200);
+    v.x = Math.random() * WORLD_W;
+    v.y = Math.random() * WORLD_H;
     v.theta = Math.random() * Math.PI * 2;
     v.trail = [];
   }
@@ -1997,8 +2040,8 @@ canvas.addEventListener('mousemove', (e) => {
   const dy = pos.y - mouseDownPos.y;
   if (!dragStarted && (dx * dx + dy * dy > 9)) dragStarted = true;
   if (dragStarted) {
-    dragging.x = pos.x;
-    dragging.y = pos.y;
+    dragging.x = wrapCoord(pos.x, WORLD_W);
+    dragging.y = wrapCoord(pos.y, WORLD_H);
   }
 });
 
@@ -2175,8 +2218,8 @@ canvas.addEventListener('touchmove', (e) => {
   const dy = pos.y - touchStartPos.y;
   if (!touchDragStarted && (dx * dx + dy * dy > 9)) touchDragStarted = true;
   if (touchDragStarted) {
-    touchDragging.x = pos.x;
-    touchDragging.y = pos.y;
+    touchDragging.x = wrapCoord(pos.x, WORLD_W);
+    touchDragging.y = wrapCoord(pos.y, WORLD_H);
   }
 }, { passive: false });
 
@@ -2248,12 +2291,12 @@ document.getElementById('record-btn').addEventListener('click', () => {
 });
 
 // --- Init ---
-createStaticLight(canvas.width * 0.65, canvas.height * 0.35);
+createStaticLight(WORLD_W * 0.65, WORLD_H * 0.35);
 
 // Create one default vehicle (V2b Aggression)
 const defaultV = createVehicle(2);
-defaultV.x = canvas.width * 0.3;
-defaultV.y = canvas.height * 0.7;
+defaultV.x = WORLD_W * 0.3;
+defaultV.y = WORLD_H * 0.7;
 defaultV.theta = -Math.PI / 4;
 
 buildVehicleCards();
