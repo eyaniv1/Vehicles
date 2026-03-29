@@ -1179,27 +1179,32 @@ function drawInlineSchematic(v, vc) {
   c.fillRect(0, 0, W, H);
 
   const cx = W / 2;
-  const gW = 30, gH = 16; // gate box size
+  const gW = 42, gH = 22; // gate box size
 
   // Helpers
   function wire(x1, y1, x2, y2, val, col, dash) {
-    c.lineWidth = 0.8 + val * 2.5;
+    c.lineWidth = 1 + val * 3;
     const a = 0.3 + val * 0.7;
     c.strokeStyle = col.replace(')', `,${a})`).replace('rgb', 'rgba');
-    if (dash) c.setLineDash([4, 3]); else c.setLineDash([]);
+    if (dash) c.setLineDash([5, 4]); else c.setLineDash([]);
     c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
     c.setLineDash([]);
   }
 
   function sensor(x, y, val, label, col) {
     const b = 0.3 + 0.7 * val;
+    const grad = c.createRadialGradient(x, y, 0, x, y, 16);
+    grad.addColorStop(0, `rgba(255,255,200,${b * 0.25})`);
+    grad.addColorStop(1, 'rgba(255,255,200,0)');
+    c.fillStyle = grad;
+    c.beginPath(); c.arc(x, y, 16, 0, Math.PI * 2); c.fill();
     c.fillStyle = `rgba(${col},${b})`;
-    c.beginPath(); c.arc(x, y, 8, 0, Math.PI * 2); c.fill();
-    c.strokeStyle = `rgba(${col},0.5)`; c.lineWidth = 1.5; c.stroke();
-    c.fillStyle = '#fff'; c.font = 'bold 9px sans-serif'; c.textAlign = 'center';
-    c.fillText((val * 100).toFixed(0), x, y + 3);
-    c.fillStyle = '#777'; c.font = '8px sans-serif';
-    c.fillText(label, x, y - 12);
+    c.beginPath(); c.arc(x, y, 12, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = `rgba(${col},0.5)`; c.lineWidth = 2; c.stroke();
+    c.fillStyle = '#fff'; c.font = 'bold 11px sans-serif'; c.textAlign = 'center';
+    c.fillText((val * 100).toFixed(0), x, y + 4);
+    c.fillStyle = '#888'; c.font = '9px sans-serif';
+    c.fillText(label, x, y - 17);
   }
 
   function gate(x, y, cfg) {
@@ -1207,47 +1212,47 @@ function drawInlineSchematic(v, vc) {
     const active = gt.id !== 'direct';
     c.fillStyle = active ? '#2a1a0a' : '#12122a';
     c.strokeStyle = active ? '#ff9800' : '#444';
-    c.lineWidth = 1.5;
-    c.beginPath(); c.roundRect(x, y, gW, gH, 3); c.fill(); c.stroke();
+    c.lineWidth = 2;
+    c.beginPath(); c.roundRect(x, y, gW, gH, 4); c.fill(); c.stroke();
     c.fillStyle = active ? '#ff9800' : '#555';
-    c.font = 'bold 9px sans-serif'; c.textAlign = 'center';
-    c.fillText(gt.name, x + gW / 2, y + gH / 2 + 3);
+    c.font = 'bold 11px sans-serif'; c.textAlign = 'center';
+    c.fillText(gt.name, x + gW / 2, y + gH / 2 + 4);
     if (active) {
-      c.fillStyle = '#ff980088'; c.font = '7px sans-serif';
-      c.fillText('T:' + cfg.threshold, x + gW / 2, y - 2);
+      c.fillStyle = '#ff9800aa'; c.font = '9px sans-serif';
+      c.fillText('T:' + cfg.threshold, x + gW / 2, y - 3);
     }
   }
 
   function motor(x, y, val, label, col) {
-    const w = 40, h = 18;
-    c.fillStyle = '#0a0a1a'; c.strokeStyle = '#444'; c.lineWidth = 1;
-    c.beginPath(); c.roundRect(x - w/2, y - h/2, w, h, 3); c.fill(); c.stroke();
-    const fw = (w - 3) * Math.min(val, 1);
+    const w = 52, h = 22;
+    c.fillStyle = '#0a0a1a'; c.strokeStyle = '#555'; c.lineWidth = 1;
+    c.beginPath(); c.roundRect(x - w/2, y - h/2, w, h, 4); c.fill(); c.stroke();
+    const fw = (w - 4) * Math.min(val, 1);
     const r = Math.floor(80 + 175 * val), g = Math.floor(60 + 100 * (1 - val));
     c.fillStyle = `rgb(${r},${g},60)`;
-    c.fillRect(x - w/2 + 1.5, y - h/2 + 1.5, fw, h - 3);
-    c.fillStyle = '#fff'; c.font = 'bold 9px sans-serif'; c.textAlign = 'center';
-    c.fillText((val * 100).toFixed(0), x, y + 3);
-    c.fillStyle = col; c.font = 'bold 8px sans-serif';
-    c.fillText(label, x, y - h/2 - 4);
+    c.fillRect(x - w/2 + 2, y - h/2 + 2, fw, h - 4);
+    c.fillStyle = '#fff'; c.font = 'bold 11px sans-serif'; c.textAlign = 'center';
+    c.fillText((val * 100).toFixed(0), x, y + 4);
+    c.fillStyle = col; c.font = 'bold 9px sans-serif';
+    c.fillText(label, x, y - h/2 - 5);
   }
 
   function polarity(x, y, inh) {
     c.fillStyle = inh ? '#f44336' : '#4caf50';
-    c.font = 'bold 12px sans-serif'; c.textAlign = 'center';
-    c.fillText(inh ? '\u2212' : '+', x, y + 4);
+    c.font = 'bold 14px sans-serif'; c.textAlign = 'center';
+    c.fillText(inh ? '\u2212' : '+', x, y + 5);
   }
 
   // ===== Layout =====
-  let y = 4;
+  let y = 8;
 
   // --- FRONT PAIR ---
-  const sY = y + 16;
-  const sLX = cx - 40, sRX = cx + 40;
+  const sY = y + 22;
+  const sLX = cx - 50, sRX = cx + 50;
   const fgActive = GATE_TYPES[v.gate.front.type].id !== 'direct';
-  const gateRow = sY + 24;
-  const mY = fgActive ? gateRow + gH + 24 : sY + 40;
-  const mLX = cx - 48, mRX = cx + 48;
+  const gateRow = sY + 36;
+  const mY = fgActive ? gateRow + gH + 36 : sY + 64;
+  const mLX = cx - 56, mRX = cx + 56;
 
   if (type.sensors === 1) {
     sensor(cx, sY, (v._frontL + v._frontR) / 2, 'Sensor', '255,255,255');
@@ -1289,8 +1294,8 @@ function drawInlineSchematic(v, vc) {
     // Polarity + crossed label
     polarity(cx, fgActive ? gateRow + gH + 4 : sY + 20, type.inhibitory);
     if (type.crossed) {
-      c.fillStyle = '#ff980066'; c.font = '7px sans-serif'; c.textAlign = 'center';
-      c.fillText('CROSSED', cx, mY - 16);
+      c.fillStyle = '#ff980066'; c.font = '9px sans-serif'; c.textAlign = 'center';
+      c.fillText('CROSSED', cx, mY - 18);
     }
   }
 
@@ -1309,10 +1314,10 @@ function drawInlineSchematic(v, vc) {
   const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
   const sgActive = GATE_TYPES[v.gate.side.type].id !== 'direct';
 
-  const ssY = mY + 28;
-  const ssLX = cx - 48, ssRX = cx + 48;
-  const sgRow = ssY + 24;
-  const smY = sgActive ? sgRow + gH + 24 : ssY + 40;
+  const ssY = mY + 40;
+  const ssLX = cx - 50, ssRX = cx + 50;
+  const sgRow = ssY + 36;
+  const smY = sgActive ? sgRow + gH + 36 : ssY + 64;
 
   sensor(ssLX, ssY, v._sideL, 'Side L', '180,255,180');
   sensor(ssRX, ssY, v._sideR, 'Side R', '180,255,180');
@@ -1341,15 +1346,15 @@ function drawInlineSchematic(v, vc) {
   }
   polarity(cx, sgActive ? sgRow + gH + 4 : ssY + 20, sideBeh.inhibitory);
   if (sideBeh.crossed) {
-    c.fillStyle = '#4caf5066'; c.font = '7px sans-serif'; c.textAlign = 'center';
-    c.fillText('CROSSED', cx, smY - 16);
+    c.fillStyle = '#4caf5066'; c.font = '9px sans-serif'; c.textAlign = 'center';
+    c.fillText('CROSSED', cx, smY - 18);
   }
 
   motor(mLX, smY, v._sideMotorL, 'Side L', '#a5d6a7');
   motor(mRX, smY, v._sideMotorR, 'Side R', '#a5d6a7');
 
   // --- BLEND + OUTPUT ---
-  const bY = smY + 24;
+  const bY = smY + 36;
   const w = v.sidePair.weight;
   const barW = 100, barH = 10;
   c.fillStyle = '#0a0a1a'; c.strokeStyle = '#4fc3f7'; c.lineWidth = 1;
@@ -1358,8 +1363,8 @@ function drawInlineSchematic(v, vc) {
   c.fillRect(cx - barW/2 + 1, bY + 1, (barW - 2) * (1 - w/100), barH - 2);
   c.fillStyle = '#a5d6a766';
   c.fillRect(cx - barW/2 + 1 + (barW - 2) * (1 - w/100), bY + 1, (barW - 2) * (w/100), barH - 2);
-  c.fillStyle = '#aaa'; c.font = '7px sans-serif'; c.textAlign = 'center';
-  c.fillText(`Front ${100-w}% / Side ${w}%`, cx, bY - 3);
+  c.fillStyle = '#aaa'; c.font = '9px sans-serif'; c.textAlign = 'center';
+  c.fillText(`Front ${100-w}% / Side ${w}%`, cx, bY - 4);
 
   // Blend wires
   wire(mLX, mY + 9, mLX, bY + barH + 14, v._frontMotorL, 'rgb(255,138,101)', false);
@@ -1367,7 +1372,7 @@ function drawInlineSchematic(v, vc) {
   wire(mLX, smY + 9, cx - 20, bY + barH + 14, v._sideMotorL, 'rgb(100,255,150)', false);
   wire(mRX, smY + 9, cx + 20, bY + barH + 14, v._sideMotorR, 'rgb(100,255,150)', false);
 
-  const oY = bY + barH + 22;
+  const oY = bY + barH + 30;
   motor(mLX, oY, v.leftSpeed, 'Out L', '#ff8a65');
   motor(mRX, oY, v.rightSpeed, 'Out R', '#81c784');
 }
@@ -1726,7 +1731,7 @@ function buildVehicleCards() {
       const vc = document.createElement('canvas');
       vc.className = 'card-schematic';
       vc.width = 252;
-      vc.height = v.sidePair.enabled ? 280 : 130;
+      vc.height = v.sidePair.enabled ? 400 : 180;
       card.appendChild(vc);
       schematicCanvases.set(v.id, vc);
     } else {
