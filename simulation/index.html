@@ -560,6 +560,14 @@
     font-size: 12px;
   }
   .btn-ref:hover { background: #455a64; }
+
+  .ref-diagram {
+    width: 100%;
+    background: #0a0a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    margin: 10px 0;
+  }
 </style>
 </head>
 <body>
@@ -642,14 +650,23 @@
 <div id="tutorial-bubble-container"></div>
 
 <div class="ref-overlay" id="ref-overlay">
-  <div class="ref-manual">
+  <div class="ref-manual" id="ref-manual-content">
     <button class="ref-close" id="ref-close">&times;</button>
     <h2>Reference Manual</h2>
+
+    <h3>Simulation Buttons</h3>
+    <table>
+      <tr><th>Button</th><th>Description</th></tr>
+      <tr><td>Stop All / Start All</td><td>Pauses or resumes the entire simulation. When resumed via Start All, all vehicles are set to running.</td></tr>
+      <tr><td>Reset All</td><td>Stops all vehicles, clears their trails, and arranges them in a spaced grid near the center of your current view.</td></tr>
+      <tr><td>Record Video</td><td>Captures the canvas as a .webm video file. Click once to start recording, click again to stop. The file downloads automatically.</td></tr>
+      <tr><td>World Size</td><td>Changes the simulation area. Vehicles and lights wrap at the edges. Smaller worlds keep things closer together.</td></tr>
+    </table>
 
     <h3>Vehicle Types (Braitenberg)</h3>
     <table>
       <tr><th>Type</th><th>Sensors</th><th>Wiring</th><th>Response</th><th>Behavior</th></tr>
-      <tr><td>V1 Wander</td><td>1</td><td>--</td><td>Excitatory</td><td>Moves without steering, speed varies with light</td></tr>
+      <tr><td>V1 Wander</td><td>1</td><td>&mdash;</td><td>Excitatory</td><td>Moves without steering, speed varies with light</td></tr>
       <tr><td>V2a Fear</td><td>2</td><td>Direct</td><td>Excitatory</td><td>Turns away from light, accelerates to flee</td></tr>
       <tr><td>V2b Aggression</td><td>2</td><td>Crossed</td><td>Excitatory</td><td>Steers toward light, charges at the source</td></tr>
       <tr><td>V3a Love</td><td>2</td><td>Direct</td><td>Inhibitory</td><td>Approaches light and slows, stops near it</td></tr>
@@ -659,17 +676,47 @@
     <h3>Logic Gates</h3>
     <table>
       <tr><th>Gate</th><th>Effect</th></tr>
-      <tr><td>Direct</td><td>No filtering, raw sensor values pass through</td></tr>
-      <tr><td>Threshold</td><td>Ignores light below threshold, sigmoid activation</td></tr>
-      <tr><td>AND</td><td>Both sensors must detect light to react</td></tr>
-      <tr><td>OR</td><td>Either sensor detecting light triggers reaction</td></tr>
-      <tr><td>XOR</td><td>Reacts when sensors differ (edge-following)</td></tr>
+      <tr><td>Direct</td><td>No filtering &mdash; raw sensor values pass straight through</td></tr>
+      <tr><td>Threshold</td><td>Sigmoid activation &mdash; ignores dim light below the threshold, reacts strongly above it</td></tr>
+      <tr><td>AND</td><td>Both sensors must detect light above threshold before the vehicle reacts &mdash; responds only to centered, strong light</td></tr>
+      <tr><td>OR</td><td>Either sensor detecting light above threshold triggers a reaction &mdash; responds to light from any direction</td></tr>
+      <tr><td>XOR</td><td>Reacts when sensors differ (one bright, one dim) &mdash; follows the edges and boundaries of light fields</td></tr>
+    </table>
+    <p>Each gate has two parameters: <b>Threshold</b> (0&ndash;80) sets the activation point, and <b>Sharpness</b> (1&ndash;20) controls how abruptly the gate switches on.</p>
+
+    <h3>Presets</h3>
+    <table>
+      <tr><th>Preset</th><th>Applies To</th><th>Description</th></tr>
+      <tr><td>Social Mode</td><td>All vehicles</td><td>Turns on mounted lights (50%), enables side sensors with Fear behavior at 25% blend. Creates mutual awareness &mdash; vehicles see each other's lights and react laterally.</td></tr>
+      <tr><td>Focused Hunter</td><td>Selected</td><td>V2b Aggression + AND gate (T:25, S:8). Only charges at strong, centered light. Ignores dim or off-center sources.</td></tr>
+      <tr><td>Edge Follower</td><td>Selected</td><td>V2b Aggression + XOR gate (T:15, S:6). Follows the boundary between light and dark rather than heading straight for the source.</td></tr>
+      <tr><td>Cautious Social</td><td>Selected</td><td>V2b Aggression + OR front gate + Side Fear with AND gate. Approaches any visible light but shies away laterally when too close to others.</td></tr>
+      <tr><td>Swarm</td><td>Selected</td><td>V3a Love + Threshold gates + light on + Side Aggression. Gathers near light sources in groups, with lateral aggression creating swirling flock behavior.</td></tr>
     </table>
 
-    <h3>Side Sensors</h3>
-    <p>Add a second pair of sensors on the sides of the vehicle. Choose a behavior type (Fear, Aggression, Love, Explorer) and blend weight to mix with front sensor output.</p>
+    <h3>Selected Vehicle Readout</h3>
+    <p>The six values at the bottom of the control panel show real-time data for the currently selected vehicle:</p>
+    <table>
+      <tr><th>Value</th><th>Meaning</th></tr>
+      <tr><td>Left Eye</td><td>Light intensity detected by the left front sensor (0&ndash;100). Higher = brighter light on the left side.</td></tr>
+      <tr><td>Right Eye</td><td>Light intensity detected by the right front sensor (0&ndash;100). Higher = brighter light on the right side.</td></tr>
+      <tr><td>Side L / Side R</td><td>Light intensity at the left and right lateral sensors (shown only when side sensors are enabled).</td></tr>
+      <tr><td>Left Motor</td><td>Current speed of the left wheel (0&ndash;100). Driven by sensor input through wiring and gates.</td></tr>
+      <tr><td>Right Motor</td><td>Current speed of the right wheel (0&ndash;100). The difference between left and right motor speeds determines turning.</td></tr>
+    </table>
+    <p>When both motors are equal the vehicle goes straight. When they differ, it turns toward the slower wheel.</p>
 
-    <h3>Controls</h3>
+    <h3>Vehicle Card Settings</h3>
+    <p><b>Start/Stop</b> &mdash; each vehicle runs independently.<br>
+    <b>Light</b> &mdash; mounted light visible to other vehicles, creating social interactions.<br>
+    <b>Speed</b> &mdash; simulation speed multiplier (1x&ndash;5x).<br>
+    <b>Contrast</b> &mdash; amplifies motor speed differences for sharper turns.<br>
+    <b>F.Gate / S.Gate</b> &mdash; logic gate on front / side sensor pair.<br>
+    <b>Side</b> &mdash; enable lateral sensors with independent behavior type.<br>
+    <b>Blend</b> &mdash; mix ratio between front and side motor output.<br>
+    <b>Explain</b> &mdash; generates a plain-English description of expected behavior.</p>
+
+    <h3>Canvas Controls</h3>
     <table>
       <tr><th>Action</th><th>How</th></tr>
       <tr><td>Pan view</td><td>Click + drag on empty canvas</td></tr>
@@ -681,21 +728,26 @@
       <tr><td>Delete light</td><td>Right-click &rarr; Delete</td></tr>
     </table>
 
-    <h3>Vehicle Card</h3>
-    <p><b>Start/Stop</b> &mdash; each vehicle runs independently.<br>
-    <b>Light</b> &mdash; mounted light visible to other vehicles.<br>
-    <b>Speed</b> &mdash; simulation speed multiplier (1x&ndash;5x).<br>
-    <b>Contrast</b> &mdash; amplifies motor speed differences for sharper turns.<br>
-    <b>F.Gate / S.Gate</b> &mdash; logic gate on front/side sensor pair.<br>
-    <b>Side</b> &mdash; enable lateral sensors with independent behavior.<br>
-    <b>Blend</b> &mdash; mix ratio between front and side motor output.<br>
-    <b>Explain</b> &mdash; generates a description of expected behavior.</p>
-
-    <h3>Presets</h3>
-    <p><b>Social Mode</b> applies to all vehicles. All other presets apply to the selected vehicle only.</p>
-
     <h3>World</h3>
-    <p>The world is a torus &mdash; vehicles and light sensing wrap around edges. Choose world size from the dropdown. Zooming out shows more of the world.</p>
+    <p>The world is a torus &mdash; vehicles wrap around edges and sensors detect light across boundaries (shortest toroidal distance). Choose world size from the dropdown. Zooming out reveals more of the world.</p>
+
+    <h3>How a Braitenberg Vehicle Works</h3>
+    <p>Each vehicle has light sensors connected to wheel motors. The wiring determines behavior:</p>
+
+    <p><b>Direct wiring</b> &mdash; left sensor drives left motor, right sensor drives right motor:</p>
+    <canvas class="ref-diagram" id="ref-diagram-direct" width="580" height="160"></canvas>
+    <p>When light is brighter on the left, the left motor speeds up, turning the vehicle <em>away</em> from the light (Fear). With inhibitory response, brighter light <em>slows</em> the motor, so the vehicle turns <em>toward</em> the light and stops near it (Love).</p>
+
+    <p><b>Crossed wiring</b> &mdash; left sensor drives right motor, right sensor drives left motor:</p>
+    <canvas class="ref-diagram" id="ref-diagram-crossed" width="580" height="160"></canvas>
+    <p>When light is brighter on the left, the <em>right</em> motor speeds up, steering the vehicle <em>toward</em> the light (Aggression). With inhibitory response, the vehicle approaches but veers away up close (Explorer).</p>
+
+    <p><b>Side sensors</b> add a second pair on the vehicle's flanks with independent wiring. Their output blends with the front pair:</p>
+    <canvas class="ref-diagram" id="ref-diagram-side" width="580" height="200"></canvas>
+
+    <p><b>Logic gates</b> sit between sensors and motors, filtering the signal:</p>
+    <canvas class="ref-diagram" id="ref-diagram-gates" width="580" height="160"></canvas>
+    <p>Gates let you create complex behaviors: an AND gate makes a vehicle ignore peripheral light; an XOR gate makes it follow light boundaries instead of heading to the center.</p>
   </div>
 </div>
 
@@ -2695,6 +2747,209 @@ document.getElementById('ref-close').addEventListener('click', () => {
 document.getElementById('ref-overlay').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
 });
+
+// --- Reference manual diagrams ---
+function drawRefDiagrams() {
+  const colors = { sensor: '#4fc3f7', motor: '#ff9800', wire: '#b0bec5', body: '#37474f', label: '#e0e0e0', gate: '#ab47bc' };
+
+  function drawVehicleBody(ctx, cx, cy, w, h) {
+    ctx.fillStyle = colors.body;
+    ctx.strokeStyle = '#546e7a';
+    ctx.lineWidth = 2;
+    const r = 10;
+    ctx.beginPath();
+    ctx.moveTo(cx - w/2 + r, cy - h/2);
+    ctx.lineTo(cx + w/2 - r, cy - h/2);
+    ctx.quadraticCurveTo(cx + w/2, cy - h/2, cx + w/2, cy - h/2 + r);
+    ctx.lineTo(cx + w/2, cy + h/2 - r);
+    ctx.quadraticCurveTo(cx + w/2, cy + h/2, cx + w/2 - r, cy + h/2);
+    ctx.lineTo(cx - w/2 + r, cy + h/2);
+    ctx.quadraticCurveTo(cx - w/2, cy + h/2, cx - w/2, cy + h/2 - r);
+    ctx.lineTo(cx - w/2, cy - h/2 + r);
+    ctx.quadraticCurveTo(cx - w/2, cy - h/2, cx - w/2 + r, cy - h/2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  }
+
+  function drawSensor(ctx, x, y, label) {
+    ctx.fillStyle = colors.sensor;
+    ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#000'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y);
+  }
+
+  function drawMotor(ctx, x, y, label) {
+    ctx.fillStyle = colors.motor;
+    ctx.fillRect(x - 12, y - 10, 24, 20);
+    ctx.fillStyle = '#000'; ctx.font = 'bold 10px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(label, x, y);
+  }
+
+  function drawWire(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color || colors.wire;
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+  }
+
+  function drawCurvedWire(ctx, x1, y1, x2, y2, bend, color) {
+    ctx.strokeStyle = color || colors.wire;
+    ctx.lineWidth = 2;
+    const mx = (x1 + x2) / 2 + bend;
+    const my = (y1 + y2) / 2;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.quadraticCurveTo(mx, my, x2, y2); ctx.stroke();
+  }
+
+  function drawArrow(ctx, x1, y1, x2, y2, color) {
+    ctx.strokeStyle = color || colors.wire;
+    ctx.fillStyle = color || colors.wire;
+    ctx.lineWidth = 2;
+    const angle = Math.atan2(y2 - y1, x2 - x1);
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x2, y2);
+    ctx.lineTo(x2 - 8 * Math.cos(angle - 0.4), y2 - 8 * Math.sin(angle - 0.4));
+    ctx.lineTo(x2 - 8 * Math.cos(angle + 0.4), y2 - 8 * Math.sin(angle + 0.4));
+    ctx.closePath(); ctx.fill();
+  }
+
+  function label(ctx, text, x, y, color) {
+    ctx.fillStyle = color || colors.label;
+    ctx.font = '12px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(text, x, y);
+  }
+
+  // 1) Direct wiring diagram
+  (function() {
+    const c = document.getElementById('ref-diagram-direct');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    const cx = 290, cy = 80;
+    drawVehicleBody(ctx, cx, cy, 200, 100);
+    // Sensors (top)
+    const sLx = cx - 50, sRx = cx + 50, sY = cy - 50;
+    drawSensor(ctx, sLx, sY - 10, 'L');
+    drawSensor(ctx, sRx, sY - 10, 'R');
+    // Motors (bottom)
+    const mLx = cx - 50, mRx = cx + 50, mY = cy + 50;
+    drawMotor(ctx, mLx, mY + 10, 'L');
+    drawMotor(ctx, mRx, mY + 10, 'R');
+    // Straight wires
+    drawArrow(ctx, sLx, sY + 2, mLx, mY, '#4fc3f7');
+    drawArrow(ctx, sRx, sY + 2, mRx, mY, '#4fc3f7');
+    // Labels
+    label(ctx, 'Sensors', cx, sY - 30);
+    label(ctx, 'Motors', cx, mY + 30);
+    label(ctx, 'Left sensor → Left motor', cx, cy, '#81d4fa');
+  })();
+
+  // 2) Crossed wiring diagram
+  (function() {
+    const c = document.getElementById('ref-diagram-crossed');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    const cx = 290, cy = 80;
+    drawVehicleBody(ctx, cx, cy, 200, 100);
+    const sLx = cx - 50, sRx = cx + 50, sY = cy - 50;
+    drawSensor(ctx, sLx, sY - 10, 'L');
+    drawSensor(ctx, sRx, sY - 10, 'R');
+    const mLx = cx - 50, mRx = cx + 50, mY = cy + 50;
+    drawMotor(ctx, mLx, mY + 10, 'L');
+    drawMotor(ctx, mRx, mY + 10, 'R');
+    // Crossed wires
+    drawCurvedWire(ctx, sLx, sY + 2, mRx, mY, 0, '#ff7043');
+    drawCurvedWire(ctx, sRx, sY + 2, mLx, mY, 0, '#ff7043');
+    // Arrowheads
+    drawArrow(ctx, mRx - 3, mY - 3, mRx, mY, '#ff7043');
+    drawArrow(ctx, mLx + 3, mY - 3, mLx, mY, '#ff7043');
+    label(ctx, 'Sensors', cx, sY - 30);
+    label(ctx, 'Motors', cx, mY + 30);
+    label(ctx, 'Left sensor → Right motor (crossed)', cx, cy, '#ffab91');
+  })();
+
+  // 3) Side sensors diagram
+  (function() {
+    const c = document.getElementById('ref-diagram-side');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    const cx = 290, cy = 100;
+    drawVehicleBody(ctx, cx, cy, 240, 120);
+    // Front sensors
+    const sLx = cx - 50, sRx = cx + 50, sY = cy - 60;
+    drawSensor(ctx, sLx, sY, 'FL');
+    drawSensor(ctx, sRx, sY, 'FR');
+    // Side sensors
+    const ssLx = cx - 120, ssRx = cx + 120, ssY = cy;
+    drawSensor(ctx, ssLx, ssY, 'SL');
+    drawSensor(ctx, ssRx, ssY, 'SR');
+    // Motors
+    const mLx = cx - 50, mRx = cx + 50, mY = cy + 60;
+    drawMotor(ctx, mLx, mY, 'L');
+    drawMotor(ctx, mRx, mY, 'R');
+    // Front wires (direct)
+    drawArrow(ctx, sLx, sY + 12, mLx, mY - 12, '#4fc3f7');
+    drawArrow(ctx, sRx, sY + 12, mRx, mY - 12, '#4fc3f7');
+    // Side wires (to motors, showing blend)
+    ctx.setLineDash([4, 4]);
+    drawArrow(ctx, ssLx + 12, ssY, mLx - 12, mY - 5, '#ab47bc');
+    drawArrow(ctx, ssRx - 12, ssY, mRx + 12, mY - 5, '#ab47bc');
+    ctx.setLineDash([]);
+    label(ctx, 'Front sensors', cx, sY - 18);
+    label(ctx, 'Side sensors (blended)', cx, ssY - 20, '#ce93d8');
+    label(ctx, 'Motors', cx, mY + 18);
+  })();
+
+  // 4) Logic gates diagram
+  (function() {
+    const c = document.getElementById('ref-diagram-gates');
+    if (!c) return;
+    const ctx = c.getContext('2d');
+    ctx.clearRect(0, 0, c.width, c.height);
+    const cy = 80;
+    // Sensor
+    drawSensor(ctx, 80, cy - 20, 'S');
+    drawSensor(ctx, 80, cy + 20, 'S');
+    // Gate box
+    ctx.fillStyle = '#6a1b9a'; ctx.strokeStyle = '#ab47bc'; ctx.lineWidth = 2;
+    ctx.fillRect(200, cy - 30, 80, 60);
+    ctx.strokeRect(200, cy - 30, 80, 60);
+    ctx.fillStyle = '#e1bee7'; ctx.font = 'bold 14px monospace'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('GATE', 240, cy);
+    // Motor
+    drawMotor(ctx, 400, cy - 20, 'L');
+    drawMotor(ctx, 400, cy + 20, 'R');
+    // Wires: sensor -> gate
+    drawArrow(ctx, 92, cy - 20, 198, cy - 10, '#4fc3f7');
+    drawArrow(ctx, 92, cy + 20, 198, cy + 10, '#4fc3f7');
+    // Wires: gate -> motor
+    drawArrow(ctx, 282, cy - 10, 386, cy - 20, '#ff9800');
+    drawArrow(ctx, 282, cy + 10, 386, cy + 20, '#ff9800');
+    // Labels
+    label(ctx, 'Sensors', 80, cy - 48);
+    label(ctx, 'Gate filters signal', 240, cy + 50, '#ce93d8');
+    label(ctx, 'Motors', 400, cy - 48);
+    // Threshold line
+    ctx.strokeStyle = '#ef5350'; ctx.lineWidth = 1; ctx.setLineDash([3, 3]);
+    ctx.beginPath(); ctx.moveTo(470, 20); ctx.lineTo(470, 140); ctx.stroke();
+    ctx.setLineDash([]);
+    label(ctx, 'Threshold', 530, 30, '#ef5350');
+    // Small sigmoid curve
+    ctx.strokeStyle = '#ef5350'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    for (let i = 0; i <= 40; i++) {
+      const t = (i / 40) * 6 - 3;
+      const sig = 1 / (1 + Math.exp(-t * 1.5));
+      const px = 470 + (i - 20) * 2;
+      const py = 130 - sig * 80;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.stroke();
+  })();
+}
+drawRefDiagrams();
 
 // --- Getting Started tutorial ---
 const tutorialSteps = [
