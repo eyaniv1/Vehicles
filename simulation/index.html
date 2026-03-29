@@ -404,7 +404,10 @@
     background: #0a0a1a;
     border: 1px solid #333;
     width: 100%;
-    aspect-ratio: 1 / 1;
+    aspect-ratio: 2 / 3;
+  }
+  .card-schematic.has-side {
+    aspect-ratio: 1 / 2;
   }
 
   .preset-grid {
@@ -1849,7 +1852,7 @@ function buildVehicleCards() {
     // Inline schematic canvas
     if (v._showView) {
       const vc = document.createElement('canvas');
-      vc.className = 'card-schematic';
+      vc.className = 'card-schematic' + (v.sidePair.enabled ? ' has-side' : '');
       vc.width = 252;
       vc.height = 100; // placeholder; resized after layout in drawAllInlineSchematics
       card.appendChild(vc);
