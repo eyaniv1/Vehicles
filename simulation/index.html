@@ -25,6 +25,62 @@
     overflow-y: auto;
   }
 
+  /* Mobile toggle button (hidden on desktop) */
+  #mobile-toggle {
+    display: none;
+    position: fixed;
+    bottom: 12px;
+    right: 12px;
+    z-index: 200;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background: #1565c0;
+    color: #fff;
+    border: none;
+    font-size: 24px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.5);
+    cursor: pointer;
+    line-height: 1;
+  }
+
+  @media (max-width: 700px) {
+    body {
+      flex-direction: column;
+      overflow: auto;
+      height: auto;
+      min-height: 100vh;
+    }
+
+    #canvas-container {
+      width: 100%;
+      padding: 4px;
+      flex: none;
+    }
+
+    canvas {
+      border-radius: 6px;
+      touch-action: none;
+    }
+
+    #controls {
+      width: 100%;
+      max-height: 50vh;
+      overflow-y: auto;
+      padding: 12px;
+      gap: 10px;
+      transition: transform 0.3s ease, opacity 0.3s ease;
+    }
+
+    #controls.collapsed {
+      display: none;
+    }
+
+    #mobile-toggle {
+      display: block;
+    }
+  }
+
   #controls h1 { font-size: 18px; color: #e0e0e0; margin-bottom: 2px; }
 
   #controls h2 {
@@ -341,11 +397,13 @@
 
   <h2>Static Lights</h2>
   <p class="info-text">
-    Double-click canvas to add a light.<br>
-    Click light to toggle. Drag to move.<br>
-    Right-click for intensity / delete.
+    Double-click/tap canvas to add a light.<br>
+    Click/tap light to toggle. Drag to move.<br>
+    Right-click or long-press for intensity / delete.
   </p>
 </div>
+
+<button id="mobile-toggle" aria-label="Toggle controls">&#9881;</button>
 
 <div id="canvas-container">
   <canvas id="canvas"></canvas>
@@ -451,10 +509,19 @@ let stopped = false;
 const canvas = document.getElementById('canvas');
 const ctx = canvas.getContext('2d');
 
+function isMobile() {
+  return window.innerWidth <= 700;
+}
+
 function resizeCanvas() {
   const container = document.getElementById('canvas-container');
-  canvas.width = Math.min(container.clientWidth - 40, 1200);
-  canvas.height = Math.min(container.clientHeight - 40, 800);
+  if (isMobile()) {
+    canvas.width = container.clientWidth - 8;
+    canvas.height = Math.min(window.innerHeight * 0.55, 500);
+  } else {
+    canvas.width = Math.min(container.clientWidth - 40, 1200);
+    canvas.height = Math.min(container.clientHeight - 40, 800);
+  }
 }
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
@@ -1295,6 +1362,107 @@ popupDeleteBtn.addEventListener('click', () => {
 document.addEventListener('mousedown', (e) => {
   if (!popup.contains(e.target) && e.target !== canvas) closePopup();
 });
+
+// --- Mobile controls toggle ---
+document.getElementById('mobile-toggle').addEventListener('click', () => {
+  const controls = document.getElementById('controls');
+  controls.classList.toggle('collapsed');
+});
+
+// --- Touch events for canvas ---
+let touchStartTime = 0;
+let touchStartPos = null;
+let touchLongPressTimer = null;
+let touchDragging = null;
+let touchDragStarted = false;
+let lastTapTime = 0;
+
+function canvasTouchCoords(e) {
+  const touch = e.touches[0] || e.changedTouches[0];
+  const rect = canvas.getBoundingClientRect();
+  return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+}
+
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  closePopup();
+  const pos = canvasTouchCoords(e);
+  touchStartPos = pos;
+  touchStartTime = Date.now();
+  touchDragStarted = false;
+
+  const hit = staticLightAt(pos.x, pos.y);
+  if (hit) {
+    touchDragging = hit;
+  }
+
+  // Long press for context menu (intensity/delete)
+  touchLongPressTimer = setTimeout(() => {
+    const light = staticLightAt(pos.x, pos.y);
+    if (light) {
+      popupLight = light;
+      popupSlider.value = light.intensity;
+      popupValue.textContent = light.intensity + '%';
+      const rect = canvas.getBoundingClientRect();
+      const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
+      popup.style.left = Math.min(rect.left - containerRect.left + pos.x + 10, containerRect.width - 160) + 'px';
+      popup.style.top = (rect.top - containerRect.top + pos.y - 30) + 'px';
+      popup.style.display = 'block';
+      touchDragging = null; // cancel drag
+    }
+    touchLongPressTimer = null;
+  }, 500);
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (touchLongPressTimer) {
+    clearTimeout(touchLongPressTimer);
+    touchLongPressTimer = null;
+  }
+  if (!touchDragging) return;
+  const pos = canvasTouchCoords(e);
+  const dx = pos.x - touchStartPos.x;
+  const dy = pos.y - touchStartPos.y;
+  if (!touchDragStarted && (dx * dx + dy * dy > 9)) touchDragStarted = true;
+  if (touchDragStarted) {
+    touchDragging.x = pos.x;
+    touchDragging.y = pos.y;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  e.preventDefault();
+  if (touchLongPressTimer) {
+    clearTimeout(touchLongPressTimer);
+    touchLongPressTimer = null;
+  }
+
+  const pos = canvasTouchCoords(e);
+  const elapsed = Date.now() - touchStartTime;
+
+  // Tap (not drag, not long press)
+  if (!touchDragStarted && elapsed < 400) {
+    const now = Date.now();
+    // Double tap to add light
+    if (now - lastTapTime < 350) {
+      if (!staticLightAt(pos.x, pos.y)) {
+        createStaticLight(pos.x, pos.y);
+      }
+      lastTapTime = 0;
+    } else {
+      // Single tap: toggle light
+      const hit = staticLightAt(pos.x, pos.y);
+      if (hit) {
+        hit.on = !hit.on;
+      }
+      lastTapTime = now;
+    }
+  }
+
+  touchDragging = null;
+  touchDragStarted = false;
+}, { passive: false });
 
 // --- Video recording ---
 let mediaRecorder = null;
