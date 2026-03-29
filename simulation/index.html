@@ -570,9 +570,9 @@ function createVehicle(typeIndex) {
   const v = {
     id: nextVehicleId++,
     typeIndex: typeIndex || 0,
-    x: Math.random() * WORLD_W,
-    y: Math.random() * WORLD_H,
-    theta: Math.random() * Math.PI * 2,
+    x: camX + (canvas.width / camZoom) / 2,
+    y: camY + (canvas.height / camZoom) / 2,
+    theta: 0,
     trail: [],
     leftSpeed: 0,
     rightSpeed: 0,
@@ -581,6 +581,7 @@ function createVehicle(typeIndex) {
     light: { on: false, intensity: 50 },
     sidePair: { enabled: false, behaviorIndex: 0, weight: 50 },
     gate: { front: defaultGateConfig(), side: defaultGateConfig() },
+    running: false,
     simSpeed: 1,
     speedContrast: 50,
     // Runtime readings for display
@@ -671,7 +672,7 @@ const WORLD_SIZES = [
   { label: 'Large (3600 x 2400)', w: 3600, h: 2400 },
   { label: 'Huge (4800 x 3200)', w: 4800, h: 3200 },
 ];
-let worldSizeIndex = 3;
+let worldSizeIndex = 1;
 let WORLD_W = WORLD_SIZES[worldSizeIndex].w;
 let WORLD_H = WORLD_SIZES[worldSizeIndex].h;
 
@@ -1541,7 +1542,9 @@ function loop(timestamp) {
   lastTime = timestamp;
   const baseDt = Math.min(rawDt, 0.05);
   if (!stopped) {
-    for (const v of vehicles) stepVehicle(v, baseDt * v.simSpeed);
+    for (const v of vehicles) {
+      if (v.running) stepVehicle(v, baseDt * v.simSpeed);
+    }
   }
   draw();
   drawAllInlineSchematics();
@@ -1599,8 +1602,20 @@ function buildVehicleCards() {
       updateReadoutName();
     });
 
+    const runBtn = document.createElement('button');
+    runBtn.className = 'btn ' + (v.running ? 'btn-stop' : 'btn-stop stopped');
+    runBtn.textContent = v.running ? 'Stop' : 'Start';
+    runBtn.style.cssText = 'font-size:10px;padding:2px 6px;';
+    runBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      v.running = !v.running;
+      runBtn.textContent = v.running ? 'Stop' : 'Start';
+      runBtn.className = 'btn ' + (v.running ? 'btn-stop' : 'btn-stop stopped');
+    });
+
     header.appendChild(dot);
     header.appendChild(select);
+    header.appendChild(runBtn);
     header.appendChild(viewBtn);
     header.appendChild(del);
 
@@ -1931,15 +1946,23 @@ document.getElementById('stop-btn').addEventListener('click', () => {
   const btn = document.getElementById('stop-btn');
   btn.textContent = stopped ? 'Start All' : 'Stop All';
   btn.className = 'btn ' + (stopped ? 'btn-stop stopped' : 'btn-stop');
+  if (!stopped) {
+    for (const v of vehicles) v.running = true;
+    buildVehicleCards();
+  }
 });
 
 document.getElementById('reset-btn').addEventListener('click', () => {
+  const cx = camX + (canvas.width / camZoom) / 2;
+  const cy = camY + (canvas.height / camZoom) / 2;
   for (const v of vehicles) {
-    v.x = Math.random() * WORLD_W;
-    v.y = Math.random() * WORLD_H;
+    v.x = cx + (Math.random() - 0.5) * 100;
+    v.y = cy + (Math.random() - 0.5) * 100;
     v.theta = Math.random() * Math.PI * 2;
     v.trail = [];
+    v.running = false;
   }
+  buildVehicleCards();
 });
 
 document.getElementById('add-vehicle-btn').addEventListener('click', () => {
@@ -2334,14 +2357,6 @@ document.getElementById('record-btn').addEventListener('click', () => {
 });
 
 // --- Init ---
-createStaticLight(WORLD_W * 0.65, WORLD_H * 0.35);
-
-// Create one default vehicle (V2b Aggression)
-const defaultV = createVehicle(2);
-defaultV.x = WORLD_W * 0.3;
-defaultV.y = WORLD_H * 0.7;
-defaultV.theta = -Math.PI / 4;
-
 buildVehicleCards();
 updateReadoutName();
 requestAnimationFrame(loop);
