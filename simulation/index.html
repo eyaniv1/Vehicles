@@ -397,49 +397,13 @@
   }
   #intensity-popup .popup-delete:hover { background: #e53935; }
 
-  /* Magnified view modal */
-  #view-modal {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 500;
-    background: rgba(0,0,0,0.8);
-    align-items: center;
-    justify-content: center;
-  }
-  #view-modal.open { display: flex; }
-
-  #view-modal-inner {
-    background: #0f0f23;
-    border: 2px solid #4fc3f7;
-    border-radius: 12px;
-    padding: 16px;
-    position: relative;
-    max-width: 95vw;
-    max-height: 95vh;
-  }
-
-  #view-close {
-    position: absolute;
-    top: 8px;
-    right: 12px;
-    background: none;
-    border: none;
-    color: #aaa;
-    font-size: 24px;
-    cursor: pointer;
-  }
-  #view-close:hover { color: #fff; }
-
-  #view-title {
-    font-size: 14px;
-    color: #4fc3f7;
-    margin-bottom: 8px;
-  }
-
-  #view-canvas {
-    border-radius: 8px;
-    background: #0f0f23;
+  /* Inline schematic canvas */
+  .card-schematic {
+    margin-top: 6px;
+    border-radius: 6px;
+    background: #0a0a1a;
+    border: 1px solid #333;
+    width: 100%;
   }
 
   .preset-grid {
@@ -523,15 +487,6 @@
     <label>Intensity <span id="popup-intensity-value">75%</span></label>
     <input type="range" id="popup-intensity-slider" min="10" max="100" value="75">
     <button class="popup-delete" id="popup-delete-btn">Delete Light</button>
-  </div>
-</div>
-
-<!-- Magnified view modal -->
-<div id="view-modal">
-  <div id="view-modal-inner">
-    <button id="view-close">&times;</button>
-    <div id="view-title">Vehicle Schematic</div>
-    <canvas id="view-canvas" width="600" height="420"></canvas>
   </div>
 </div>
 
@@ -646,7 +601,8 @@ function getVehicleType(v) {
 
 // --- Global state ---
 let stopped = false;
-let viewVehicleId = null; // vehicle being viewed in magnified modal
+// Map of vehicleId -> canvas element for inline schematics
+const schematicCanvases = new Map();
 
 // --- Canvas setup ---
 const canvas = document.getElementById('canvas');
@@ -1211,378 +1167,217 @@ function draw() {
   for (const v of vehicles) drawVehicle(v);
 }
 
-// --- Magnified view drawing ---
-function drawMagnifiedView() {
-  const modal = document.getElementById('view-modal');
-  if (!modal.classList.contains('open')) return;
-
-  const v = vehicles.find(v => v.id === viewVehicleId);
-  if (!v) return;
-
-  const vc = document.getElementById('view-canvas');
-  const vctx = vc.getContext('2d');
+// --- Inline schematic drawing (compact, fits inside vehicle card) ---
+function drawInlineSchematic(v, vc) {
+  const c = vc.getContext('2d');
   const W = vc.width;
   const H = vc.height;
   const type = getVehicleType(v);
 
-  vctx.clearRect(0, 0, W, H);
-  vctx.fillStyle = '#0f0f23';
-  vctx.fillRect(0, 0, W, H);
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = '#0a0a1a';
+  c.fillRect(0, 0, W, H);
 
-  // Layout constants
   const cx = W / 2;
-  const bodyW = 160;
-  const bodyH = 100;
-  const bodyX = cx - bodyW / 2;
-  const bodyY = 60;
+  const gW = 30, gH = 16; // gate box size
 
-  // Sensor positions (schematic)
-  const sensorY = 30;
-  const sensorLX = cx - 55;
-  const sensorRX = cx + 55;
-
-  // Gate box positions
-  const gateY = bodyY + 15;
-  const gateW = 36;
-  const gateH = 22;
-  const gateLX = cx - 60;
-  const gateRX = cx + 24;
-
-  // Motor/wheel positions
-  const motorY = bodyY + bodyH + 30;
-  const motorLX = cx - 70;
-  const motorRX = cx + 70;
-
-  // Side sensor positions
-  const sideSensorLX = bodyX - 40;
-  const sideSensorRX = bodyX + bodyW + 40;
-  const sideSensorY = bodyY + bodyH / 2;
-
-  // Side gate positions
-  const sideGateY = bodyY + bodyH + 5;
-  const sideGateLX = cx - 120;
-  const sideGateRX = cx + 84;
-
-  // Blend indicator
-  const blendY = motorY + 40;
-
-  // Helper: draw signal wire with thickness/color based on value
-  function drawWire(x1, y1, x2, y2, value, color, dashed) {
-    const lw = 1 + value * 4;
-    const alpha = 0.3 + value * 0.7;
-    vctx.lineWidth = lw;
-    vctx.strokeStyle = color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
-    if (dashed) vctx.setLineDash([6, 4]);
-    else vctx.setLineDash([]);
-    vctx.beginPath();
-    vctx.moveTo(x1, y1);
-    vctx.lineTo(x2, y2);
-    vctx.stroke();
-    vctx.setLineDash([]);
+  // Helpers
+  function wire(x1, y1, x2, y2, val, col, dash) {
+    c.lineWidth = 0.8 + val * 2.5;
+    const a = 0.3 + val * 0.7;
+    c.strokeStyle = col.replace(')', `,${a})`).replace('rgb', 'rgba');
+    if (dash) c.setLineDash([4, 3]); else c.setLineDash([]);
+    c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+    c.setLineDash([]);
   }
 
-  // Helper: draw sensor circle
-  function drawSensor(x, y, value, label, color) {
-    const bright = 0.3 + 0.7 * value;
-    // Glow
-    const grad = vctx.createRadialGradient(x, y, 0, x, y, 18);
-    grad.addColorStop(0, `rgba(255, 255, 200, ${bright * 0.3})`);
-    grad.addColorStop(1, 'rgba(255, 255, 200, 0)');
-    vctx.fillStyle = grad;
-    vctx.beginPath();
-    vctx.arc(x, y, 18, 0, Math.PI * 2);
-    vctx.fill();
-
-    vctx.fillStyle = `rgba(${color}, ${bright})`;
-    vctx.beginPath();
-    vctx.arc(x, y, 10, 0, Math.PI * 2);
-    vctx.fill();
-    vctx.strokeStyle = `rgba(${color}, 0.6)`;
-    vctx.lineWidth = 2;
-    vctx.stroke();
-
-    // Value
-    vctx.fillStyle = '#fff';
-    vctx.font = 'bold 11px sans-serif';
-    vctx.textAlign = 'center';
-    vctx.fillText((value * 100).toFixed(0), x, y + 4);
-
-    // Label
-    vctx.fillStyle = '#888';
-    vctx.font = '10px sans-serif';
-    vctx.fillText(label, x, y - 16);
+  function sensor(x, y, val, label, col) {
+    const b = 0.3 + 0.7 * val;
+    c.fillStyle = `rgba(${col},${b})`;
+    c.beginPath(); c.arc(x, y, 8, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = `rgba(${col},0.5)`; c.lineWidth = 1.5; c.stroke();
+    c.fillStyle = '#fff'; c.font = 'bold 9px sans-serif'; c.textAlign = 'center';
+    c.fillText((val * 100).toFixed(0), x, y + 3);
+    c.fillStyle = '#777'; c.font = '8px sans-serif';
+    c.fillText(label, x, y - 12);
   }
 
-  // Helper: draw gate box
-  function drawGateBox(x, y, gateConfig, inputL, inputR, outputL, outputR) {
-    const gateType = GATE_TYPES[gateConfig.type];
-    const isActive = gateType.id !== 'direct';
-    const bgColor = isActive ? '#2a1a0a' : '#1a1a2e';
-    const borderColor = isActive ? '#ff9800' : '#444';
-
-    vctx.fillStyle = bgColor;
-    vctx.strokeStyle = borderColor;
-    vctx.lineWidth = 2;
-    vctx.beginPath();
-    vctx.roundRect(x, y, gateW, gateH, 4);
-    vctx.fill();
-    vctx.stroke();
-
-    vctx.fillStyle = isActive ? '#ff9800' : '#666';
-    vctx.font = 'bold 11px sans-serif';
-    vctx.textAlign = 'center';
-    vctx.fillText(gateType.name, x + gateW / 2, y + gateH / 2 + 4);
-
-    if (isActive) {
-      // Show threshold line
-      vctx.fillStyle = '#ff980088';
-      vctx.font = '9px sans-serif';
-      vctx.fillText('T:' + gateConfig.threshold, x + gateW / 2, y - 3);
+  function gate(x, y, cfg) {
+    const gt = GATE_TYPES[cfg.type];
+    const active = gt.id !== 'direct';
+    c.fillStyle = active ? '#2a1a0a' : '#12122a';
+    c.strokeStyle = active ? '#ff9800' : '#444';
+    c.lineWidth = 1.5;
+    c.beginPath(); c.roundRect(x, y, gW, gH, 3); c.fill(); c.stroke();
+    c.fillStyle = active ? '#ff9800' : '#555';
+    c.font = 'bold 9px sans-serif'; c.textAlign = 'center';
+    c.fillText(gt.name, x + gW / 2, y + gH / 2 + 3);
+    if (active) {
+      c.fillStyle = '#ff980088'; c.font = '7px sans-serif';
+      c.fillText('T:' + cfg.threshold, x + gW / 2, y - 2);
     }
   }
 
-  // Helper: draw motor
-  function drawMotor(x, y, value, label, color) {
-    const w = 50, h = 28;
-    // Speed bar background
-    vctx.fillStyle = '#1a1a2e';
-    vctx.strokeStyle = '#555';
-    vctx.lineWidth = 1;
-    vctx.beginPath();
-    vctx.roundRect(x - w/2, y - h/2, w, h, 4);
-    vctx.fill();
-    vctx.stroke();
-
-    // Speed bar fill
-    const fillW = (w - 4) * Math.min(value, 1);
-    const r = Math.floor(80 + 175 * value);
-    const g = Math.floor(60 + 100 * (1 - value));
-    vctx.fillStyle = `rgb(${r}, ${g}, 60)`;
-    vctx.fillRect(x - w/2 + 2, y - h/2 + 2, fillW, h - 4);
-
-    // Value text
-    vctx.fillStyle = '#fff';
-    vctx.font = 'bold 12px sans-serif';
-    vctx.textAlign = 'center';
-    vctx.fillText((value * 100).toFixed(0), x, y + 4);
-
-    // Label
-    vctx.fillStyle = color;
-    vctx.font = 'bold 10px sans-serif';
-    vctx.fillText(label, x, y - h/2 - 6);
+  function motor(x, y, val, label, col) {
+    const w = 40, h = 18;
+    c.fillStyle = '#0a0a1a'; c.strokeStyle = '#444'; c.lineWidth = 1;
+    c.beginPath(); c.roundRect(x - w/2, y - h/2, w, h, 3); c.fill(); c.stroke();
+    const fw = (w - 3) * Math.min(val, 1);
+    const r = Math.floor(80 + 175 * val), g = Math.floor(60 + 100 * (1 - val));
+    c.fillStyle = `rgb(${r},${g},60)`;
+    c.fillRect(x - w/2 + 1.5, y - h/2 + 1.5, fw, h - 3);
+    c.fillStyle = '#fff'; c.font = 'bold 9px sans-serif'; c.textAlign = 'center';
+    c.fillText((val * 100).toFixed(0), x, y + 3);
+    c.fillStyle = col; c.font = 'bold 8px sans-serif';
+    c.fillText(label, x, y - h/2 - 4);
   }
 
-  // Helper: draw polarity indicator
-  function drawPolarity(x, y, inhibitory) {
-    vctx.fillStyle = inhibitory ? '#f44336' : '#4caf50';
-    vctx.font = 'bold 14px sans-serif';
-    vctx.textAlign = 'center';
-    vctx.fillText(inhibitory ? '-' : '+', x, y + 5);
+  function polarity(x, y, inh) {
+    c.fillStyle = inh ? '#f44336' : '#4caf50';
+    c.font = 'bold 12px sans-serif'; c.textAlign = 'center';
+    c.fillText(inh ? '\u2212' : '+', x, y + 4);
   }
 
-  // ===== Draw the schematic =====
-
-  // Title
-  vctx.fillStyle = v.color.stroke;
-  vctx.font = 'bold 14px sans-serif';
-  vctx.textAlign = 'center';
-  vctx.fillText(type.name, cx, 16);
-
-  // Vehicle body outline
-  vctx.fillStyle = v.color.body + '44';
-  vctx.strokeStyle = v.color.stroke;
-  vctx.lineWidth = 2;
-  vctx.beginPath();
-  vctx.roundRect(bodyX, bodyY, bodyW, bodyH, 8);
-  vctx.fill();
-  vctx.stroke();
-
-  // Mounted light indicator
-  if (v.light.on) {
-    vctx.fillStyle = '#ffd54f';
-    vctx.beginPath();
-    vctx.arc(cx, bodyY + bodyH / 2, 6, 0, Math.PI * 2);
-    vctx.fill();
-    vctx.fillStyle = '#888';
-    vctx.font = '9px sans-serif';
-    vctx.fillText('Light ' + v.light.intensity + '%', cx, bodyY + bodyH / 2 + 16);
-  }
+  // ===== Layout =====
+  let y = 4;
 
   // --- FRONT PAIR ---
+  const sY = y + 16;
+  const sLX = cx - 40, sRX = cx + 40;
+  const fgActive = GATE_TYPES[v.gate.front.type].id !== 'direct';
+  const gateRow = sY + 24;
+  const mY = fgActive ? gateRow + gH + 24 : sY + 40;
+  const mLX = cx - 48, mRX = cx + 48;
+
   if (type.sensors === 1) {
-    // Single sensor
-    drawSensor(cx, sensorY, (v._frontL + v._frontR) / 2, 'Sensor', '255, 255, 255');
-
-    const frontGateId = GATE_TYPES[v.gate.front.type].id;
-    if (frontGateId !== 'direct') {
-      drawGateBox(cx - gateW / 2, gateY, v.gate.front);
-      drawWire(cx, sensorY + 10, cx, gateY, (v._frontL + v._frontR) / 2, 'rgb(255, 255, 255)', false);
-      drawWire(cx, gateY + gateH, motorLX, motorY - 14, v._gatedFrontL, 'rgb(255, 200, 100)', true);
-      drawWire(cx, gateY + gateH, motorRX, motorY - 14, v._gatedFrontR, 'rgb(255, 200, 100)', true);
+    sensor(cx, sY, (v._frontL + v._frontR) / 2, 'Sensor', '255,255,255');
+    if (fgActive) {
+      gate(cx - gW / 2, gateRow, v.gate.front);
+      wire(cx, sY + 8, cx, gateRow, (v._frontL + v._frontR) / 2, 'rgb(255,255,255)', false);
+      wire(cx, gateRow + gH, mLX, mY - 9, v._gatedFrontL, 'rgb(255,200,100)', true);
+      wire(cx, gateRow + gH, mRX, mY - 9, v._gatedFrontR, 'rgb(255,200,100)', true);
     } else {
-      drawWire(cx, sensorY + 10, motorLX, motorY - 14, v._frontMotorL, 'rgb(255, 200, 100)', true);
-      drawWire(cx, sensorY + 10, motorRX, motorY - 14, v._frontMotorR, 'rgb(255, 200, 100)', true);
+      wire(cx, sY + 8, mLX, mY - 9, v._frontMotorL, 'rgb(255,200,100)', true);
+      wire(cx, sY + 8, mRX, mY - 9, v._frontMotorR, 'rgb(255,200,100)', true);
     }
   } else {
-    // Two front sensors
-    drawSensor(sensorLX, sensorY, v._frontL, 'Left Eye', '255, 255, 255');
-    drawSensor(sensorRX, sensorY, v._frontR, 'Right Eye', '255, 255, 255');
+    sensor(sLX, sY, v._frontL, 'L Eye', '255,255,255');
+    sensor(sRX, sY, v._frontR, 'R Eye', '255,255,255');
 
-    const frontGateId = GATE_TYPES[v.gate.front.type].id;
-    const gateActive = frontGateId !== 'direct';
-
-    if (gateActive) {
-      // Left gate
-      drawGateBox(gateLX, gateY, v.gate.front);
-      // Right gate
-      drawGateBox(gateRX, gateY, v.gate.front);
-
-      // Sensor → Gate wires
-      drawWire(sensorLX, sensorY + 10, gateLX + gateW / 2, gateY, v._frontL, 'rgb(255, 255, 255)', false);
-      drawWire(sensorRX, sensorY + 10, gateRX + gateW / 2, gateY, v._frontR, 'rgb(255, 255, 255)', false);
-
-      // Gate → Motor wires (with crossing)
-      const postGateY = gateY + gateH;
+    if (fgActive) {
+      gate(cx - gW - 4, gateRow, v.gate.front);
+      gate(cx + 4, gateRow, v.gate.front);
+      wire(sLX, sY + 8, cx - gW / 2 - 4, gateRow, v._frontL, 'rgb(255,255,255)', false);
+      wire(sRX, sY + 8, cx + gW / 2 + 4, gateRow, v._frontR, 'rgb(255,255,255)', false);
+      const pgy = gateRow + gH;
       if (type.crossed) {
-        drawWire(gateLX + gateW / 2, postGateY, motorRX, motorY - 14, v._gatedFrontL, 'rgb(255, 200, 100)', true);
-        drawWire(gateRX + gateW / 2, postGateY, motorLX, motorY - 14, v._gatedFrontR, 'rgb(255, 200, 100)', true);
+        wire(cx - gW / 2 - 4, pgy, mRX, mY - 9, v._gatedFrontL, 'rgb(255,200,100)', true);
+        wire(cx + gW / 2 + 4, pgy, mLX, mY - 9, v._gatedFrontR, 'rgb(255,200,100)', true);
       } else {
-        drawWire(gateLX + gateW / 2, postGateY, motorLX, motorY - 14, v._gatedFrontL, 'rgb(255, 200, 100)', true);
-        drawWire(gateRX + gateW / 2, postGateY, motorRX, motorY - 14, v._gatedFrontR, 'rgb(255, 200, 100)', true);
+        wire(cx - gW / 2 - 4, pgy, mLX, mY - 9, v._gatedFrontL, 'rgb(255,200,100)', true);
+        wire(cx + gW / 2 + 4, pgy, mRX, mY - 9, v._gatedFrontR, 'rgb(255,200,100)', true);
       }
-
-      // Polarity
-      drawPolarity(cx, postGateY + 8, type.inhibitory);
     } else {
-      // Direct: sensor → motor
       if (type.crossed) {
-        drawWire(sensorLX, sensorY + 10, motorRX, motorY - 14, v._frontL, 'rgb(255, 200, 100)', true);
-        drawWire(sensorRX, sensorY + 10, motorLX, motorY - 14, v._frontR, 'rgb(255, 200, 100)', true);
+        wire(sLX, sY + 8, mRX, mY - 9, v._frontL, 'rgb(255,200,100)', true);
+        wire(sRX, sY + 8, mLX, mY - 9, v._frontR, 'rgb(255,200,100)', true);
       } else {
-        drawWire(sensorLX, sensorY + 10, motorLX, motorY - 14, v._frontL, 'rgb(255, 200, 100)', true);
-        drawWire(sensorRX, sensorY + 10, motorRX, motorY - 14, v._frontR, 'rgb(255, 200, 100)', true);
+        wire(sLX, sY + 8, mLX, mY - 9, v._frontL, 'rgb(255,200,100)', true);
+        wire(sRX, sY + 8, mRX, mY - 9, v._frontR, 'rgb(255,200,100)', true);
       }
-      // Polarity indicator
-      drawPolarity(cx, bodyY + bodyH - 10, type.inhibitory);
     }
-
-    // Crossed indicator
+    // Polarity + crossed label
+    polarity(cx, fgActive ? gateRow + gH + 4 : sY + 20, type.inhibitory);
     if (type.crossed) {
-      vctx.fillStyle = '#ff980088';
-      vctx.font = '9px sans-serif';
-      vctx.textAlign = 'center';
-      vctx.fillText('CROSSED', cx, bodyY + bodyH - 2);
+      c.fillStyle = '#ff980066'; c.font = '7px sans-serif'; c.textAlign = 'center';
+      c.fillText('CROSSED', cx, mY - 16);
     }
   }
 
-  // Motors
+  // Front motors
   if (!v.sidePair.enabled) {
-    drawMotor(motorLX, motorY, v.leftSpeed, 'Left Motor', '#ff8a65');
-    drawMotor(motorRX, motorY, v.rightSpeed, 'Right Motor', '#81c784');
-  } else {
-    // Show front motor contribution
-    drawMotor(motorLX, motorY, v._frontMotorL, 'Front L', '#ff8a65');
-    drawMotor(motorRX, motorY, v._frontMotorR, 'Front R', '#81c784');
+    motor(mLX, mY, v.leftSpeed, 'L Motor', '#ff8a65');
+    motor(mRX, mY, v.rightSpeed, 'R Motor', '#81c784');
+    return;
   }
+
+  // Show front contribution motors
+  motor(mLX, mY, v._frontMotorL, 'Front L', '#ff8a65');
+  motor(mRX, mY, v._frontMotorR, 'Front R', '#81c784');
 
   // --- SIDE PAIR ---
-  if (v.sidePair.enabled) {
-    const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
+  const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
+  const sgActive = GATE_TYPES[v.gate.side.type].id !== 'direct';
 
-    // Side sensors
-    drawSensor(sideSensorLX, sideSensorY, v._sideL, 'Side L', '180, 255, 180');
-    drawSensor(sideSensorRX, sideSensorY, v._sideR, 'Side R', '180, 255, 180');
+  const ssY = mY + 28;
+  const ssLX = cx - 48, ssRX = cx + 48;
+  const sgRow = ssY + 24;
+  const smY = sgActive ? sgRow + gH + 24 : ssY + 40;
 
-    const sideGateId = GATE_TYPES[v.gate.side.type].id;
-    const sideGateActive = sideGateId !== 'direct';
+  sensor(ssLX, ssY, v._sideL, 'Side L', '180,255,180');
+  sensor(ssRX, ssY, v._sideR, 'Side R', '180,255,180');
 
-    const sideMotorY = motorY + 55;
-
-    if (sideGateActive) {
-      drawGateBox(sideGateLX, sideGateY, v.gate.side);
-      drawGateBox(sideGateRX, sideGateY, v.gate.side);
-
-      drawWire(sideSensorLX, sideSensorY + 10, sideGateLX + gateW / 2, sideGateY, v._sideL, 'rgb(100, 255, 150)', false);
-      drawWire(sideSensorRX, sideSensorY + 10, sideGateRX + gateW / 2, sideGateY, v._sideR, 'rgb(100, 255, 150)', false);
-
-      if (sideBeh.crossed) {
-        drawWire(sideGateLX + gateW / 2, sideGateY + gateH, motorRX, sideMotorY - 14, v._gatedSideL, 'rgb(100, 255, 150)', true);
-        drawWire(sideGateRX + gateW / 2, sideGateY + gateH, motorLX, sideMotorY - 14, v._gatedSideR, 'rgb(100, 255, 150)', true);
-      } else {
-        drawWire(sideGateLX + gateW / 2, sideGateY + gateH, motorLX, sideMotorY - 14, v._gatedSideL, 'rgb(100, 255, 150)', true);
-        drawWire(sideGateRX + gateW / 2, sideGateY + gateH, motorRX, sideMotorY - 14, v._gatedSideR, 'rgb(100, 255, 150)', true);
-      }
-
-      drawPolarity(cx, sideGateY + gateH + 10, sideBeh.inhibitory);
-    } else {
-      if (sideBeh.crossed) {
-        drawWire(sideSensorLX, sideSensorY + 10, motorRX, sideMotorY - 14, v._sideL, 'rgb(100, 255, 150)', true);
-        drawWire(sideSensorRX, sideSensorY + 10, motorLX, sideMotorY - 14, v._sideR, 'rgb(100, 255, 150)', true);
-      } else {
-        drawWire(sideSensorLX, sideSensorY + 10, motorLX, sideMotorY - 14, v._sideL, 'rgb(100, 255, 150)', true);
-        drawWire(sideSensorRX, sideSensorY + 10, motorRX, sideMotorY - 14, v._sideR, 'rgb(100, 255, 150)', true);
-      }
-      drawPolarity(cx, sideMotorY - 24, sideBeh.inhibitory);
-    }
-
-    // Side motors
-    drawMotor(motorLX, sideMotorY, v._sideMotorL, 'Side L', '#a5d6a7');
-    drawMotor(motorRX, sideMotorY, v._sideMotorR, 'Side R', '#a5d6a7');
-
-    // Side behavior label
-    vctx.fillStyle = '#4caf50';
-    vctx.font = '10px sans-serif';
-    vctx.textAlign = 'center';
+  if (sgActive) {
+    gate(cx - gW - 4, sgRow, v.gate.side);
+    gate(cx + 4, sgRow, v.gate.side);
+    wire(ssLX, ssY + 8, cx - gW / 2 - 4, sgRow, v._sideL, 'rgb(100,255,150)', false);
+    wire(ssRX, ssY + 8, cx + gW / 2 + 4, sgRow, v._sideR, 'rgb(100,255,150)', false);
+    const psy = sgRow + gH;
     if (sideBeh.crossed) {
-      vctx.fillText('CROSSED', cx, sideMotorY - 2);
+      wire(cx - gW / 2 - 4, psy, mRX, smY - 9, v._gatedSideL, 'rgb(100,255,150)', true);
+      wire(cx + gW / 2 + 4, psy, mLX, smY - 9, v._gatedSideR, 'rgb(100,255,150)', true);
+    } else {
+      wire(cx - gW / 2 - 4, psy, mLX, smY - 9, v._gatedSideL, 'rgb(100,255,150)', true);
+      wire(cx + gW / 2 + 4, psy, mRX, smY - 9, v._gatedSideR, 'rgb(100,255,150)', true);
     }
-
-    // Blend section
-    const finalMotorY = sideMotorY + 50;
-    const w = v.sidePair.weight;
-
-    // Blend bar
-    vctx.fillStyle = '#1a1a2e';
-    vctx.strokeStyle = '#4fc3f7';
-    vctx.lineWidth = 1;
-    const barW = 120, barH = 14;
-    vctx.beginPath();
-    vctx.roundRect(cx - barW/2, finalMotorY - barH/2 - 20, barW, barH, 3);
-    vctx.fill();
-    vctx.stroke();
-
-    // Front portion
-    const frontW = (barW - 4) * (1 - w / 100);
-    vctx.fillStyle = '#ff8a6566';
-    vctx.fillRect(cx - barW/2 + 2, finalMotorY - barH/2 - 18, frontW, barH - 4);
-
-    // Side portion
-    const sideW = (barW - 4) * (w / 100);
-    vctx.fillStyle = '#a5d6a766';
-    vctx.fillRect(cx - barW/2 + 2 + frontW, finalMotorY - barH/2 - 18, sideW, barH - 4);
-
-    vctx.fillStyle = '#fff';
-    vctx.font = '9px sans-serif';
-    vctx.textAlign = 'center';
-    vctx.fillText(`Blend: Front ${100-w}% / Side ${w}%`, cx, finalMotorY - barH/2 - 20 - 4);
-
-    // Wires to final motors
-    drawWire(motorLX, motorY + 14, motorLX, finalMotorY - 14, v._frontMotorL, 'rgb(255, 138, 101)', false);
-    drawWire(motorRX, motorY + 14, motorRX, finalMotorY - 14, v._frontMotorR, 'rgb(129, 199, 132)', false);
-    drawWire(motorLX, sideMotorY + 14, cx - 30, finalMotorY - 14, v._sideMotorL, 'rgb(100, 255, 150)', false);
-    drawWire(motorRX, sideMotorY + 14, cx + 30, finalMotorY - 14, v._sideMotorR, 'rgb(100, 255, 150)', false);
-
-    // Final output motors
-    drawMotor(motorLX, finalMotorY, v.leftSpeed, 'Output L', '#ff8a65');
-    drawMotor(motorRX, finalMotorY, v.rightSpeed, 'Output R', '#81c784');
+  } else {
+    if (sideBeh.crossed) {
+      wire(ssLX, ssY + 8, mRX, smY - 9, v._sideL, 'rgb(100,255,150)', true);
+      wire(ssRX, ssY + 8, mLX, smY - 9, v._sideR, 'rgb(100,255,150)', true);
+    } else {
+      wire(ssLX, ssY + 8, mLX, smY - 9, v._sideL, 'rgb(100,255,150)', true);
+      wire(ssRX, ssY + 8, mRX, smY - 9, v._sideR, 'rgb(100,255,150)', true);
+    }
+  }
+  polarity(cx, sgActive ? sgRow + gH + 4 : ssY + 20, sideBeh.inhibitory);
+  if (sideBeh.crossed) {
+    c.fillStyle = '#4caf5066'; c.font = '7px sans-serif'; c.textAlign = 'center';
+    c.fillText('CROSSED', cx, smY - 16);
   }
 
-  // Footer info
-  const footerY = H - 10;
-  vctx.fillStyle = '#555';
-  vctx.font = '10px sans-serif';
-  vctx.textAlign = 'center';
-  vctx.fillText(`Speed: ${v.simSpeed}x | Contrast: ${v.speedContrast}%`, cx, footerY);
+  motor(mLX, smY, v._sideMotorL, 'Side L', '#a5d6a7');
+  motor(mRX, smY, v._sideMotorR, 'Side R', '#a5d6a7');
+
+  // --- BLEND + OUTPUT ---
+  const bY = smY + 24;
+  const w = v.sidePair.weight;
+  const barW = 100, barH = 10;
+  c.fillStyle = '#0a0a1a'; c.strokeStyle = '#4fc3f7'; c.lineWidth = 1;
+  c.beginPath(); c.roundRect(cx - barW/2, bY, barW, barH, 2); c.fill(); c.stroke();
+  c.fillStyle = '#ff8a6566';
+  c.fillRect(cx - barW/2 + 1, bY + 1, (barW - 2) * (1 - w/100), barH - 2);
+  c.fillStyle = '#a5d6a766';
+  c.fillRect(cx - barW/2 + 1 + (barW - 2) * (1 - w/100), bY + 1, (barW - 2) * (w/100), barH - 2);
+  c.fillStyle = '#aaa'; c.font = '7px sans-serif'; c.textAlign = 'center';
+  c.fillText(`Front ${100-w}% / Side ${w}%`, cx, bY - 3);
+
+  // Blend wires
+  wire(mLX, mY + 9, mLX, bY + barH + 14, v._frontMotorL, 'rgb(255,138,101)', false);
+  wire(mRX, mY + 9, mRX, bY + barH + 14, v._frontMotorR, 'rgb(129,199,132)', false);
+  wire(mLX, smY + 9, cx - 20, bY + barH + 14, v._sideMotorL, 'rgb(100,255,150)', false);
+  wire(mRX, smY + 9, cx + 20, bY + barH + 14, v._sideMotorR, 'rgb(100,255,150)', false);
+
+  const oY = bY + barH + 22;
+  motor(mLX, oY, v.leftSpeed, 'Out L', '#ff8a65');
+  motor(mRX, oY, v.rightSpeed, 'Out R', '#81c784');
+}
+
+function drawAllInlineSchematics() {
+  for (const v of vehicles) {
+    if (!v._showView) continue;
+    const vc = schematicCanvases.get(v.id);
+    if (vc) drawInlineSchematic(v, vc);
+  }
 }
 
 // --- Game loop ---
@@ -1596,7 +1391,7 @@ function loop(timestamp) {
     for (const v of vehicles) stepVehicle(v, baseDt * v.simSpeed);
   }
   draw();
-  drawMagnifiedView();
+  drawAllInlineSchematics();
   requestAnimationFrame(loop);
 }
 
@@ -1634,10 +1429,11 @@ function buildVehicleCards() {
 
     const viewBtn = document.createElement('button');
     viewBtn.className = 'btn btn-view';
-    viewBtn.textContent = 'View';
+    viewBtn.textContent = v._showView ? 'Hide' : 'View';
     viewBtn.addEventListener('click', (e) => {
       e.stopPropagation();
-      openMagnifiedView(v.id);
+      v._showView = !v._showView;
+      buildVehicleCards();
     });
 
     const del = document.createElement('button');
@@ -1925,6 +1721,18 @@ function buildVehicleCards() {
     if (sideGateRow) card.appendChild(sideGateRow);
     if (sideGateParams) card.appendChild(sideGateParams);
 
+    // Inline schematic canvas
+    if (v._showView) {
+      const vc = document.createElement('canvas');
+      vc.className = 'card-schematic';
+      vc.width = 252;
+      vc.height = v.sidePair.enabled ? 280 : 130;
+      card.appendChild(vc);
+      schematicCanvases.set(v.id, vc);
+    } else {
+      schematicCanvases.delete(v.id);
+    }
+
     // Click card to select vehicle
     card.addEventListener('click', () => {
       selectedVehicleId = v.id;
@@ -1949,35 +1757,6 @@ function updateReadoutName() {
     el.style.color = '#666';
   }
 }
-
-// --- Magnified view modal ---
-function openMagnifiedView(vehicleId) {
-  viewVehicleId = vehicleId;
-  const modal = document.getElementById('view-modal');
-  modal.classList.add('open');
-
-  // Resize canvas for side pair
-  const v = vehicles.find(v => v.id === vehicleId);
-  const vc = document.getElementById('view-canvas');
-  if (v && v.sidePair.enabled) {
-    vc.height = 500;
-  } else {
-    vc.height = 320;
-  }
-
-  const type = getVehicleType(v);
-  document.getElementById('view-title').textContent = type.name + ' — Schematic';
-}
-
-function closeMagnifiedView() {
-  document.getElementById('view-modal').classList.remove('open');
-  viewVehicleId = null;
-}
-
-document.getElementById('view-close').addEventListener('click', closeMagnifiedView);
-document.getElementById('view-modal').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('view-modal')) closeMagnifiedView();
-});
 
 // --- UI: Controls ---
 document.getElementById('stop-btn').addEventListener('click', () => {
