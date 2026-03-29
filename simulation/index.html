@@ -173,6 +173,8 @@
     cursor: pointer;
     transition: all 0.15s;
     position: relative;
+    display: flex;
+    flex-direction: column;
   }
 
   .vehicle-card:hover { border-color: #555; }
@@ -404,6 +406,8 @@
     background: #0a0a1a;
     border: 1px solid #333;
     width: 100%;
+    flex: 1;
+    min-height: 180px;
   }
 
   .preset-grid {
@@ -1178,7 +1182,25 @@ function drawInlineSchematic(v, vc) {
   c.fillStyle = '#0a0a1a';
   c.fillRect(0, 0, W, H);
 
-  const cx = W / 2;
+  // Compute natural content height, then scale to fill canvas
+  const fgActive = GATE_TYPES[v.gate.front.type].id !== 'direct';
+  const sgActive = v.sidePair.enabled ? GATE_TYPES[v.gate.side.type].id !== 'direct' : false;
+  let natH;
+  if (!v.sidePair.enabled) {
+    // sensors + optional gate + motors + padding
+    natH = fgActive ? 150 : 110;
+  } else {
+    // front + side + blend + output
+    const frontEnd = fgActive ? 130 : 100;
+    const sideH = sgActive ? 120 : 90;
+    natH = frontEnd + sideH + 80; // blend + output
+  }
+  const scale = Math.min(H / natH, W / 252);
+  c.save();
+  c.translate((W - 252 * scale) / 2, (H - natH * scale) / 2);
+  c.scale(scale, scale);
+
+  const cx = 126; // half of 252 (reference width)
   const gW = 42, gH = 22; // gate box size
 
   // Helpers
@@ -1249,7 +1271,6 @@ function drawInlineSchematic(v, vc) {
   // --- FRONT PAIR ---
   const sY = y + 22;
   const sLX = cx - 50, sRX = cx + 50;
-  const fgActive = GATE_TYPES[v.gate.front.type].id !== 'direct';
   const gateRow = sY + 36;
   const mY = fgActive ? gateRow + gH + 36 : sY + 64;
   const mLX = cx - 56, mRX = cx + 56;
@@ -1303,6 +1324,7 @@ function drawInlineSchematic(v, vc) {
   if (!v.sidePair.enabled) {
     motor(mLX, mY, v.leftSpeed, 'L Motor', '#ff8a65');
     motor(mRX, mY, v.rightSpeed, 'R Motor', '#81c784');
+    c.restore();
     return;
   }
 
@@ -1312,7 +1334,6 @@ function drawInlineSchematic(v, vc) {
 
   // --- SIDE PAIR ---
   const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
-  const sgActive = GATE_TYPES[v.gate.side.type].id !== 'direct';
 
   const ssY = mY + 40;
   const ssLX = cx - 50, ssRX = cx + 50;
@@ -1375,13 +1396,21 @@ function drawInlineSchematic(v, vc) {
   const oY = bY + barH + 30;
   motor(mLX, oY, v.leftSpeed, 'Out L', '#ff8a65');
   motor(mRX, oY, v.rightSpeed, 'Out R', '#81c784');
+  c.restore();
 }
 
 function drawAllInlineSchematics() {
   for (const v of vehicles) {
     if (!v._showView) continue;
     const vc = schematicCanvases.get(v.id);
-    if (vc) drawInlineSchematic(v, vc);
+    if (!vc) continue;
+    // Sync canvas pixel size to CSS rendered size
+    const rect = vc.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      vc.width = Math.round(rect.width);
+      vc.height = Math.round(rect.height);
+    }
+    drawInlineSchematic(v, vc);
   }
 }
 
@@ -1731,7 +1760,7 @@ function buildVehicleCards() {
       const vc = document.createElement('canvas');
       vc.className = 'card-schematic';
       vc.width = 252;
-      vc.height = v.sidePair.enabled ? 400 : 180;
+      vc.height = 180; // initial; resized dynamically in drawAllInlineSchematics
       card.appendChild(vc);
       schematicCanvases.set(v.id, vc);
     } else {
