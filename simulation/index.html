@@ -404,6 +404,7 @@
     background: #0a0a1a;
     border: 1px solid #333;
     width: 100%;
+    aspect-ratio: 1 / 1;
   }
 
   .preset-grid {
@@ -1223,25 +1224,11 @@ function drawInlineSchematic(v, vc) {
   c.fillStyle = '#0a0a1a';
   c.fillRect(0, 0, W, H);
 
-  // Compute natural content height, then scale to fill canvas
+  // Scale drawing to fill canvas
   const fgActive = GATE_TYPES[v.gate.front.type].id !== 'direct';
   const sgActive = v.sidePair.enabled ? GATE_TYPES[v.gate.side.type].id !== 'direct' : false;
-  let natH;
-  if (!v.sidePair.enabled) {
-    // sensors + optional gate + motors + padding
-    natH = fgActive ? 150 : 110;
-  } else {
-    // front + side + blend + output
-    const frontEnd = fgActive ? 130 : 100;
-    const sideH = sgActive ? 120 : 90;
-    natH = frontEnd + sideH + 80; // blend + output
-  }
-  const scale = Math.min(H / natH, W / 252);
-  c.save();
-  c.translate((W - 252 * scale) / 2, (H - natH * scale) / 2);
-  c.scale(scale, scale);
-
-  const cx = 126; // half of 252 (reference width)
+  const refW = 252;
+  const cx = refW / 2;
   const gW = 42, gH = 22; // gate box size
 
   // Helpers
@@ -1305,6 +1292,26 @@ function drawInlineSchematic(v, vc) {
     c.font = 'bold 14px sans-serif'; c.textAlign = 'center';
     c.fillText(inh ? '\u2212' : '+', x, y + 5);
   }
+
+  // ===== Compute content extent and apply scale =====
+  // Pre-compute content bottom for scaling
+  const _sY = 30, _gateRow = 66;
+  const _mY = fgActive ? _gateRow + gH + 36 : _sY + 64;
+  let contentBottom;
+  if (!v.sidePair.enabled) {
+    contentBottom = _mY + 16; // motor half-height + padding
+  } else {
+    const _ssY = _mY + 40;
+    const _sgRow = _ssY + 36;
+    const _smY = sgActive ? _sgRow + gH + 36 : _ssY + 64;
+    const _bY = _smY + 36;
+    const _oY = _bY + 10 + 30;
+    contentBottom = _oY + 16;
+  }
+  const scale = Math.min(W / refW, H / contentBottom);
+  c.save();
+  c.translate((W - refW * scale) / 2, (H - contentBottom * scale) / 2);
+  c.scale(scale, scale);
 
   // ===== Layout =====
   let y = 8;
@@ -1445,20 +1452,11 @@ function drawAllInlineSchematics() {
     if (!v._showView) continue;
     const vc = schematicCanvases.get(v.id);
     if (!vc) continue;
-    // Size canvas to match the controls height above it in the card
-    const card = vc.parentElement;
-    if (card) {
-      let controlsH = 0;
-      for (const child of card.children) {
-        if (child === vc) break;
-        controlsH += child.offsetHeight + 6; // approx gap
-      }
-      const targetH = Math.max(controlsH, 250);
-      const cardW = card.clientWidth - 20; // padding
-      vc.style.width = cardW + 'px';
-      vc.style.height = targetH + 'px';
-      vc.width = Math.round(cardW);
-      vc.height = Math.round(targetH);
+    // Sync canvas pixel size to CSS rendered size
+    const rect = vc.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      vc.width = Math.round(rect.width);
+      vc.height = Math.round(rect.height);
     }
     drawInlineSchematic(v, vc);
   }
