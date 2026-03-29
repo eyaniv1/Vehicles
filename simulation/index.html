@@ -891,6 +891,7 @@ function stepVehicle(v, dt) {
 
 // --- Drawing ---
 function drawLightGradients() {
+  const vw = visibleWorld();
   for (const light of staticLights) {
     const radius = 250 * (light.intensity / 75);
     const alpha = light.on ? 0.15 : 0.03;
@@ -898,7 +899,7 @@ function drawLightGradients() {
     grad.addColorStop(0, `rgba(255, 235, 100, ${alpha})`);
     grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+    ctx.fillRect(vw.x, vw.y, vw.w, vw.h);
   }
   for (const v of vehicles) {
     if (!v.light.on) continue;
@@ -907,7 +908,7 @@ function drawLightGradients() {
     grad.addColorStop(0, 'rgba(255, 235, 100, 0.1)');
     grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, WORLD_W, WORLD_H);
+    ctx.fillRect(vw.x, vw.y, vw.w, vw.h);
   }
 }
 
@@ -1214,37 +1215,10 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(vw.x, y); ctx.lineTo(vw.x + vw.w, y); ctx.stroke();
   }
 
-  // Draw world content at all torus offsets visible in the viewport
-  const vwRight = vw.x + vw.w;
-  const vwBottom = vw.y + vw.h;
-  const ox0 = Math.floor(vw.x / WORLD_W);
-  const ox1 = Math.floor(vwRight / WORLD_W);
-  const oy0 = Math.floor(vw.y / WORLD_H);
-  const oy1 = Math.floor(vwBottom / WORLD_H);
-
-  for (let oy = oy0; oy <= oy1; oy++) {
-    for (let ox = ox0; ox <= ox1; ox++) {
-      ctx.save();
-      ctx.translate(ox * WORLD_W, oy * WORLD_H);
-      drawLightGradients();
-      for (const v of vehicles) drawTrail(v);
-      drawStaticLights();
-      for (const v of vehicles) drawVehicle(v);
-      ctx.restore();
-    }
-  }
-
-  // World boundary outline (subtle)
-  ctx.strokeStyle = 'rgba(79, 195, 247, 0.15)';
-  ctx.lineWidth = 1 / camZoom;
-  for (let oy = oy0; oy <= oy1 + 1; oy++) {
-    const wy = oy * WORLD_H;
-    ctx.beginPath(); ctx.moveTo(vw.x, wy); ctx.lineTo(vwRight, wy); ctx.stroke();
-  }
-  for (let ox = ox0; ox <= ox1 + 1; ox++) {
-    const wx = ox * WORLD_W;
-    ctx.beginPath(); ctx.moveTo(wx, vw.y); ctx.lineTo(wx, vwBottom); ctx.stroke();
-  }
+  drawLightGradients();
+  for (const v of vehicles) drawTrail(v);
+  drawStaticLights();
+  for (const v of vehicles) drawVehicle(v);
 
   ctx.restore();
 
@@ -1369,14 +1343,18 @@ function drawInlineSchematic(v, vc) {
   const mY = fgActive ? gateRow + gH + 36 : sY + 64;
   const mLX = cx - 56, mRX = cx + 56;
 
+  const hasSide = v.sidePair.enabled;
+
   if (type.sensors === 1) {
     sensor(cx, sY, (v._frontL + v._frontR) / 2, 'Sensor', '255,255,255');
     if (fgActive) {
       gate(cx - gW / 2, gateRow, v.gate.front);
       wire(cx, sY + 8, cx, gateRow, (v._frontL + v._frontR) / 2, 'rgb(255,255,255)', false);
-      wire(cx, gateRow + gH, mLX, mY - 9, v._gatedFrontL, 'rgb(255,200,100)', true);
-      wire(cx, gateRow + gH, mRX, mY - 9, v._gatedFrontR, 'rgb(255,200,100)', true);
-    } else {
+      if (!hasSide) {
+        wire(cx, gateRow + gH, mLX, mY - 9, v._gatedFrontL, 'rgb(255,200,100)', true);
+        wire(cx, gateRow + gH, mRX, mY - 9, v._gatedFrontR, 'rgb(255,200,100)', true);
+      }
+    } else if (!hasSide) {
       wire(cx, sY + 8, mLX, mY - 9, v._frontMotorL, 'rgb(255,200,100)', true);
       wire(cx, sY + 8, mRX, mY - 9, v._frontMotorR, 'rgb(255,200,100)', true);
     }
@@ -1389,15 +1367,17 @@ function drawInlineSchematic(v, vc) {
       gate(cx + 4, gateRow, v.gate.front);
       wire(sLX, sY + 8, cx - gW / 2 - 4, gateRow, v._frontL, 'rgb(255,255,255)', false);
       wire(sRX, sY + 8, cx + gW / 2 + 4, gateRow, v._frontR, 'rgb(255,255,255)', false);
-      const pgy = gateRow + gH;
-      if (type.crossed) {
-        wire(cx - gW / 2 - 4, pgy, mRX, mY - 9, v._gatedFrontL, 'rgb(255,200,100)', true);
-        wire(cx + gW / 2 + 4, pgy, mLX, mY - 9, v._gatedFrontR, 'rgb(255,200,100)', true);
-      } else {
-        wire(cx - gW / 2 - 4, pgy, mLX, mY - 9, v._gatedFrontL, 'rgb(255,200,100)', true);
-        wire(cx + gW / 2 + 4, pgy, mRX, mY - 9, v._gatedFrontR, 'rgb(255,200,100)', true);
+      if (!hasSide) {
+        const pgy = gateRow + gH;
+        if (type.crossed) {
+          wire(cx - gW / 2 - 4, pgy, mRX, mY - 9, v._gatedFrontL, 'rgb(255,200,100)', true);
+          wire(cx + gW / 2 + 4, pgy, mLX, mY - 9, v._gatedFrontR, 'rgb(255,200,100)', true);
+        } else {
+          wire(cx - gW / 2 - 4, pgy, mLX, mY - 9, v._gatedFrontL, 'rgb(255,200,100)', true);
+          wire(cx + gW / 2 + 4, pgy, mRX, mY - 9, v._gatedFrontR, 'rgb(255,200,100)', true);
+        }
       }
-    } else {
+    } else if (!hasSide) {
       if (type.crossed) {
         wire(sLX, sY + 8, mRX, mY - 9, v._frontL, 'rgb(255,200,100)', true);
         wire(sRX, sY + 8, mLX, mY - 9, v._frontR, 'rgb(255,200,100)', true);
@@ -1409,13 +1389,13 @@ function drawInlineSchematic(v, vc) {
     // Polarity + crossed label
     polarity(cx, fgActive ? gateRow + gH + 4 : sY + 20, type.inhibitory);
     if (type.crossed) {
-      c.fillStyle = '#ff980066'; c.font = '9px sans-serif'; c.textAlign = 'center';
-      c.fillText('CROSSED', cx, mY - 18);
+      c.fillStyle = '#ff980066'; c.font = '8px sans-serif'; c.textAlign = 'center';
+      c.fillText('X', cx, mY - 18);
     }
   }
 
-  // Front motors
-  if (!v.sidePair.enabled) {
+  // No side pair: just draw motors and return
+  if (!hasSide) {
     motor(mLX, mY, v.leftSpeed, 'L Motor', '#ff8a65');
     motor(mRX, mY, v.rightSpeed, 'R Motor', '#81c784');
     c.restore();
@@ -1427,9 +1407,7 @@ function drawInlineSchematic(v, vc) {
   const w = v.sidePair.weight;
 
   // Front wires end points (from gate or sensor)
-  const fEndLX = type.crossed ? mRX : mLX;
-  const fEndRX = type.crossed ? mLX : mRX;
-  let fWireEndL, fWireEndR, fWireBottomY;
+  let fWireEndL, fWireEndR;
   if (fgActive) {
     fWireEndL = { x: cx - gW / 2 - 4, y: gateRow + gH };
     fWireEndR = { x: cx + gW / 2 + 4, y: gateRow + gH };
