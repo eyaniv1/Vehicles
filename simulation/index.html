@@ -415,6 +415,26 @@
     grid-template-columns: 1fr 1fr;
     gap: 4px;
   }
+
+  .btn-explain {
+    background: #37474f;
+    color: #b0bec5;
+    width: 100%;
+    font-size: 11px;
+  }
+  .btn-explain:hover { background: #455a64; }
+
+  .explain-text {
+    margin-top: 6px;
+    padding: 8px 10px;
+    background: #0d1b2a;
+    border: 1px solid #37474f;
+    border-radius: 6px;
+    font-size: 11px;
+    color: #b0bec5;
+    line-height: 1.5;
+    white-space: pre-wrap;
+  }
 </style>
 </head>
 <body>
@@ -606,6 +626,98 @@ function removeVehicle(id) {
 
 function getVehicleType(v) {
   return VEHICLE_TYPES[v.typeIndex];
+}
+
+// --- Behavior explanation ---
+function explainVehicle(v) {
+  const type = getVehicleType(v);
+  const lines = [];
+
+  // Core type behavior
+  if (type.sensors === 1) {
+    lines.push('Single sensor drives both wheels equally — moves toward or away from light without steering.');
+  } else {
+    const wiring = type.crossed ? 'crossed (left eye to right wheel, right eye to left wheel)' : 'direct (left eye to left wheel, right eye to right wheel)';
+    lines.push(`Two front sensors with ${wiring} wiring.`);
+
+    if (type.inhibitory) {
+      lines.push('Inhibitory response: brighter light = slower motor. Approaches light and slows down near it.');
+      if (type.crossed) {
+        lines.push('Crossed + inhibitory = Explorer: approaches light but turns away at close range, exploring the environment.');
+      } else {
+        lines.push('Direct + inhibitory = Love: approaches light and stops near it, "adoring" the source.');
+      }
+    } else {
+      lines.push('Excitatory response: brighter light = faster motor.');
+      if (type.crossed) {
+        lines.push('Crossed + excitatory = Aggression: steers toward light and accelerates, charging at the source.');
+      } else {
+        lines.push('Direct + excitatory = Fear: steers away from light and accelerates, fleeing the source.');
+      }
+    }
+  }
+
+  // Front gate
+  const fGate = GATE_TYPES[v.gate.front.type];
+  if (fGate.id !== 'direct') {
+    const th = v.gate.front.threshold;
+    const sh = v.gate.front.sharpness;
+    switch (fGate.id) {
+      case 'threshold':
+        lines.push(`Front Threshold gate (T:${th}, S:${sh}): ignores dim light below ~${th}% intensity. Only reacts when light is strong enough.`);
+        break;
+      case 'and':
+        lines.push(`Front AND gate (T:${th}, S:${sh}): both sensors must detect light above ~${th}% before reacting. Only responds to centered, strong light.`);
+        break;
+      case 'or':
+        lines.push(`Front OR gate (T:${th}, S:${sh}): reacts if either sensor detects light above ~${th}%. Responds to light from any direction.`);
+        break;
+      case 'xor':
+        lines.push(`Front XOR gate (T:${th}, S:${sh}): reacts when sensors differ — one bright, one dim. Follows edges/boundaries of light.`);
+        break;
+    }
+  }
+
+  // Side pair
+  if (v.sidePair.enabled) {
+    const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
+    const w = v.sidePair.weight;
+    const sideDesc = sideBeh.name.toLowerCase();
+    lines.push(`Side sensors enabled with ${sideDesc} behavior (${w}% influence). Adds lateral light sensitivity.`);
+
+    if (sideBeh.inhibitory) {
+      lines.push(`Side ${sideBeh.name}: slows the motor on the side sensing light laterally.`);
+    } else {
+      lines.push(`Side ${sideBeh.name}: speeds up the motor on the side sensing light laterally.`);
+    }
+
+    if (sideBeh.crossed) {
+      lines.push('Side wiring is crossed: lateral light on left affects right motor and vice versa.');
+    }
+
+    const sGate = GATE_TYPES[v.gate.side.type];
+    if (sGate.id !== 'direct') {
+      lines.push(`Side ${sGate.name} gate (T:${v.gate.side.threshold}, S:${v.gate.side.sharpness}): filters lateral sensor input.`);
+    }
+
+    lines.push(`Blending: ${100 - w}% front behavior, ${w}% side behavior.`);
+  }
+
+  // Light
+  if (v.light.on) {
+    lines.push(`Mounted light ON at ${v.light.intensity}% intensity — visible to other vehicles, creating social interactions.`);
+  }
+
+  // Speed contrast
+  if (v.speedContrast !== 50) {
+    if (v.speedContrast > 50) {
+      lines.push(`High speed contrast (${v.speedContrast}%): amplifies the difference between left and right motor speeds — sharper turns.`);
+    } else {
+      lines.push(`Low speed contrast (${v.speedContrast}%): softens motor speed differences — gentler, wider turns.`);
+    }
+  }
+
+  return lines.join('\n\n');
 }
 
 // --- Global state ---
@@ -1877,6 +1989,16 @@ function buildVehicleCards() {
       }
     }
 
+    // Explain button
+    const explainBtn = document.createElement('button');
+    explainBtn.className = 'btn btn-explain';
+    explainBtn.textContent = v._showExplain ? 'Hide Explanation' : 'Explain Behavior';
+    explainBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      v._showExplain = !v._showExplain;
+      buildVehicleCards();
+    });
+
     // Assemble card
     card.appendChild(header);
     card.appendChild(lightRow);
@@ -1888,6 +2010,14 @@ function buildVehicleCards() {
     card.appendChild(blendRow);
     if (sideGateRow) card.appendChild(sideGateRow);
     if (sideGateParams) card.appendChild(sideGateParams);
+    card.appendChild(explainBtn);
+
+    if (v._showExplain) {
+      const explainDiv = document.createElement('div');
+      explainDiv.className = 'explain-text';
+      explainDiv.textContent = explainVehicle(v);
+      card.appendChild(explainDiv);
+    }
 
     // Inline schematic canvas
     if (v._showView) {
