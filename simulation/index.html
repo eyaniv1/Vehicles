@@ -150,6 +150,14 @@
   }
   .btn-preset:hover { background: #7b1fa2; }
 
+  .btn-view {
+    background: #00695c;
+    color: #fff;
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+  .btn-view:hover { background: #00897b; }
+
   .btn-row {
     display: flex;
     gap: 6px;
@@ -254,6 +262,51 @@
     font-size: 11px;
   }
 
+  .card-gate {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 11px;
+    color: #aaa;
+  }
+
+  .card-gate select {
+    background: #16213e;
+    color: #e0e0e0;
+    border: 1px solid #444;
+    border-radius: 4px;
+    padding: 2px 3px;
+    font-size: 11px;
+    cursor: pointer;
+  }
+
+  .card-gate .gate-label {
+    min-width: 28px;
+  }
+
+  .gate-params {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 10px;
+    color: #777;
+    padding-left: 32px;
+  }
+
+  .gate-params input[type="range"] {
+    flex: 1;
+    height: 12px;
+    accent-color: #ff9800;
+  }
+
+  .gate-params .gp-val {
+    color: #ff9800;
+    font-weight: bold;
+    width: 24px;
+    text-align: right;
+    font-size: 10px;
+  }
+
   #vehicle-list {
     display: flex;
     flex-direction: column;
@@ -343,6 +396,57 @@
     width: 100%;
   }
   #intensity-popup .popup-delete:hover { background: #e53935; }
+
+  /* Magnified view modal */
+  #view-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 500;
+    background: rgba(0,0,0,0.8);
+    align-items: center;
+    justify-content: center;
+  }
+  #view-modal.open { display: flex; }
+
+  #view-modal-inner {
+    background: #0f0f23;
+    border: 2px solid #4fc3f7;
+    border-radius: 12px;
+    padding: 16px;
+    position: relative;
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+
+  #view-close {
+    position: absolute;
+    top: 8px;
+    right: 12px;
+    background: none;
+    border: none;
+    color: #aaa;
+    font-size: 24px;
+    cursor: pointer;
+  }
+  #view-close:hover { color: #fff; }
+
+  #view-title {
+    font-size: 14px;
+    color: #4fc3f7;
+    margin-bottom: 8px;
+  }
+
+  #view-canvas {
+    border-radius: 8px;
+    background: #0f0f23;
+  }
+
+  .preset-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 4px;
+  }
 </style>
 </head>
 <body>
@@ -359,8 +463,16 @@
 
   <h2>Vehicles</h2>
   <button class="btn btn-add" id="add-vehicle-btn">+ Add Vehicle</button>
-  <button class="btn btn-preset" id="social-btn">Social Mode: Lights + Side Fear</button>
   <div id="vehicle-list"></div>
+
+  <h2>Presets</h2>
+  <button class="btn btn-preset" id="social-btn">Social Mode: Lights + Side Fear</button>
+  <div class="preset-grid">
+    <button class="btn btn-preset" id="preset-focused">Focused Hunter</button>
+    <button class="btn btn-preset" id="preset-edge">Edge Follower</button>
+    <button class="btn btn-preset" id="preset-cautious">Cautious Social</button>
+    <button class="btn btn-preset" id="preset-swarm">Swarm</button>
+  </div>
 
   <h2>Selected Vehicle</h2>
   <div class="readout-vehicle-name" id="readout-name">--</div>
@@ -414,7 +526,25 @@
   </div>
 </div>
 
+<!-- Magnified view modal -->
+<div id="view-modal">
+  <div id="view-modal-inner">
+    <button id="view-close">&times;</button>
+    <div id="view-title">Vehicle Schematic</div>
+    <canvas id="view-canvas" width="600" height="420"></canvas>
+  </div>
+</div>
+
 <script>
+// --- Gate type definitions ---
+const GATE_TYPES = [
+  { id: 'direct', name: 'Direct', symbol: '--' },
+  { id: 'threshold', name: 'Threshold', symbol: 'T' },
+  { id: 'and', name: 'AND', symbol: '&' },
+  { id: 'or', name: 'OR', symbol: '|' },
+  { id: 'xor', name: 'XOR', symbol: '^' },
+];
+
 // --- Vehicle type definitions ---
 const VEHICLE_TYPES = [
   { id: 'v1',  name: 'V1 — Getting Around', shortName: 'V1 Wander',
@@ -467,6 +597,10 @@ let vehicles = [];
 let selectedVehicleId = null;
 let colorIndex = 0;
 
+function defaultGateConfig() {
+  return { type: 0, threshold: 30, sharpness: 5 }; // type index into GATE_TYPES
+}
+
 function createVehicle(typeIndex) {
   const color = VEHICLE_COLORS[colorIndex % VEHICLE_COLORS.length];
   colorIndex++;
@@ -483,8 +617,16 @@ function createVehicle(typeIndex) {
     color: color,
     light: { on: false, intensity: 50 },
     sidePair: { enabled: false, behaviorIndex: 0, weight: 50 },
+    gate: { front: defaultGateConfig(), side: defaultGateConfig() },
     simSpeed: 1,
     speedContrast: 50,
+    // Runtime readings for display
+    _frontL: 0, _frontR: 0,
+    _gatedFrontL: 0, _gatedFrontR: 0,
+    _sideL: 0, _sideR: 0,
+    _gatedSideL: 0, _gatedSideR: 0,
+    _frontMotorL: 0, _frontMotorR: 0,
+    _sideMotorL: 0, _sideMotorR: 0,
   };
   vehicles.push(v);
   if (!selectedVehicleId) selectedVehicleId = v.id;
@@ -504,6 +646,7 @@ function getVehicleType(v) {
 
 // --- Global state ---
 let stopped = false;
+let viewVehicleId = null; // vehicle being viewed in magnified modal
 
 // --- Canvas setup ---
 const canvas = document.getElementById('canvas');
@@ -531,7 +674,7 @@ const VEHICLE_LENGTH = 50;
 const VEHICLE_WIDTH = 34;
 const SENSOR_SPREAD = 18;
 const SENSOR_FORWARD = 30;
-const SIDE_SENSOR_OFFSET = VEHICLE_WIDTH / 2 + 4; // how far out from center
+const SIDE_SENSOR_OFFSET = VEHICLE_WIDTH / 2 + 4;
 const WHEEL_BASE = VEHICLE_WIDTH;
 
 // Side pair behavior options
@@ -541,6 +684,45 @@ const SIDE_BEHAVIORS = [
   { name: 'Love', crossed: false, inhibitory: true },
   { name: 'Explorer', crossed: true, inhibitory: true },
 ];
+
+// --- Gate processing ---
+function sigmoid(x, threshold, sharpness) {
+  // threshold is 0-100, convert to 0-1 range
+  const t = threshold / 100;
+  return 1 / (1 + Math.exp(-sharpness * (x - t)));
+}
+
+function applyGate(rawL, rawR, gateConfig) {
+  const gateType = GATE_TYPES[gateConfig.type].id;
+  const th = gateConfig.threshold;
+  const sh = gateConfig.sharpness;
+
+  switch (gateType) {
+    case 'direct':
+      return { left: rawL, right: rawR };
+
+    case 'threshold':
+      return { left: sigmoid(rawL, th, sh), right: sigmoid(rawR, th, sh) };
+
+    case 'and': {
+      const gate = sigmoid(Math.min(rawL, rawR), th, sh);
+      return { left: rawL * gate, right: rawR * gate };
+    }
+
+    case 'or': {
+      const gate = sigmoid(Math.max(rawL, rawR), th, sh);
+      return { left: rawL * gate, right: rawR * gate };
+    }
+
+    case 'xor': {
+      const gate = sigmoid(Math.abs(rawL - rawR), th, sh);
+      return { left: rawL * gate, right: rawR * gate };
+    }
+
+    default:
+      return { left: rawL, right: rawR };
+  }
+}
 
 // --- Sensor calculation ---
 function getFrontSensorPositions(v) {
@@ -557,8 +739,6 @@ function getFrontSensorPositions(v) {
 function getSideSensorPositions(v) {
   const cosT = Math.cos(v.theta);
   const sinT = Math.sin(v.theta);
-  // Left side sensor: perpendicular left from vehicle center (y-down canvas)
-  // Right side sensor: perpendicular right
   return {
     leftX:  v.x + sinT * SIDE_SENSOR_OFFSET,
     leftY:  v.y - cosT * SIDE_SENSOR_OFFSET,
@@ -571,7 +751,6 @@ function getSideSensorPositions(v) {
 function totalIntensityAt(px, py, excludeVehicleId) {
   let sum = 0;
 
-  // Static lights
   for (const light of staticLights) {
     if (!light.on) continue;
     const dx = px - light.x;
@@ -582,7 +761,6 @@ function totalIntensityAt(px, py, excludeVehicleId) {
     sum += (light.intensity / 75) * 80000 / effectiveDist;
   }
 
-  // Vehicle-mounted lights (exclude self)
   for (const v of vehicles) {
     if (v.id === excludeVehicleId) continue;
     if (!v.light.on) continue;
@@ -629,8 +807,19 @@ function stepVehicle(v, dt) {
   const rawFrontL = totalIntensityAt(frontSensors.leftX, frontSensors.leftY, v.id);
   const rawFrontR = totalIntensityAt(frontSensors.rightX, frontSensors.rightY, v.id);
 
+  // Apply front gate
+  const gatedFront = applyGate(rawFrontL, rawFrontR, v.gate.front);
+
   const type = getVehicleType(v);
-  const front = computePairMotors(rawFrontL, rawFrontR, type.sensors, type.crossed, type.inhibitory);
+  const front = computePairMotors(gatedFront.left, gatedFront.right, type.sensors, type.crossed, type.inhibitory);
+
+  // Store readings
+  v._frontL = rawFrontL;
+  v._frontR = rawFrontR;
+  v._gatedFrontL = gatedFront.left;
+  v._gatedFrontR = gatedFront.right;
+  v._frontMotorL = front.left;
+  v._frontMotorR = front.right;
 
   let leftSpeed, rightSpeed;
 
@@ -638,16 +827,23 @@ function stepVehicle(v, dt) {
     const sideSensors = getSideSensorPositions(v);
     const rawSideL = totalIntensityAt(sideSensors.leftX, sideSensors.leftY, v.id);
     const rawSideR = totalIntensityAt(sideSensors.rightX, sideSensors.rightY, v.id);
+
+    // Apply side gate
+    const gatedSide = applyGate(rawSideL, rawSideR, v.gate.side);
+
     const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
-    const side = computePairMotors(rawSideL, rawSideR, 2, sideBeh.crossed, sideBeh.inhibitory);
+    const side = computePairMotors(gatedSide.left, gatedSide.right, 2, sideBeh.crossed, sideBeh.inhibitory);
 
     const w = v.sidePair.weight / 100;
     leftSpeed = (1 - w) * front.left + w * side.left;
     rightSpeed = (1 - w) * front.right + w * side.right;
 
-    // Store side readings for readout
     v._sideL = rawSideL;
     v._sideR = rawSideR;
+    v._gatedSideL = gatedSide.left;
+    v._gatedSideR = gatedSide.right;
+    v._sideMotorL = side.left;
+    v._sideMotorR = side.right;
   } else {
     leftSpeed = front.left;
     rightSpeed = front.right;
@@ -669,7 +865,7 @@ function stepVehicle(v, dt) {
   v.y += linearV * Math.sin(v.theta) * dt;
   v.theta += angularV * dt;
 
-  // Wrap around edges (insert null trail marker to break the line)
+  // Wrap around edges
   const margin = 10;
   let wrapped = false;
   if (v.x < -margin) { v.x = canvas.width + margin; wrapped = true; }
@@ -700,7 +896,6 @@ function stepVehicle(v, dt) {
 
 // --- Drawing ---
 function drawLightGradients() {
-  // Static lights
   for (const light of staticLights) {
     const radius = 250 * (light.intensity / 75);
     const alpha = light.on ? 0.15 : 0.03;
@@ -710,7 +905,6 @@ function drawLightGradients() {
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
-  // Vehicle-mounted lights
   for (const v of vehicles) {
     if (!v.light.on) continue;
     const radius = 200 * (v.light.intensity / 75);
@@ -812,6 +1006,15 @@ function drawVehicle(v) {
     ctx.fill();
   }
 
+  // Gate indicator on body (small text)
+  const frontGateId = GATE_TYPES[v.gate.front.type].id;
+  if (frontGateId !== 'direct') {
+    ctx.fillStyle = '#ff9800';
+    ctx.font = 'bold 8px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(GATE_TYPES[v.gate.front.type].symbol, 5, 3);
+  }
+
   // Wheels
   const wheelW = VEHICLE_LENGTH / 2.2;
   const wheelH = 8;
@@ -826,7 +1029,6 @@ function drawVehicle(v) {
 
   const tickCount = 4;
 
-  // Left wheel
   const leftWheelY = -VEHICLE_WIDTH / 2 - wheelH;
   ctx.fillStyle = wheelColor(v.leftSpeed);
   ctx.strokeStyle = '#888';
@@ -841,7 +1043,6 @@ function drawVehicle(v) {
     ctx.beginPath(); ctx.moveTo(tx, leftWheelY); ctx.lineTo(tx, leftWheelY + wheelH); ctx.stroke();
   }
 
-  // Right wheel
   const rightWheelY = VEHICLE_WIDTH / 2;
   ctx.fillStyle = wheelColor(v.rightSpeed);
   ctx.strokeStyle = '#888';
@@ -939,7 +1140,6 @@ function drawVehicle(v) {
     const sideR = totalIntensityAt(sideSensors.rightX, sideSensors.rightY, v.id);
     const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
 
-    // Side sensor dots (on left and right sides of body)
     const sideY_left = -SIDE_SENSOR_OFFSET;
     const sideY_right = SIDE_SENSOR_OFFSET;
 
@@ -960,7 +1160,6 @@ function drawVehicle(v) {
     ctx.strokeStyle = 'rgba(180, 255, 180, 0.5)';
     ctx.stroke();
 
-    // Side wiring lines (green-tinted)
     ctx.lineWidth = 1.5;
     ctx.setLineDash([3, 3]);
     ctx.strokeStyle = 'rgba(100, 255, 150, 0.4)';
@@ -1012,6 +1211,380 @@ function draw() {
   for (const v of vehicles) drawVehicle(v);
 }
 
+// --- Magnified view drawing ---
+function drawMagnifiedView() {
+  const modal = document.getElementById('view-modal');
+  if (!modal.classList.contains('open')) return;
+
+  const v = vehicles.find(v => v.id === viewVehicleId);
+  if (!v) return;
+
+  const vc = document.getElementById('view-canvas');
+  const vctx = vc.getContext('2d');
+  const W = vc.width;
+  const H = vc.height;
+  const type = getVehicleType(v);
+
+  vctx.clearRect(0, 0, W, H);
+  vctx.fillStyle = '#0f0f23';
+  vctx.fillRect(0, 0, W, H);
+
+  // Layout constants
+  const cx = W / 2;
+  const bodyW = 160;
+  const bodyH = 100;
+  const bodyX = cx - bodyW / 2;
+  const bodyY = 60;
+
+  // Sensor positions (schematic)
+  const sensorY = 30;
+  const sensorLX = cx - 55;
+  const sensorRX = cx + 55;
+
+  // Gate box positions
+  const gateY = bodyY + 15;
+  const gateW = 36;
+  const gateH = 22;
+  const gateLX = cx - 60;
+  const gateRX = cx + 24;
+
+  // Motor/wheel positions
+  const motorY = bodyY + bodyH + 30;
+  const motorLX = cx - 70;
+  const motorRX = cx + 70;
+
+  // Side sensor positions
+  const sideSensorLX = bodyX - 40;
+  const sideSensorRX = bodyX + bodyW + 40;
+  const sideSensorY = bodyY + bodyH / 2;
+
+  // Side gate positions
+  const sideGateY = bodyY + bodyH + 5;
+  const sideGateLX = cx - 120;
+  const sideGateRX = cx + 84;
+
+  // Blend indicator
+  const blendY = motorY + 40;
+
+  // Helper: draw signal wire with thickness/color based on value
+  function drawWire(x1, y1, x2, y2, value, color, dashed) {
+    const lw = 1 + value * 4;
+    const alpha = 0.3 + value * 0.7;
+    vctx.lineWidth = lw;
+    vctx.strokeStyle = color.replace(')', `, ${alpha})`).replace('rgb', 'rgba');
+    if (dashed) vctx.setLineDash([6, 4]);
+    else vctx.setLineDash([]);
+    vctx.beginPath();
+    vctx.moveTo(x1, y1);
+    vctx.lineTo(x2, y2);
+    vctx.stroke();
+    vctx.setLineDash([]);
+  }
+
+  // Helper: draw sensor circle
+  function drawSensor(x, y, value, label, color) {
+    const bright = 0.3 + 0.7 * value;
+    // Glow
+    const grad = vctx.createRadialGradient(x, y, 0, x, y, 18);
+    grad.addColorStop(0, `rgba(255, 255, 200, ${bright * 0.3})`);
+    grad.addColorStop(1, 'rgba(255, 255, 200, 0)');
+    vctx.fillStyle = grad;
+    vctx.beginPath();
+    vctx.arc(x, y, 18, 0, Math.PI * 2);
+    vctx.fill();
+
+    vctx.fillStyle = `rgba(${color}, ${bright})`;
+    vctx.beginPath();
+    vctx.arc(x, y, 10, 0, Math.PI * 2);
+    vctx.fill();
+    vctx.strokeStyle = `rgba(${color}, 0.6)`;
+    vctx.lineWidth = 2;
+    vctx.stroke();
+
+    // Value
+    vctx.fillStyle = '#fff';
+    vctx.font = 'bold 11px sans-serif';
+    vctx.textAlign = 'center';
+    vctx.fillText((value * 100).toFixed(0), x, y + 4);
+
+    // Label
+    vctx.fillStyle = '#888';
+    vctx.font = '10px sans-serif';
+    vctx.fillText(label, x, y - 16);
+  }
+
+  // Helper: draw gate box
+  function drawGateBox(x, y, gateConfig, inputL, inputR, outputL, outputR) {
+    const gateType = GATE_TYPES[gateConfig.type];
+    const isActive = gateType.id !== 'direct';
+    const bgColor = isActive ? '#2a1a0a' : '#1a1a2e';
+    const borderColor = isActive ? '#ff9800' : '#444';
+
+    vctx.fillStyle = bgColor;
+    vctx.strokeStyle = borderColor;
+    vctx.lineWidth = 2;
+    vctx.beginPath();
+    vctx.roundRect(x, y, gateW, gateH, 4);
+    vctx.fill();
+    vctx.stroke();
+
+    vctx.fillStyle = isActive ? '#ff9800' : '#666';
+    vctx.font = 'bold 11px sans-serif';
+    vctx.textAlign = 'center';
+    vctx.fillText(gateType.name, x + gateW / 2, y + gateH / 2 + 4);
+
+    if (isActive) {
+      // Show threshold line
+      vctx.fillStyle = '#ff980088';
+      vctx.font = '9px sans-serif';
+      vctx.fillText('T:' + gateConfig.threshold, x + gateW / 2, y - 3);
+    }
+  }
+
+  // Helper: draw motor
+  function drawMotor(x, y, value, label, color) {
+    const w = 50, h = 28;
+    // Speed bar background
+    vctx.fillStyle = '#1a1a2e';
+    vctx.strokeStyle = '#555';
+    vctx.lineWidth = 1;
+    vctx.beginPath();
+    vctx.roundRect(x - w/2, y - h/2, w, h, 4);
+    vctx.fill();
+    vctx.stroke();
+
+    // Speed bar fill
+    const fillW = (w - 4) * Math.min(value, 1);
+    const r = Math.floor(80 + 175 * value);
+    const g = Math.floor(60 + 100 * (1 - value));
+    vctx.fillStyle = `rgb(${r}, ${g}, 60)`;
+    vctx.fillRect(x - w/2 + 2, y - h/2 + 2, fillW, h - 4);
+
+    // Value text
+    vctx.fillStyle = '#fff';
+    vctx.font = 'bold 12px sans-serif';
+    vctx.textAlign = 'center';
+    vctx.fillText((value * 100).toFixed(0), x, y + 4);
+
+    // Label
+    vctx.fillStyle = color;
+    vctx.font = 'bold 10px sans-serif';
+    vctx.fillText(label, x, y - h/2 - 6);
+  }
+
+  // Helper: draw polarity indicator
+  function drawPolarity(x, y, inhibitory) {
+    vctx.fillStyle = inhibitory ? '#f44336' : '#4caf50';
+    vctx.font = 'bold 14px sans-serif';
+    vctx.textAlign = 'center';
+    vctx.fillText(inhibitory ? '-' : '+', x, y + 5);
+  }
+
+  // ===== Draw the schematic =====
+
+  // Title
+  vctx.fillStyle = v.color.stroke;
+  vctx.font = 'bold 14px sans-serif';
+  vctx.textAlign = 'center';
+  vctx.fillText(type.name, cx, 16);
+
+  // Vehicle body outline
+  vctx.fillStyle = v.color.body + '44';
+  vctx.strokeStyle = v.color.stroke;
+  vctx.lineWidth = 2;
+  vctx.beginPath();
+  vctx.roundRect(bodyX, bodyY, bodyW, bodyH, 8);
+  vctx.fill();
+  vctx.stroke();
+
+  // Mounted light indicator
+  if (v.light.on) {
+    vctx.fillStyle = '#ffd54f';
+    vctx.beginPath();
+    vctx.arc(cx, bodyY + bodyH / 2, 6, 0, Math.PI * 2);
+    vctx.fill();
+    vctx.fillStyle = '#888';
+    vctx.font = '9px sans-serif';
+    vctx.fillText('Light ' + v.light.intensity + '%', cx, bodyY + bodyH / 2 + 16);
+  }
+
+  // --- FRONT PAIR ---
+  if (type.sensors === 1) {
+    // Single sensor
+    drawSensor(cx, sensorY, (v._frontL + v._frontR) / 2, 'Sensor', '255, 255, 255');
+
+    const frontGateId = GATE_TYPES[v.gate.front.type].id;
+    if (frontGateId !== 'direct') {
+      drawGateBox(cx - gateW / 2, gateY, v.gate.front);
+      drawWire(cx, sensorY + 10, cx, gateY, (v._frontL + v._frontR) / 2, 'rgb(255, 255, 255)', false);
+      drawWire(cx, gateY + gateH, motorLX, motorY - 14, v._gatedFrontL, 'rgb(255, 200, 100)', true);
+      drawWire(cx, gateY + gateH, motorRX, motorY - 14, v._gatedFrontR, 'rgb(255, 200, 100)', true);
+    } else {
+      drawWire(cx, sensorY + 10, motorLX, motorY - 14, v._frontMotorL, 'rgb(255, 200, 100)', true);
+      drawWire(cx, sensorY + 10, motorRX, motorY - 14, v._frontMotorR, 'rgb(255, 200, 100)', true);
+    }
+  } else {
+    // Two front sensors
+    drawSensor(sensorLX, sensorY, v._frontL, 'Left Eye', '255, 255, 255');
+    drawSensor(sensorRX, sensorY, v._frontR, 'Right Eye', '255, 255, 255');
+
+    const frontGateId = GATE_TYPES[v.gate.front.type].id;
+    const gateActive = frontGateId !== 'direct';
+
+    if (gateActive) {
+      // Left gate
+      drawGateBox(gateLX, gateY, v.gate.front);
+      // Right gate
+      drawGateBox(gateRX, gateY, v.gate.front);
+
+      // Sensor → Gate wires
+      drawWire(sensorLX, sensorY + 10, gateLX + gateW / 2, gateY, v._frontL, 'rgb(255, 255, 255)', false);
+      drawWire(sensorRX, sensorY + 10, gateRX + gateW / 2, gateY, v._frontR, 'rgb(255, 255, 255)', false);
+
+      // Gate → Motor wires (with crossing)
+      const postGateY = gateY + gateH;
+      if (type.crossed) {
+        drawWire(gateLX + gateW / 2, postGateY, motorRX, motorY - 14, v._gatedFrontL, 'rgb(255, 200, 100)', true);
+        drawWire(gateRX + gateW / 2, postGateY, motorLX, motorY - 14, v._gatedFrontR, 'rgb(255, 200, 100)', true);
+      } else {
+        drawWire(gateLX + gateW / 2, postGateY, motorLX, motorY - 14, v._gatedFrontL, 'rgb(255, 200, 100)', true);
+        drawWire(gateRX + gateW / 2, postGateY, motorRX, motorY - 14, v._gatedFrontR, 'rgb(255, 200, 100)', true);
+      }
+
+      // Polarity
+      drawPolarity(cx, postGateY + 8, type.inhibitory);
+    } else {
+      // Direct: sensor → motor
+      if (type.crossed) {
+        drawWire(sensorLX, sensorY + 10, motorRX, motorY - 14, v._frontL, 'rgb(255, 200, 100)', true);
+        drawWire(sensorRX, sensorY + 10, motorLX, motorY - 14, v._frontR, 'rgb(255, 200, 100)', true);
+      } else {
+        drawWire(sensorLX, sensorY + 10, motorLX, motorY - 14, v._frontL, 'rgb(255, 200, 100)', true);
+        drawWire(sensorRX, sensorY + 10, motorRX, motorY - 14, v._frontR, 'rgb(255, 200, 100)', true);
+      }
+      // Polarity indicator
+      drawPolarity(cx, bodyY + bodyH - 10, type.inhibitory);
+    }
+
+    // Crossed indicator
+    if (type.crossed) {
+      vctx.fillStyle = '#ff980088';
+      vctx.font = '9px sans-serif';
+      vctx.textAlign = 'center';
+      vctx.fillText('CROSSED', cx, bodyY + bodyH - 2);
+    }
+  }
+
+  // Motors
+  if (!v.sidePair.enabled) {
+    drawMotor(motorLX, motorY, v.leftSpeed, 'Left Motor', '#ff8a65');
+    drawMotor(motorRX, motorY, v.rightSpeed, 'Right Motor', '#81c784');
+  } else {
+    // Show front motor contribution
+    drawMotor(motorLX, motorY, v._frontMotorL, 'Front L', '#ff8a65');
+    drawMotor(motorRX, motorY, v._frontMotorR, 'Front R', '#81c784');
+  }
+
+  // --- SIDE PAIR ---
+  if (v.sidePair.enabled) {
+    const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
+
+    // Side sensors
+    drawSensor(sideSensorLX, sideSensorY, v._sideL, 'Side L', '180, 255, 180');
+    drawSensor(sideSensorRX, sideSensorY, v._sideR, 'Side R', '180, 255, 180');
+
+    const sideGateId = GATE_TYPES[v.gate.side.type].id;
+    const sideGateActive = sideGateId !== 'direct';
+
+    const sideMotorY = motorY + 55;
+
+    if (sideGateActive) {
+      drawGateBox(sideGateLX, sideGateY, v.gate.side);
+      drawGateBox(sideGateRX, sideGateY, v.gate.side);
+
+      drawWire(sideSensorLX, sideSensorY + 10, sideGateLX + gateW / 2, sideGateY, v._sideL, 'rgb(100, 255, 150)', false);
+      drawWire(sideSensorRX, sideSensorY + 10, sideGateRX + gateW / 2, sideGateY, v._sideR, 'rgb(100, 255, 150)', false);
+
+      if (sideBeh.crossed) {
+        drawWire(sideGateLX + gateW / 2, sideGateY + gateH, motorRX, sideMotorY - 14, v._gatedSideL, 'rgb(100, 255, 150)', true);
+        drawWire(sideGateRX + gateW / 2, sideGateY + gateH, motorLX, sideMotorY - 14, v._gatedSideR, 'rgb(100, 255, 150)', true);
+      } else {
+        drawWire(sideGateLX + gateW / 2, sideGateY + gateH, motorLX, sideMotorY - 14, v._gatedSideL, 'rgb(100, 255, 150)', true);
+        drawWire(sideGateRX + gateW / 2, sideGateY + gateH, motorRX, sideMotorY - 14, v._gatedSideR, 'rgb(100, 255, 150)', true);
+      }
+
+      drawPolarity(cx, sideGateY + gateH + 10, sideBeh.inhibitory);
+    } else {
+      if (sideBeh.crossed) {
+        drawWire(sideSensorLX, sideSensorY + 10, motorRX, sideMotorY - 14, v._sideL, 'rgb(100, 255, 150)', true);
+        drawWire(sideSensorRX, sideSensorY + 10, motorLX, sideMotorY - 14, v._sideR, 'rgb(100, 255, 150)', true);
+      } else {
+        drawWire(sideSensorLX, sideSensorY + 10, motorLX, sideMotorY - 14, v._sideL, 'rgb(100, 255, 150)', true);
+        drawWire(sideSensorRX, sideSensorY + 10, motorRX, sideMotorY - 14, v._sideR, 'rgb(100, 255, 150)', true);
+      }
+      drawPolarity(cx, sideMotorY - 24, sideBeh.inhibitory);
+    }
+
+    // Side motors
+    drawMotor(motorLX, sideMotorY, v._sideMotorL, 'Side L', '#a5d6a7');
+    drawMotor(motorRX, sideMotorY, v._sideMotorR, 'Side R', '#a5d6a7');
+
+    // Side behavior label
+    vctx.fillStyle = '#4caf50';
+    vctx.font = '10px sans-serif';
+    vctx.textAlign = 'center';
+    if (sideBeh.crossed) {
+      vctx.fillText('CROSSED', cx, sideMotorY - 2);
+    }
+
+    // Blend section
+    const finalMotorY = sideMotorY + 50;
+    const w = v.sidePair.weight;
+
+    // Blend bar
+    vctx.fillStyle = '#1a1a2e';
+    vctx.strokeStyle = '#4fc3f7';
+    vctx.lineWidth = 1;
+    const barW = 120, barH = 14;
+    vctx.beginPath();
+    vctx.roundRect(cx - barW/2, finalMotorY - barH/2 - 20, barW, barH, 3);
+    vctx.fill();
+    vctx.stroke();
+
+    // Front portion
+    const frontW = (barW - 4) * (1 - w / 100);
+    vctx.fillStyle = '#ff8a6566';
+    vctx.fillRect(cx - barW/2 + 2, finalMotorY - barH/2 - 18, frontW, barH - 4);
+
+    // Side portion
+    const sideW = (barW - 4) * (w / 100);
+    vctx.fillStyle = '#a5d6a766';
+    vctx.fillRect(cx - barW/2 + 2 + frontW, finalMotorY - barH/2 - 18, sideW, barH - 4);
+
+    vctx.fillStyle = '#fff';
+    vctx.font = '9px sans-serif';
+    vctx.textAlign = 'center';
+    vctx.fillText(`Blend: Front ${100-w}% / Side ${w}%`, cx, finalMotorY - barH/2 - 20 - 4);
+
+    // Wires to final motors
+    drawWire(motorLX, motorY + 14, motorLX, finalMotorY - 14, v._frontMotorL, 'rgb(255, 138, 101)', false);
+    drawWire(motorRX, motorY + 14, motorRX, finalMotorY - 14, v._frontMotorR, 'rgb(129, 199, 132)', false);
+    drawWire(motorLX, sideMotorY + 14, cx - 30, finalMotorY - 14, v._sideMotorL, 'rgb(100, 255, 150)', false);
+    drawWire(motorRX, sideMotorY + 14, cx + 30, finalMotorY - 14, v._sideMotorR, 'rgb(100, 255, 150)', false);
+
+    // Final output motors
+    drawMotor(motorLX, finalMotorY, v.leftSpeed, 'Output L', '#ff8a65');
+    drawMotor(motorRX, finalMotorY, v.rightSpeed, 'Output R', '#81c784');
+  }
+
+  // Footer info
+  const footerY = H - 10;
+  vctx.fillStyle = '#555';
+  vctx.font = '10px sans-serif';
+  vctx.textAlign = 'center';
+  vctx.fillText(`Speed: ${v.simSpeed}x | Contrast: ${v.speedContrast}%`, cx, footerY);
+}
+
 // --- Game loop ---
 let lastTime = 0;
 function loop(timestamp) {
@@ -1023,6 +1596,7 @@ function loop(timestamp) {
     for (const v of vehicles) stepVehicle(v, baseDt * v.simSpeed);
   }
   draw();
+  drawMagnifiedView();
   requestAnimationFrame(loop);
 }
 
@@ -1036,7 +1610,7 @@ function buildVehicleCards() {
     card.className = 'vehicle-card' + (v.id === selectedVehicleId ? ' selected' : '');
     card.dataset.vehicleId = v.id;
 
-    // Header row: color dot + type select + delete
+    // Header row: color dot + type select + view + delete
     const header = document.createElement('div');
     header.className = 'card-header';
 
@@ -1058,6 +1632,14 @@ function buildVehicleCards() {
       updateReadoutName();
     });
 
+    const viewBtn = document.createElement('button');
+    viewBtn.className = 'btn btn-view';
+    viewBtn.textContent = 'View';
+    viewBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openMagnifiedView(v.id);
+    });
+
     const del = document.createElement('button');
     del.className = 'card-delete';
     del.textContent = '\u00d7';
@@ -1070,15 +1652,14 @@ function buildVehicleCards() {
 
     header.appendChild(dot);
     header.appendChild(select);
+    header.appendChild(viewBtn);
     header.appendChild(del);
 
-    // Light row: checkbox + slider + value
+    // Light row
     const lightRow = document.createElement('div');
     lightRow.className = 'card-light';
-
     const lightLabel = document.createElement('span');
     lightLabel.textContent = 'Light';
-
     const lightCheck = document.createElement('input');
     lightCheck.type = 'checkbox';
     lightCheck.checked = v.light.on;
@@ -1086,22 +1667,19 @@ function buildVehicleCards() {
       e.stopPropagation();
       v.light.on = e.target.checked;
     });
-
     const lightSlider = document.createElement('input');
     lightSlider.type = 'range';
     lightSlider.min = 10;
     lightSlider.max = 100;
     lightSlider.value = v.light.intensity;
+    const lightVal = document.createElement('span');
+    lightVal.className = 'light-val';
+    lightVal.textContent = v.light.intensity + '%';
     lightSlider.addEventListener('input', (e) => {
       e.stopPropagation();
       v.light.intensity = parseInt(e.target.value);
       lightVal.textContent = v.light.intensity + '%';
     });
-
-    const lightVal = document.createElement('span');
-    lightVal.className = 'light-val';
-    lightVal.textContent = v.light.intensity + '%';
-
     lightRow.appendChild(lightLabel);
     lightRow.appendChild(lightCheck);
     lightRow.appendChild(lightSlider);
@@ -1151,7 +1729,72 @@ function buildVehicleCards() {
     contrastRow.appendChild(contrastSlider);
     contrastRow.appendChild(contrastVal);
 
-    // Side pair row: enable checkbox + behavior select
+    // --- Front gate row ---
+    const frontGateRow = document.createElement('div');
+    frontGateRow.className = 'card-gate';
+    const fgLabel = document.createElement('span');
+    fgLabel.className = 'gate-label';
+    fgLabel.textContent = 'F.Gate';
+    const fgSelect = document.createElement('select');
+    GATE_TYPES.forEach((g, i) => {
+      const opt = document.createElement('option');
+      opt.value = i;
+      opt.textContent = g.name;
+      if (i === v.gate.front.type) opt.selected = true;
+      fgSelect.appendChild(opt);
+    });
+    fgSelect.addEventListener('change', (e) => {
+      e.stopPropagation();
+      v.gate.front.type = parseInt(e.target.value);
+      buildVehicleCards(); // rebuild to show/hide params
+    });
+    frontGateRow.appendChild(fgLabel);
+    frontGateRow.appendChild(fgSelect);
+
+    // Front gate params (if not direct)
+    let frontGateParams = null;
+    if (GATE_TYPES[v.gate.front.type].id !== 'direct') {
+      frontGateParams = document.createElement('div');
+      frontGateParams.className = 'gate-params';
+      const thLabel = document.createElement('span');
+      thLabel.textContent = 'Thr';
+      const thSlider = document.createElement('input');
+      thSlider.type = 'range';
+      thSlider.min = 0;
+      thSlider.max = 80;
+      thSlider.value = v.gate.front.threshold;
+      const thVal = document.createElement('span');
+      thVal.className = 'gp-val';
+      thVal.textContent = v.gate.front.threshold;
+      thSlider.addEventListener('input', (e) => {
+        e.stopPropagation();
+        v.gate.front.threshold = parseInt(e.target.value);
+        thVal.textContent = v.gate.front.threshold;
+      });
+      const shLabel = document.createElement('span');
+      shLabel.textContent = 'Sh';
+      const shSlider = document.createElement('input');
+      shSlider.type = 'range';
+      shSlider.min = 1;
+      shSlider.max = 20;
+      shSlider.value = v.gate.front.sharpness;
+      const shVal = document.createElement('span');
+      shVal.className = 'gp-val';
+      shVal.textContent = v.gate.front.sharpness;
+      shSlider.addEventListener('input', (e) => {
+        e.stopPropagation();
+        v.gate.front.sharpness = parseInt(e.target.value);
+        shVal.textContent = v.gate.front.sharpness;
+      });
+      frontGateParams.appendChild(thLabel);
+      frontGateParams.appendChild(thSlider);
+      frontGateParams.appendChild(thVal);
+      frontGateParams.appendChild(shLabel);
+      frontGateParams.appendChild(shSlider);
+      frontGateParams.appendChild(shVal);
+    }
+
+    // Side pair row
     const sideRow = document.createElement('div');
     sideRow.className = 'card-light';
     const sideLabel = document.createElement('span');
@@ -1171,6 +1814,7 @@ function buildVehicleCards() {
     sideCheck.addEventListener('change', (e) => {
       e.stopPropagation();
       v.sidePair.enabled = e.target.checked;
+      buildVehicleCards();
     });
     sideSelect.addEventListener('change', (e) => {
       e.stopPropagation();
@@ -1180,7 +1824,7 @@ function buildVehicleCards() {
     sideRow.appendChild(sideCheck);
     sideRow.appendChild(sideSelect);
 
-    // Side blend weight row
+    // Blend row
     const blendRow = document.createElement('div');
     blendRow.className = 'card-slider';
     const blendLabel = document.createElement('span');
@@ -1202,12 +1846,84 @@ function buildVehicleCards() {
     blendRow.appendChild(blendSlider);
     blendRow.appendChild(blendVal);
 
+    // Side gate row (if side pair enabled)
+    let sideGateRow = null;
+    let sideGateParams = null;
+    if (v.sidePair.enabled) {
+      sideGateRow = document.createElement('div');
+      sideGateRow.className = 'card-gate';
+      const sgLabel = document.createElement('span');
+      sgLabel.className = 'gate-label';
+      sgLabel.textContent = 'S.Gate';
+      const sgSelect = document.createElement('select');
+      GATE_TYPES.forEach((g, i) => {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = g.name;
+        if (i === v.gate.side.type) opt.selected = true;
+        sgSelect.appendChild(opt);
+      });
+      sgSelect.addEventListener('change', (e) => {
+        e.stopPropagation();
+        v.gate.side.type = parseInt(e.target.value);
+        buildVehicleCards();
+      });
+      sideGateRow.appendChild(sgLabel);
+      sideGateRow.appendChild(sgSelect);
+
+      if (GATE_TYPES[v.gate.side.type].id !== 'direct') {
+        sideGateParams = document.createElement('div');
+        sideGateParams.className = 'gate-params';
+        const sthLabel = document.createElement('span');
+        sthLabel.textContent = 'Thr';
+        const sthSlider = document.createElement('input');
+        sthSlider.type = 'range';
+        sthSlider.min = 0;
+        sthSlider.max = 80;
+        sthSlider.value = v.gate.side.threshold;
+        const sthVal = document.createElement('span');
+        sthVal.className = 'gp-val';
+        sthVal.textContent = v.gate.side.threshold;
+        sthSlider.addEventListener('input', (e) => {
+          e.stopPropagation();
+          v.gate.side.threshold = parseInt(e.target.value);
+          sthVal.textContent = v.gate.side.threshold;
+        });
+        const sshLabel = document.createElement('span');
+        sshLabel.textContent = 'Sh';
+        const sshSlider = document.createElement('input');
+        sshSlider.type = 'range';
+        sshSlider.min = 1;
+        sshSlider.max = 20;
+        sshSlider.value = v.gate.side.sharpness;
+        const sshVal = document.createElement('span');
+        sshVal.className = 'gp-val';
+        sshVal.textContent = v.gate.side.sharpness;
+        sshSlider.addEventListener('input', (e) => {
+          e.stopPropagation();
+          v.gate.side.sharpness = parseInt(e.target.value);
+          sshVal.textContent = v.gate.side.sharpness;
+        });
+        sideGateParams.appendChild(sthLabel);
+        sideGateParams.appendChild(sthSlider);
+        sideGateParams.appendChild(sthVal);
+        sideGateParams.appendChild(sshLabel);
+        sideGateParams.appendChild(sshSlider);
+        sideGateParams.appendChild(sshVal);
+      }
+    }
+
+    // Assemble card
     card.appendChild(header);
     card.appendChild(lightRow);
     card.appendChild(speedRow);
     card.appendChild(contrastRow);
+    card.appendChild(frontGateRow);
+    if (frontGateParams) card.appendChild(frontGateParams);
     card.appendChild(sideRow);
     card.appendChild(blendRow);
+    if (sideGateRow) card.appendChild(sideGateRow);
+    if (sideGateParams) card.appendChild(sideGateParams);
 
     // Click card to select vehicle
     card.addEventListener('click', () => {
@@ -1234,6 +1950,35 @@ function updateReadoutName() {
   }
 }
 
+// --- Magnified view modal ---
+function openMagnifiedView(vehicleId) {
+  viewVehicleId = vehicleId;
+  const modal = document.getElementById('view-modal');
+  modal.classList.add('open');
+
+  // Resize canvas for side pair
+  const v = vehicles.find(v => v.id === vehicleId);
+  const vc = document.getElementById('view-canvas');
+  if (v && v.sidePair.enabled) {
+    vc.height = 500;
+  } else {
+    vc.height = 320;
+  }
+
+  const type = getVehicleType(v);
+  document.getElementById('view-title').textContent = type.name + ' — Schematic';
+}
+
+function closeMagnifiedView() {
+  document.getElementById('view-modal').classList.remove('open');
+  viewVehicleId = null;
+}
+
+document.getElementById('view-close').addEventListener('click', closeMagnifiedView);
+document.getElementById('view-modal').addEventListener('click', (e) => {
+  if (e.target === document.getElementById('view-modal')) closeMagnifiedView();
+});
+
 // --- UI: Controls ---
 document.getElementById('stop-btn').addEventListener('click', () => {
   stopped = !stopped;
@@ -1257,6 +2002,7 @@ document.getElementById('add-vehicle-btn').addEventListener('click', () => {
   updateReadoutName();
 });
 
+// --- Presets ---
 document.getElementById('social-btn').addEventListener('click', () => {
   for (const v of vehicles) {
     v.light.on = true;
@@ -1264,8 +2010,66 @@ document.getElementById('social-btn').addEventListener('click', () => {
     v.sidePair.enabled = true;
     v.sidePair.behaviorIndex = 0; // Fear
     v.sidePair.weight = 25;
+    v.gate.front = defaultGateConfig();
+    v.gate.side = defaultGateConfig();
   }
   buildVehicleCards();
+});
+
+// Focused Hunter: V2b Aggression + AND gate on front
+document.getElementById('preset-focused').addEventListener('click', () => {
+  for (const v of vehicles) {
+    v.typeIndex = 2; // V2b Aggression
+    v.gate.front = { type: 2, threshold: 25, sharpness: 8 }; // AND
+    v.gate.side = defaultGateConfig();
+    v.sidePair.enabled = false;
+  }
+  buildVehicleCards();
+  updateReadoutName();
+});
+
+// Edge Follower: V2b Aggression + XOR gate on front
+document.getElementById('preset-edge').addEventListener('click', () => {
+  for (const v of vehicles) {
+    v.typeIndex = 2; // V2b Aggression
+    v.gate.front = { type: 4, threshold: 15, sharpness: 6 }; // XOR
+    v.gate.side = defaultGateConfig();
+    v.sidePair.enabled = false;
+  }
+  buildVehicleCards();
+  updateReadoutName();
+});
+
+// Cautious Social: Front OR excitatory + Side AND Fear
+document.getElementById('preset-cautious').addEventListener('click', () => {
+  for (const v of vehicles) {
+    v.typeIndex = 2; // V2b Aggression
+    v.light.on = true;
+    v.light.intensity = 50;
+    v.gate.front = { type: 3, threshold: 20, sharpness: 4 }; // OR
+    v.sidePair.enabled = true;
+    v.sidePair.behaviorIndex = 0; // Fear
+    v.sidePair.weight = 30;
+    v.gate.side = { type: 2, threshold: 35, sharpness: 8 }; // AND
+  }
+  buildVehicleCards();
+  updateReadoutName();
+});
+
+// Swarm: Love + Threshold gates + lights + side aggression
+document.getElementById('preset-swarm').addEventListener('click', () => {
+  for (const v of vehicles) {
+    v.typeIndex = 3; // V3a Love
+    v.light.on = true;
+    v.light.intensity = 40;
+    v.gate.front = { type: 1, threshold: 20, sharpness: 4 }; // Threshold
+    v.sidePair.enabled = true;
+    v.sidePair.behaviorIndex = 1; // Aggression
+    v.sidePair.weight = 20;
+    v.gate.side = { type: 1, threshold: 40, sharpness: 6 }; // Threshold
+  }
+  buildVehicleCards();
+  updateReadoutName();
 });
 
 // --- Canvas interaction: static lights ---
@@ -1396,7 +2200,6 @@ canvas.addEventListener('touchstart', (e) => {
     touchDragging = hit;
   }
 
-  // Long press for context menu (intensity/delete)
   touchLongPressTimer = setTimeout(() => {
     const light = staticLightAt(pos.x, pos.y);
     if (light) {
@@ -1408,7 +2211,7 @@ canvas.addEventListener('touchstart', (e) => {
       popup.style.left = Math.min(rect.left - containerRect.left + pos.x + 10, containerRect.width - 160) + 'px';
       popup.style.top = (rect.top - containerRect.top + pos.y - 30) + 'px';
       popup.style.display = 'block';
-      touchDragging = null; // cancel drag
+      touchDragging = null;
     }
     touchLongPressTimer = null;
   }, 500);
@@ -1441,17 +2244,14 @@ canvas.addEventListener('touchend', (e) => {
   const pos = canvasTouchCoords(e);
   const elapsed = Date.now() - touchStartTime;
 
-  // Tap (not drag, not long press)
   if (!touchDragStarted && elapsed < 400) {
     const now = Date.now();
-    // Double tap to add light
     if (now - lastTapTime < 350) {
       if (!staticLightAt(pos.x, pos.y)) {
         createStaticLight(pos.x, pos.y);
       }
       lastTapTime = 0;
     } else {
-      // Single tap: toggle light
       const hit = staticLightAt(pos.x, pos.y);
       if (hit) {
         hit.on = !hit.on;
