@@ -173,8 +173,6 @@
     cursor: pointer;
     transition: all 0.15s;
     position: relative;
-    display: flex;
-    flex-direction: column;
   }
 
   .vehicle-card:hover { border-color: #555; }
@@ -406,8 +404,6 @@
     background: #0a0a1a;
     border: 1px solid #333;
     width: 100%;
-    flex: 1;
-    min-height: 180px;
   }
 
   .preset-grid {
@@ -479,7 +475,8 @@
   <p class="info-text">
     Double-click/tap canvas to add a light.<br>
     Click/tap light to toggle. Drag to move.<br>
-    Right-click or long-press for intensity / delete.
+    Right-click or long-press for intensity / delete.<br>
+    Scroll wheel to zoom. Middle-click or Ctrl+drag to pan.
   </p>
 </div>
 
@@ -607,6 +604,28 @@ function getVehicleType(v) {
 let stopped = false;
 // Map of vehicleId -> canvas element for inline schematics
 const schematicCanvases = new Map();
+
+// --- Camera / zoom state ---
+let camZoom = 1;
+let camX = 0;
+let camY = 0;
+const CAM_ZOOM_MIN = 0.15;
+const CAM_ZOOM_MAX = 4;
+let isPanning = false;
+let panStartX = 0, panStartY = 0;
+let camStartX = 0, camStartY = 0;
+
+function screenToWorld(sx, sy) {
+  return { x: sx / camZoom + camX, y: sy / camZoom + camY };
+}
+
+function worldToScreen(wx, wy) {
+  return { x: (wx - camX) * camZoom, y: (wy - camY) * camZoom };
+}
+
+function visibleWorld() {
+  return { x: camX, y: camY, w: canvas.width / camZoom, h: canvas.height / camZoom };
+}
 
 // --- Canvas setup ---
 const canvas = document.getElementById('canvas');
@@ -825,13 +844,14 @@ function stepVehicle(v, dt) {
   v.y += linearV * Math.sin(v.theta) * dt;
   v.theta += angularV * dt;
 
-  // Wrap around edges
+  // Wrap around visible world edges
+  const vw = visibleWorld();
   const margin = 10;
   let wrapped = false;
-  if (v.x < -margin) { v.x = canvas.width + margin; wrapped = true; }
-  if (v.x > canvas.width + margin) { v.x = -margin; wrapped = true; }
-  if (v.y < -margin) { v.y = canvas.height + margin; wrapped = true; }
-  if (v.y > canvas.height + margin) { v.y = -margin; wrapped = true; }
+  if (v.x < vw.x - margin) { v.x = vw.x + vw.w + margin; wrapped = true; }
+  if (v.x > vw.x + vw.w + margin) { v.x = vw.x - margin; wrapped = true; }
+  if (v.y < vw.y - margin) { v.y = vw.y + vw.h + margin; wrapped = true; }
+  if (v.y > vw.y + vw.h + margin) { v.y = vw.y - margin; wrapped = true; }
 
   if (wrapped) v.trail.push(null);
   v.trail.push({ x: v.x, y: v.y });
@@ -856,6 +876,7 @@ function stepVehicle(v, dt) {
 
 // --- Drawing ---
 function drawLightGradients() {
+  const vw = visibleWorld();
   for (const light of staticLights) {
     const radius = 250 * (light.intensity / 75);
     const alpha = light.on ? 0.15 : 0.03;
@@ -863,7 +884,7 @@ function drawLightGradients() {
     grad.addColorStop(0, `rgba(255, 235, 100, ${alpha})`);
     grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(vw.x, vw.y, vw.w, vw.h);
   }
   for (const v of vehicles) {
     if (!v.light.on) continue;
@@ -872,7 +893,7 @@ function drawLightGradients() {
     grad.addColorStop(0, 'rgba(255, 235, 100, 0.1)');
     grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillRect(vw.x, vw.y, vw.w, vw.h);
   }
 }
 
@@ -1152,23 +1173,43 @@ function drawVehicle(v) {
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
+  // Background (screen space)
   ctx.fillStyle = '#0f0f23';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Apply camera transform for world-space drawing
+  ctx.save();
+  ctx.scale(camZoom, camZoom);
+  ctx.translate(-camX, -camY);
+
+  // Grid (world space, covers visible area)
   ctx.strokeStyle = '#1a1a33';
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 1 / camZoom;
   const gridSize = 40;
-  for (let x = 0; x < canvas.width; x += gridSize) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
+  const vw = visibleWorld();
+  const gx0 = Math.floor(vw.x / gridSize) * gridSize;
+  const gy0 = Math.floor(vw.y / gridSize) * gridSize;
+  for (let x = gx0; x < vw.x + vw.w; x += gridSize) {
+    ctx.beginPath(); ctx.moveTo(x, vw.y); ctx.lineTo(x, vw.y + vw.h); ctx.stroke();
   }
-  for (let y = 0; y < canvas.height; y += gridSize) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvas.width, y); ctx.stroke();
+  for (let y = gy0; y < vw.y + vw.h; y += gridSize) {
+    ctx.beginPath(); ctx.moveTo(vw.x, y); ctx.lineTo(vw.x + vw.w, y); ctx.stroke();
   }
 
   drawLightGradients();
   for (const v of vehicles) drawTrail(v);
   drawStaticLights();
   for (const v of vehicles) drawVehicle(v);
+
+  ctx.restore();
+
+  // Zoom indicator (screen space)
+  if (camZoom !== 1) {
+    ctx.fillStyle = 'rgba(255,255,255,0.4)';
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'right';
+    ctx.fillText((camZoom * 100).toFixed(0) + '%', canvas.width - 10, canvas.height - 10);
+  }
 }
 
 // --- Inline schematic drawing (compact, fits inside vehicle card) ---
@@ -1404,11 +1445,20 @@ function drawAllInlineSchematics() {
     if (!v._showView) continue;
     const vc = schematicCanvases.get(v.id);
     if (!vc) continue;
-    // Sync canvas pixel size to CSS rendered size
-    const rect = vc.getBoundingClientRect();
-    if (rect.width > 0 && rect.height > 0) {
-      vc.width = Math.round(rect.width);
-      vc.height = Math.round(rect.height);
+    // Size canvas to match the controls height above it in the card
+    const card = vc.parentElement;
+    if (card) {
+      let controlsH = 0;
+      for (const child of card.children) {
+        if (child === vc) break;
+        controlsH += child.offsetHeight + 6; // approx gap
+      }
+      const targetH = Math.max(controlsH, 250);
+      const cardW = card.clientWidth - 20; // padding
+      vc.style.width = cardW + 'px';
+      vc.style.height = targetH + 'px';
+      vc.width = Math.round(cardW);
+      vc.height = Math.round(targetH);
     }
     drawInlineSchematic(v, vc);
   }
@@ -1760,7 +1810,7 @@ function buildVehicleCards() {
       const vc = document.createElement('canvas');
       vc.className = 'card-schematic';
       vc.width = 252;
-      vc.height = 180; // initial; resized dynamically in drawAllInlineSchematics
+      vc.height = 100; // placeholder; resized after layout in drawAllInlineSchematics
       card.appendChild(vc);
       schematicCanvases.set(v.id, vc);
     } else {
@@ -1898,6 +1948,13 @@ let popupLight = null;
 
 function canvasCoords(e) {
   const rect = canvas.getBoundingClientRect();
+  const sx = e.clientX - rect.left;
+  const sy = e.clientY - rect.top;
+  return screenToWorld(sx, sy);
+}
+
+function canvasScreenCoords(e) {
+  const rect = canvas.getBoundingClientRect();
   return { x: e.clientX - rect.left, y: e.clientY - rect.top };
 }
 
@@ -1907,6 +1964,17 @@ function closePopup() {
 }
 
 canvas.addEventListener('mousedown', (e) => {
+  // Middle-click or Ctrl+left-click: start panning
+  if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
+    e.preventDefault();
+    isPanning = true;
+    const sc = canvasScreenCoords(e);
+    panStartX = sc.x;
+    panStartY = sc.y;
+    camStartX = camX;
+    camStartY = camY;
+    return;
+  }
   if (e.button !== 0) return;
   closePopup();
   const pos = canvasCoords(e);
@@ -1919,6 +1987,12 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 canvas.addEventListener('mousemove', (e) => {
+  if (isPanning) {
+    const sc = canvasScreenCoords(e);
+    camX = camStartX - (sc.x - panStartX) / camZoom;
+    camY = camStartY - (sc.y - panStartY) / camZoom;
+    return;
+  }
   if (!dragging) return;
   const pos = canvasCoords(e);
   const dx = pos.x - mouseDownPos.x;
@@ -1931,6 +2005,10 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 canvas.addEventListener('mouseup', (e) => {
+  if (isPanning) {
+    isPanning = false;
+    return;
+  }
   if (e.button !== 0) return;
   if (dragging && !dragStarted) {
     dragging.on = !dragging.on;
@@ -1938,6 +2016,22 @@ canvas.addEventListener('mouseup', (e) => {
   dragging = null;
   dragStarted = false;
 });
+
+// Zoom with mouse wheel
+canvas.addEventListener('wheel', (e) => {
+  e.preventDefault();
+  const sc = canvasScreenCoords(e);
+  // World point under cursor before zoom
+  const wx = sc.x / camZoom + camX;
+  const wy = sc.y / camZoom + camY;
+
+  const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+  camZoom = Math.max(CAM_ZOOM_MIN, Math.min(CAM_ZOOM_MAX, camZoom * zoomFactor));
+
+  // Adjust cam so the same world point stays under the cursor
+  camX = wx - sc.x / camZoom;
+  camY = wy - sc.y / camZoom;
+}, { passive: false });
 
 canvas.addEventListener('dblclick', (e) => {
   const pos = canvasCoords(e);
@@ -1956,8 +2050,9 @@ canvas.addEventListener('contextmenu', (e) => {
     popupValue.textContent = hit.intensity + '%';
     const rect = canvas.getBoundingClientRect();
     const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
-    popup.style.left = (rect.left - containerRect.left + pos.x + 20) + 'px';
-    popup.style.top = (rect.top - containerRect.top + pos.y - 30) + 'px';
+    const sc = worldToScreen(pos.x, pos.y);
+    popup.style.left = (rect.left - containerRect.left + sc.x + 20) + 'px';
+    popup.style.top = (rect.top - containerRect.top + sc.y - 30) + 'px';
     popup.style.display = 'block';
   } else {
     closePopup();
@@ -1997,12 +2092,36 @@ let lastTapTime = 0;
 function canvasTouchCoords(e) {
   const touch = e.touches[0] || e.changedTouches[0];
   const rect = canvas.getBoundingClientRect();
-  return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+  const sx = touch.clientX - rect.left;
+  const sy = touch.clientY - rect.top;
+  return screenToWorld(sx, sy);
 }
+
+let pinchStartDist = 0;
+let pinchStartZoom = 1;
+let pinchStartCamX = 0, pinchStartCamY = 0;
+let pinchMidWorld = null;
 
 canvas.addEventListener('touchstart', (e) => {
   e.preventDefault();
   closePopup();
+
+  // Pinch-to-zoom with two fingers
+  if (e.touches.length === 2) {
+    const t0 = e.touches[0], t1 = e.touches[1];
+    pinchStartDist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    pinchStartZoom = camZoom;
+    pinchStartCamX = camX;
+    pinchStartCamY = camY;
+    const rect = canvas.getBoundingClientRect();
+    const midSx = ((t0.clientX + t1.clientX) / 2) - rect.left;
+    const midSy = ((t0.clientY + t1.clientY) / 2) - rect.top;
+    pinchMidWorld = screenToWorld(midSx, midSy);
+    touchDragging = null;
+    if (touchLongPressTimer) { clearTimeout(touchLongPressTimer); touchLongPressTimer = null; }
+    return;
+  }
+
   const pos = canvasTouchCoords(e);
   touchStartPos = pos;
   touchStartTime = Date.now();
@@ -2021,8 +2140,9 @@ canvas.addEventListener('touchstart', (e) => {
       popupValue.textContent = light.intensity + '%';
       const rect = canvas.getBoundingClientRect();
       const containerRect = document.getElementById('canvas-container').getBoundingClientRect();
-      popup.style.left = Math.min(rect.left - containerRect.left + pos.x + 10, containerRect.width - 160) + 'px';
-      popup.style.top = (rect.top - containerRect.top + pos.y - 30) + 'px';
+      const sc = worldToScreen(pos.x, pos.y);
+      popup.style.left = Math.min(rect.left - containerRect.left + sc.x + 10, containerRect.width - 160) + 'px';
+      popup.style.top = (rect.top - containerRect.top + sc.y - 30) + 'px';
       popup.style.display = 'block';
       touchDragging = null;
     }
@@ -2036,6 +2156,21 @@ canvas.addEventListener('touchmove', (e) => {
     clearTimeout(touchLongPressTimer);
     touchLongPressTimer = null;
   }
+
+  // Pinch-to-zoom
+  if (e.touches.length === 2 && pinchMidWorld) {
+    const t0 = e.touches[0], t1 = e.touches[1];
+    const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
+    const scale = dist / pinchStartDist;
+    camZoom = Math.max(CAM_ZOOM_MIN, Math.min(CAM_ZOOM_MAX, pinchStartZoom * scale));
+    const rect = canvas.getBoundingClientRect();
+    const midSx = ((t0.clientX + t1.clientX) / 2) - rect.left;
+    const midSy = ((t0.clientY + t1.clientY) / 2) - rect.top;
+    camX = pinchMidWorld.x - midSx / camZoom;
+    camY = pinchMidWorld.y - midSy / camZoom;
+    return;
+  }
+
   if (!touchDragging) return;
   const pos = canvasTouchCoords(e);
   const dx = pos.x - touchStartPos.x;
