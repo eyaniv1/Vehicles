@@ -427,6 +427,10 @@
     <button class="btn btn-stop" id="stop-btn">Stop All</button>
     <button class="btn btn-reset" id="reset-btn">Reset All</button>
   </div>
+  <div class="slider-row">
+    <label>World Size</label>
+    <select id="world-size-select" style="background:#16213e;color:#e0e0e0;border:1px solid #444;border-radius:4px;padding:4px;font-size:12px;cursor:pointer;"></select>
+  </div>
   <button class="btn btn-record" id="record-btn">Record Video</button>
 
   <h2>Vehicles</h2>
@@ -480,7 +484,7 @@
     Double-click/tap canvas to add a light.<br>
     Click/tap light to toggle. Drag to move.<br>
     Right-click or long-press for intensity / delete.<br>
-    Scroll wheel to zoom. Middle-click or Ctrl+drag to pan.
+    Scroll wheel to zoom. Click + drag to pan.
   </p>
 </div>
 
@@ -612,8 +616,10 @@ const schematicCanvases = new Map();
 let camZoom = 1;
 let camX = 0;
 let camY = 0;
-const CAM_ZOOM_MIN = 0.15;
 const CAM_ZOOM_MAX = 4;
+function camZoomMin() {
+  return Math.min(canvas.width / WORLD_W, canvas.height / WORLD_H);
+}
 let isPanning = false;
 let panStartX = 0, panStartY = 0;
 let camStartX = 0, camStartY = 0;
@@ -651,9 +657,36 @@ function resizeCanvas() {
 window.addEventListener('resize', resizeCanvas);
 resizeCanvas();
 
-// --- World size (fixed torus) ---
-const WORLD_W = 1200;
-const WORLD_H = 800;
+// --- World size (torus, changeable) ---
+const WORLD_SIZES = [
+  { label: 'Small (1200 x 800)', w: 1200, h: 800 },
+  { label: 'Medium (2400 x 1600)', w: 2400, h: 1600 },
+  { label: 'Large (3600 x 2400)', w: 3600, h: 2400 },
+  { label: 'Huge (4800 x 3200)', w: 4800, h: 3200 },
+];
+let worldSizeIndex = 3;
+let WORLD_W = WORLD_SIZES[worldSizeIndex].w;
+let WORLD_H = WORLD_SIZES[worldSizeIndex].h;
+
+function setWorldSize(index) {
+  worldSizeIndex = index;
+  WORLD_W = WORLD_SIZES[index].w;
+  WORLD_H = WORLD_SIZES[index].h;
+  // Re-wrap all vehicles and lights into new bounds
+  for (const v of vehicles) {
+    v.x = wrapCoord(v.x, WORLD_W);
+    v.y = wrapCoord(v.y, WORLD_H);
+    v.trail = [];
+  }
+  for (const l of staticLights) {
+    l.x = wrapCoord(l.x, WORLD_W);
+    l.y = wrapCoord(l.y, WORLD_H);
+  }
+  // Reset camera to show full world
+  camZoom = camZoomMin();
+  camX = 0;
+  camY = 0;
+}
 
 // Wrap a coordinate into [0, size)
 function wrapCoord(val, size) {
@@ -1872,6 +1905,20 @@ function updateReadoutName() {
 }
 
 // --- UI: Controls ---
+
+// World size dropdown
+const worldSizeSelect = document.getElementById('world-size-select');
+WORLD_SIZES.forEach((s, i) => {
+  const opt = document.createElement('option');
+  opt.value = i;
+  opt.textContent = s.label;
+  if (i === worldSizeIndex) opt.selected = true;
+  worldSizeSelect.appendChild(opt);
+});
+worldSizeSelect.addEventListener('change', (e) => {
+  setWorldSize(parseInt(e.target.value));
+});
+
 document.getElementById('stop-btn').addEventListener('click', () => {
   stopped = !stopped;
   const btn = document.getElementById('stop-btn');
@@ -1993,25 +2040,23 @@ function closePopup() {
 }
 
 canvas.addEventListener('mousedown', (e) => {
-  // Middle-click or Ctrl+left-click: start panning
-  if (e.button === 1 || (e.button === 0 && e.ctrlKey)) {
-    e.preventDefault();
-    isPanning = true;
-    const sc = canvasScreenCoords(e);
-    panStartX = sc.x;
-    panStartY = sc.y;
-    camStartX = camX;
-    camStartY = camY;
-    return;
-  }
   if (e.button !== 0) return;
   closePopup();
   const pos = canvasCoords(e);
   mouseDownPos = pos;
   const hit = staticLightAt(pos.x, pos.y);
   if (hit) {
+    // Drag the light
     dragging = hit;
     dragStarted = false;
+  } else {
+    // Pan the camera
+    isPanning = true;
+    const sc = canvasScreenCoords(e);
+    panStartX = sc.x;
+    panStartY = sc.y;
+    camStartX = camX;
+    camStartY = camY;
   }
 });
 
@@ -2055,7 +2100,7 @@ canvas.addEventListener('wheel', (e) => {
   const wy = sc.y / camZoom + camY;
 
   const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
-  camZoom = Math.max(CAM_ZOOM_MIN, Math.min(CAM_ZOOM_MAX, camZoom * zoomFactor));
+  camZoom = Math.max(camZoomMin(), Math.min(CAM_ZOOM_MAX, camZoom * zoomFactor));
 
   // Adjust cam so the same world point stays under the cursor
   camX = wx - sc.x / camZoom;
@@ -2191,7 +2236,7 @@ canvas.addEventListener('touchmove', (e) => {
     const t0 = e.touches[0], t1 = e.touches[1];
     const dist = Math.hypot(t1.clientX - t0.clientX, t1.clientY - t0.clientY);
     const scale = dist / pinchStartDist;
-    camZoom = Math.max(CAM_ZOOM_MIN, Math.min(CAM_ZOOM_MAX, pinchStartZoom * scale));
+    camZoom = Math.max(camZoomMin(), Math.min(CAM_ZOOM_MAX, pinchStartZoom * scale));
     const rect = canvas.getBoundingClientRect();
     const midSx = ((t0.clientX + t1.clientX) / 2) - rect.left;
     const midSy = ((t0.clientY + t1.clientY) / 2) - rect.top;
