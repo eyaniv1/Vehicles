@@ -404,10 +404,10 @@
     background: #0a0a1a;
     border: 1px solid #333;
     width: 100%;
-    aspect-ratio: 2 / 3;
+    aspect-ratio: 3 / 4;
   }
   .card-schematic.has-side {
-    aspect-ratio: 1 / 2;
+    aspect-ratio: 2 / 3;
   }
 
   .preset-grid {
@@ -1310,7 +1310,7 @@ function drawInlineSchematic(v, vc) {
     c.beginPath(); c.roundRect(x, y, gW, gH, 4); c.fill(); c.stroke();
     c.fillStyle = active ? '#ff9800' : '#555';
     c.font = 'bold 11px sans-serif'; c.textAlign = 'center';
-    c.fillText(gt.name, x + gW / 2, y + gH / 2 + 4);
+    c.fillText(gt.id === 'threshold' ? 'THR' : gt.name, x + gW / 2, y + gH / 2 + 4);
     if (active) {
       c.fillStyle = '#ff9800aa'; c.font = '9px sans-serif';
       c.fillText('T:' + cfg.threshold, x + gW / 2, y - 3);
@@ -1343,13 +1343,13 @@ function drawInlineSchematic(v, vc) {
   const _mY = fgActive ? _gateRow + gH + 36 : _sY + 64;
   let contentBottom;
   if (!v.sidePair.enabled) {
-    contentBottom = _mY + 16; // motor half-height + padding
+    contentBottom = _mY + 16;
   } else {
-    const _ssY = _mY + 40;
-    const _sgRow = _ssY + 36;
-    const _smY = sgActive ? _sgRow + gH + 36 : _ssY + 64;
-    const _bY = _smY + 36;
-    const _oY = _bY + 10 + 30;
+    // side sensors at _mY+8, side gate at _mY+38, sideWireEnd at _mY+38+gH or _mY+16
+    const _ssY = _mY + 8;
+    const _sideWireEndY = sgActive ? _ssY + 30 + gH : _ssY + 8;
+    const _blendY = _sideWireEndY + 28;
+    const _oY = _blendY + 28;
     contentBottom = _oY + 16;
   }
   // Content spans ~cx±60 plus labels/glow → ~170px wide
@@ -1422,17 +1422,27 @@ function drawInlineSchematic(v, vc) {
     return;
   }
 
-  // Show front contribution motors
-  motor(mLX, mY, v._frontMotorL, 'Front L', '#ff8a65');
-  motor(mRX, mY, v._frontMotorR, 'Front R', '#81c784');
-
-  // --- SIDE PAIR ---
+  // --- SIDE PAIR: route front + side wires to blend circle then single output motors ---
   const sideBeh = SIDE_BEHAVIORS[v.sidePair.behaviorIndex];
+  const w = v.sidePair.weight;
 
-  const ssY = mY + 40;
+  // Front wires end points (from gate or sensor)
+  const fEndLX = type.crossed ? mRX : mLX;
+  const fEndRX = type.crossed ? mLX : mRX;
+  let fWireEndL, fWireEndR, fWireBottomY;
+  if (fgActive) {
+    fWireEndL = { x: cx - gW / 2 - 4, y: gateRow + gH };
+    fWireEndR = { x: cx + gW / 2 + 4, y: gateRow + gH };
+  } else {
+    fWireEndL = { x: sLX, y: sY + 8 };
+    fWireEndR = { x: sRX, y: sY + 8 };
+  }
+
+  // Side sensors row — placed below front section
+  const ssY = mY + 8;
   const ssLX = cx - 50, ssRX = cx + 50;
-  const sgRow = ssY + 36;
-  const smY = sgActive ? sgRow + gH + 36 : ssY + 64;
+  const sgRow = ssY + 30;
+  const sideWireEndY = sgActive ? sgRow + gH : ssY + 8;
 
   sensor(ssLX, ssY, v._sideL, 'Side L', '180,255,180');
   sensor(ssRX, ssY, v._sideR, 'Side R', '180,255,180');
@@ -1442,54 +1452,51 @@ function drawInlineSchematic(v, vc) {
     gate(cx + 4, sgRow, v.gate.side);
     wire(ssLX, ssY + 8, cx - gW / 2 - 4, sgRow, v._sideL, 'rgb(100,255,150)', false);
     wire(ssRX, ssY + 8, cx + gW / 2 + 4, sgRow, v._sideR, 'rgb(100,255,150)', false);
-    const psy = sgRow + gH;
-    if (sideBeh.crossed) {
-      wire(cx - gW / 2 - 4, psy, mRX, smY - 9, v._gatedSideL, 'rgb(100,255,150)', true);
-      wire(cx + gW / 2 + 4, psy, mLX, smY - 9, v._gatedSideR, 'rgb(100,255,150)', true);
-    } else {
-      wire(cx - gW / 2 - 4, psy, mLX, smY - 9, v._gatedSideL, 'rgb(100,255,150)', true);
-      wire(cx + gW / 2 + 4, psy, mRX, smY - 9, v._gatedSideR, 'rgb(100,255,150)', true);
-    }
-  } else {
-    if (sideBeh.crossed) {
-      wire(ssLX, ssY + 8, mRX, smY - 9, v._sideL, 'rgb(100,255,150)', true);
-      wire(ssRX, ssY + 8, mLX, smY - 9, v._sideR, 'rgb(100,255,150)', true);
-    } else {
-      wire(ssLX, ssY + 8, mLX, smY - 9, v._sideL, 'rgb(100,255,150)', true);
-      wire(ssRX, ssY + 8, mRX, smY - 9, v._sideR, 'rgb(100,255,150)', true);
-    }
   }
-  polarity(cx, sgActive ? sgRow + gH + 4 : ssY + 20, sideBeh.inhibitory);
+  polarity(cx, sgActive ? sgRow + gH + 2 : ssY + 16, sideBeh.inhibitory);
   if (sideBeh.crossed) {
-    c.fillStyle = '#4caf5066'; c.font = '9px sans-serif'; c.textAlign = 'center';
-    c.fillText('CROSSED', cx, smY - 18);
+    c.fillStyle = '#4caf5066'; c.font = '8px sans-serif'; c.textAlign = 'center';
+    c.fillText('X', cx + 14, sgActive ? sgRow + gH + 6 : ssY + 20);
   }
 
-  motor(mLX, smY, v._sideMotorL, 'Side L', '#a5d6a7');
-  motor(mRX, smY, v._sideMotorR, 'Side R', '#a5d6a7');
+  // Blend node — small circle where front + side merge
+  const blendY = sideWireEndY + 28;
+  const blendLX = mLX, blendRX = mRX;
 
-  // --- BLEND + OUTPUT ---
-  const bY = smY + 36;
-  const w = v.sidePair.weight;
-  const barW = 100, barH = 10;
-  c.fillStyle = '#0a0a1a'; c.strokeStyle = '#4fc3f7'; c.lineWidth = 1;
-  c.beginPath(); c.roundRect(cx - barW/2, bY, barW, barH, 2); c.fill(); c.stroke();
-  c.fillStyle = '#ff8a6566';
-  c.fillRect(cx - barW/2 + 1, bY + 1, (barW - 2) * (1 - w/100), barH - 2);
-  c.fillStyle = '#a5d6a766';
-  c.fillRect(cx - barW/2 + 1 + (barW - 2) * (1 - w/100), bY + 1, (barW - 2) * (w/100), barH - 2);
-  c.fillStyle = '#aaa'; c.font = '9px sans-serif'; c.textAlign = 'center';
-  c.fillText(`Front ${100-w}% / Side ${w}%`, cx, bY - 4);
+  // Draw blend circles
+  function blendNode(bx, by) {
+    c.fillStyle = '#1a2a4e'; c.strokeStyle = '#4fc3f7'; c.lineWidth = 1.5;
+    c.beginPath(); c.arc(bx, by, 8, 0, Math.PI * 2); c.fill(); c.stroke();
+    c.fillStyle = '#aaa'; c.font = '7px sans-serif'; c.textAlign = 'center';
+    c.fillText(`${100-w}/${w}`, bx, by + 3);
+  }
+  blendNode(blendLX, blendY);
+  blendNode(blendRX, blendY);
 
-  // Blend wires
-  wire(mLX, mY + 9, mLX, bY + barH + 14, v._frontMotorL, 'rgb(255,138,101)', false);
-  wire(mRX, mY + 9, mRX, bY + barH + 14, v._frontMotorR, 'rgb(129,199,132)', false);
-  wire(mLX, smY + 9, cx - 20, bY + barH + 14, v._sideMotorL, 'rgb(100,255,150)', false);
-  wire(mRX, smY + 9, cx + 20, bY + barH + 14, v._sideMotorR, 'rgb(100,255,150)', false);
+  // Front wires → blend nodes
+  wire(fWireEndL.x, fWireEndL.y, type.crossed ? blendRX : blendLX, blendY - 8, fgActive ? v._gatedFrontL : v._frontL, 'rgb(255,200,100)', true);
+  wire(fWireEndR.x, fWireEndR.y, type.crossed ? blendLX : blendRX, blendY - 8, fgActive ? v._gatedFrontR : v._frontR, 'rgb(255,200,100)', true);
 
-  const oY = bY + barH + 30;
-  motor(mLX, oY, v.leftSpeed, 'Out L', '#ff8a65');
-  motor(mRX, oY, v.rightSpeed, 'Out R', '#81c784');
+  // Side wires → blend nodes
+  const sWireLX = sgActive ? cx - gW / 2 - 4 : ssLX;
+  const sWireRX = sgActive ? cx + gW / 2 + 4 : ssRX;
+  const sValL = sgActive ? v._gatedSideL : v._sideL;
+  const sValR = sgActive ? v._gatedSideR : v._sideR;
+  if (sideBeh.crossed) {
+    wire(sWireLX, sideWireEndY, blendRX, blendY - 8, sValL, 'rgb(100,255,150)', true);
+    wire(sWireRX, sideWireEndY, blendLX, blendY - 8, sValR, 'rgb(100,255,150)', true);
+  } else {
+    wire(sWireLX, sideWireEndY, blendLX, blendY - 8, sValL, 'rgb(100,255,150)', true);
+    wire(sWireRX, sideWireEndY, blendRX, blendY - 8, sValR, 'rgb(100,255,150)', true);
+  }
+
+  // Blend nodes → output motors
+  const oY = blendY + 28;
+  wire(blendLX, blendY + 8, mLX, oY - 9, v.leftSpeed, 'rgb(255,200,100)', false);
+  wire(blendRX, blendY + 8, mRX, oY - 9, v.rightSpeed, 'rgb(129,199,132)', false);
+
+  motor(mLX, oY, v.leftSpeed, 'L Motor', '#ff8a65');
+  motor(mRX, oY, v.rightSpeed, 'R Motor', '#81c784');
   c.restore();
 }
 
