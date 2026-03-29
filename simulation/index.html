@@ -1955,10 +1955,15 @@ document.getElementById('stop-btn').addEventListener('click', () => {
 document.getElementById('reset-btn').addEventListener('click', () => {
   const cx = camX + (canvas.width / camZoom) / 2;
   const cy = camY + (canvas.height / camZoom) / 2;
-  for (const v of vehicles) {
-    v.x = cx + (Math.random() - 0.5) * 100;
-    v.y = cy + (Math.random() - 0.5) * 100;
-    v.theta = Math.random() * Math.PI * 2;
+  const spacing = 80;
+  const cols = Math.ceil(Math.sqrt(vehicles.length));
+  for (let i = 0; i < vehicles.length; i++) {
+    const v = vehicles[i];
+    const col = i % cols;
+    const row = Math.floor(i / cols);
+    v.x = wrapCoord(cx + (col - (cols - 1) / 2) * spacing, WORLD_W);
+    v.y = wrapCoord(cy + (row - (Math.ceil(vehicles.length / cols) - 1) / 2) * spacing, WORLD_H);
+    v.theta = 0;
     v.trail = [];
     v.running = false;
   }
@@ -1972,12 +1977,17 @@ document.getElementById('add-vehicle-btn').addEventListener('click', () => {
 });
 
 // --- Presets ---
+function selectedVehicle() {
+  return vehicles.find(v => v.id === selectedVehicleId) || null;
+}
+
+// Social Mode: applies to ALL vehicles
 document.getElementById('social-btn').addEventListener('click', () => {
   for (const v of vehicles) {
     v.light.on = true;
     v.light.intensity = 50;
     v.sidePair.enabled = true;
-    v.sidePair.behaviorIndex = 0; // Fear
+    v.sidePair.behaviorIndex = 0;
     v.sidePair.weight = 25;
     v.gate.front = defaultGateConfig();
     v.gate.side = defaultGateConfig();
@@ -1985,58 +1995,58 @@ document.getElementById('social-btn').addEventListener('click', () => {
   buildVehicleCards();
 });
 
-// Focused Hunter: V2b Aggression + AND gate on front
+// Focused Hunter: selected vehicle only
 document.getElementById('preset-focused').addEventListener('click', () => {
-  for (const v of vehicles) {
-    v.typeIndex = 2; // V2b Aggression
-    v.gate.front = { type: 2, threshold: 25, sharpness: 8 }; // AND
-    v.gate.side = defaultGateConfig();
-    v.sidePair.enabled = false;
-  }
+  const v = selectedVehicle();
+  if (!v) return;
+  v.typeIndex = 2;
+  v.gate.front = { type: 2, threshold: 25, sharpness: 8 };
+  v.gate.side = defaultGateConfig();
+  v.sidePair.enabled = false;
   buildVehicleCards();
   updateReadoutName();
 });
 
-// Edge Follower: V2b Aggression + XOR gate on front
+// Edge Follower: selected vehicle only
 document.getElementById('preset-edge').addEventListener('click', () => {
-  for (const v of vehicles) {
-    v.typeIndex = 2; // V2b Aggression
-    v.gate.front = { type: 4, threshold: 15, sharpness: 6 }; // XOR
-    v.gate.side = defaultGateConfig();
-    v.sidePair.enabled = false;
-  }
+  const v = selectedVehicle();
+  if (!v) return;
+  v.typeIndex = 2;
+  v.gate.front = { type: 4, threshold: 15, sharpness: 6 };
+  v.gate.side = defaultGateConfig();
+  v.sidePair.enabled = false;
   buildVehicleCards();
   updateReadoutName();
 });
 
-// Cautious Social: Front OR excitatory + Side AND Fear
+// Cautious Social: selected vehicle only
 document.getElementById('preset-cautious').addEventListener('click', () => {
-  for (const v of vehicles) {
-    v.typeIndex = 2; // V2b Aggression
-    v.light.on = true;
-    v.light.intensity = 50;
-    v.gate.front = { type: 3, threshold: 20, sharpness: 4 }; // OR
-    v.sidePair.enabled = true;
-    v.sidePair.behaviorIndex = 0; // Fear
-    v.sidePair.weight = 30;
-    v.gate.side = { type: 2, threshold: 35, sharpness: 8 }; // AND
-  }
+  const v = selectedVehicle();
+  if (!v) return;
+  v.typeIndex = 2;
+  v.light.on = true;
+  v.light.intensity = 50;
+  v.gate.front = { type: 3, threshold: 20, sharpness: 4 };
+  v.sidePair.enabled = true;
+  v.sidePair.behaviorIndex = 0;
+  v.sidePair.weight = 30;
+  v.gate.side = { type: 2, threshold: 35, sharpness: 8 };
   buildVehicleCards();
   updateReadoutName();
 });
 
-// Swarm: Love + Threshold gates + lights + side aggression
+// Swarm: selected vehicle only
 document.getElementById('preset-swarm').addEventListener('click', () => {
-  for (const v of vehicles) {
-    v.typeIndex = 3; // V3a Love
-    v.light.on = true;
-    v.light.intensity = 40;
-    v.gate.front = { type: 1, threshold: 20, sharpness: 4 }; // Threshold
-    v.sidePair.enabled = true;
-    v.sidePair.behaviorIndex = 1; // Aggression
-    v.sidePair.weight = 20;
-    v.gate.side = { type: 1, threshold: 40, sharpness: 6 }; // Threshold
-  }
+  const v = selectedVehicle();
+  if (!v) return;
+  v.typeIndex = 3;
+  v.light.on = true;
+  v.light.intensity = 40;
+  v.gate.front = { type: 1, threshold: 20, sharpness: 4 };
+  v.sidePair.enabled = true;
+  v.sidePair.behaviorIndex = 1;
+  v.sidePair.weight = 20;
+  v.gate.side = { type: 1, threshold: 40, sharpness: 6 };
   buildVehicleCards();
   updateReadoutName();
 });
