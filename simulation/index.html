@@ -435,12 +435,141 @@
     line-height: 1.5;
     white-space: pre-wrap;
   }
+
+  /* Tutorial bubble */
+  .tutorial-bubble {
+    position: fixed;
+    z-index: 500;
+    background: #1565c0;
+    color: #fff;
+    padding: 14px 18px;
+    border-radius: 10px;
+    font-size: 13px;
+    line-height: 1.5;
+    max-width: 320px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    pointer-events: auto;
+  }
+  .tutorial-bubble::after {
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    background: #1565c0;
+    transform: rotate(45deg);
+  }
+  .tutorial-bubble.arrow-left::after { left: -7px; top: 20px; }
+  .tutorial-bubble.arrow-right::after { right: -7px; top: 20px; }
+  .tutorial-bubble.arrow-top::after { top: -7px; left: 30px; }
+  .tutorial-bubble.arrow-bottom::after { bottom: -7px; left: 30px; }
+
+  .tutorial-bubble .step-label {
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    opacity: 0.7;
+    margin-bottom: 4px;
+  }
+  .tutorial-bubble .step-text { margin-bottom: 10px; }
+  .tutorial-bubble .step-btns {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .tutorial-bubble .step-btns button {
+    padding: 5px 14px;
+    border: none;
+    border-radius: 5px;
+    font-size: 12px;
+    font-weight: bold;
+    cursor: pointer;
+  }
+  .tutorial-btn-next { background: #fff; color: #1565c0; }
+  .tutorial-btn-next:hover { background: #e3f2fd; }
+  .tutorial-btn-skip { background: transparent; color: rgba(255,255,255,0.7); }
+  .tutorial-btn-skip:hover { color: #fff; }
+
+  .tutorial-highlight {
+    position: relative;
+    z-index: 499;
+    box-shadow: 0 0 0 4px rgba(21,101,192,0.6), 0 0 16px rgba(21,101,192,0.3);
+    border-radius: 6px;
+  }
+
+  /* Reference manual overlay */
+  .ref-overlay {
+    display: none;
+    position: fixed;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 600;
+    background: rgba(0,0,0,0.7);
+    align-items: center;
+    justify-content: center;
+  }
+  .ref-overlay.open { display: flex; }
+
+  .ref-manual {
+    background: #16213e;
+    color: #e0e0e0;
+    border-radius: 12px;
+    padding: 24px 28px;
+    max-width: 640px;
+    max-height: 80vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .ref-manual h2 { color: #4fc3f7; font-size: 18px; margin: 0 0 12px; }
+  .ref-manual h3 { color: #81d4fa; font-size: 14px; margin: 16px 0 6px; }
+  .ref-manual p { margin: 0 0 8px; color: #b0bec5; }
+  .ref-manual kbd {
+    background: #0d1b2a;
+    border: 1px solid #444;
+    border-radius: 3px;
+    padding: 1px 5px;
+    font-size: 11px;
+    color: #4fc3f7;
+  }
+  .ref-manual .ref-close {
+    float: right;
+    background: none;
+    border: none;
+    color: #666;
+    font-size: 20px;
+    cursor: pointer;
+    line-height: 1;
+  }
+  .ref-manual .ref-close:hover { color: #fff; }
+  .ref-manual table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+  .ref-manual th { text-align: left; color: #4fc3f7; font-size: 12px; padding: 4px 8px; border-bottom: 1px solid #333; }
+  .ref-manual td { padding: 4px 8px; font-size: 12px; color: #b0bec5; border-bottom: 1px solid #1a1a2e; }
+
+  .btn-guide {
+    background: #0d47a1;
+    color: #fff;
+    width: 100%;
+    font-size: 12px;
+  }
+  .btn-guide:hover { background: #1565c0; }
+
+  .btn-ref {
+    background: #37474f;
+    color: #b0bec5;
+    width: 100%;
+    font-size: 12px;
+  }
+  .btn-ref:hover { background: #455a64; }
 </style>
 </head>
 <body>
 
 <div id="controls">
   <h1>Braitenberg Vehicles</h1>
+  <div class="btn-row">
+    <button class="btn btn-guide" id="guide-btn">Getting Started</button>
+    <button class="btn btn-ref" id="ref-btn">Reference</button>
+  </div>
 
   <h2>Simulation</h2>
   <div class="btn-row">
@@ -509,6 +638,66 @@
 </div>
 
 <button id="mobile-toggle" aria-label="Toggle controls">&#9881;</button>
+
+<div id="tutorial-bubble-container"></div>
+
+<div class="ref-overlay" id="ref-overlay">
+  <div class="ref-manual">
+    <button class="ref-close" id="ref-close">&times;</button>
+    <h2>Reference Manual</h2>
+
+    <h3>Vehicle Types (Braitenberg)</h3>
+    <table>
+      <tr><th>Type</th><th>Sensors</th><th>Wiring</th><th>Response</th><th>Behavior</th></tr>
+      <tr><td>V1 Wander</td><td>1</td><td>--</td><td>Excitatory</td><td>Moves without steering, speed varies with light</td></tr>
+      <tr><td>V2a Fear</td><td>2</td><td>Direct</td><td>Excitatory</td><td>Turns away from light, accelerates to flee</td></tr>
+      <tr><td>V2b Aggression</td><td>2</td><td>Crossed</td><td>Excitatory</td><td>Steers toward light, charges at the source</td></tr>
+      <tr><td>V3a Love</td><td>2</td><td>Direct</td><td>Inhibitory</td><td>Approaches light and slows, stops near it</td></tr>
+      <tr><td>V3b Explorer</td><td>2</td><td>Crossed</td><td>Inhibitory</td><td>Approaches light but turns away up close</td></tr>
+    </table>
+
+    <h3>Logic Gates</h3>
+    <table>
+      <tr><th>Gate</th><th>Effect</th></tr>
+      <tr><td>Direct</td><td>No filtering, raw sensor values pass through</td></tr>
+      <tr><td>Threshold</td><td>Ignores light below threshold, sigmoid activation</td></tr>
+      <tr><td>AND</td><td>Both sensors must detect light to react</td></tr>
+      <tr><td>OR</td><td>Either sensor detecting light triggers reaction</td></tr>
+      <tr><td>XOR</td><td>Reacts when sensors differ (edge-following)</td></tr>
+    </table>
+
+    <h3>Side Sensors</h3>
+    <p>Add a second pair of sensors on the sides of the vehicle. Choose a behavior type (Fear, Aggression, Love, Explorer) and blend weight to mix with front sensor output.</p>
+
+    <h3>Controls</h3>
+    <table>
+      <tr><th>Action</th><th>How</th></tr>
+      <tr><td>Pan view</td><td>Click + drag on empty canvas</td></tr>
+      <tr><td>Zoom</td><td>Mouse scroll wheel</td></tr>
+      <tr><td>Add light</td><td>Double-click on canvas</td></tr>
+      <tr><td>Toggle light</td><td>Click on a light</td></tr>
+      <tr><td>Move light</td><td>Drag a light</td></tr>
+      <tr><td>Light settings</td><td>Right-click on a light</td></tr>
+      <tr><td>Delete light</td><td>Right-click &rarr; Delete</td></tr>
+    </table>
+
+    <h3>Vehicle Card</h3>
+    <p><b>Start/Stop</b> &mdash; each vehicle runs independently.<br>
+    <b>Light</b> &mdash; mounted light visible to other vehicles.<br>
+    <b>Speed</b> &mdash; simulation speed multiplier (1x&ndash;5x).<br>
+    <b>Contrast</b> &mdash; amplifies motor speed differences for sharper turns.<br>
+    <b>F.Gate / S.Gate</b> &mdash; logic gate on front/side sensor pair.<br>
+    <b>Side</b> &mdash; enable lateral sensors with independent behavior.<br>
+    <b>Blend</b> &mdash; mix ratio between front and side motor output.<br>
+    <b>Explain</b> &mdash; generates a description of expected behavior.</p>
+
+    <h3>Presets</h3>
+    <p><b>Social Mode</b> applies to all vehicles. All other presets apply to the selected vehicle only.</p>
+
+    <h3>World</h3>
+    <p>The world is a torus &mdash; vehicles and light sensing wrap around edges. Choose world size from the dropdown. Zooming out shows more of the world.</p>
+  </div>
+</div>
 
 <div id="canvas-container">
   <canvas id="canvas"></canvas>
@@ -589,7 +778,7 @@ function createVehicle(typeIndex) {
   colorIndex++;
   const v = {
     id: nextVehicleId++,
-    typeIndex: typeIndex || 0,
+    typeIndex: typeIndex != null ? typeIndex : 2,
     x: camX + (canvas.width / camZoom) / 2,
     y: camY + (canvas.height / camZoom) / 2,
     theta: 0,
@@ -2494,6 +2683,130 @@ document.getElementById('record-btn').addEventListener('click', () => {
   mediaRecorder.start();
   btn.textContent = 'Stop Recording';
   btn.classList.add('recording');
+});
+
+// --- Reference manual ---
+document.getElementById('ref-btn').addEventListener('click', () => {
+  document.getElementById('ref-overlay').classList.add('open');
+});
+document.getElementById('ref-close').addEventListener('click', () => {
+  document.getElementById('ref-overlay').classList.remove('open');
+});
+document.getElementById('ref-overlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
+});
+
+// --- Getting Started tutorial ---
+const tutorialSteps = [
+  {
+    target: '#world-size-select',
+    text: 'First, choose your world size. This sets how large the simulation area is. A smaller world keeps vehicles closer together.',
+    arrow: 'left',
+  },
+  {
+    target: '#add-vehicle-btn',
+    text: 'Add a vehicle. It will appear in the center of your view as a V2b Aggression type — it steers toward light.',
+    arrow: 'left',
+  },
+  {
+    target: '#canvas',
+    text: 'Double-click anywhere on the canvas to place a light source. Vehicles will sense it and react based on their wiring.',
+    arrow: 'right',
+  },
+  {
+    target: null, // will target first vehicle card's start button
+    targetFn: () => document.querySelector('.vehicle-card .btn-stop'),
+    text: 'Press the Start button on a vehicle card to set it in motion. Each vehicle can be started and stopped independently.',
+    arrow: 'left',
+  },
+  {
+    target: null,
+    targetFn: () => document.querySelector('.vehicle-card'),
+    text: 'Use the vehicle card controls to change type, adjust gates, enable side sensors, toggle its light, and more. Click "Explain Behavior" to understand what it will do.',
+    arrow: 'left',
+  },
+  {
+    target: '#canvas',
+    text: 'Scroll to zoom in/out. Click and drag empty space to pan. You can add more vehicles and lights to create complex interactions. Have fun experimenting!',
+    arrow: 'right',
+  },
+];
+
+let tutorialStep = -1;
+const bubbleContainer = document.getElementById('tutorial-bubble-container');
+
+function showTutorialStep(index) {
+  // Clean up previous
+  bubbleContainer.innerHTML = '';
+  document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
+
+  if (index < 0 || index >= tutorialSteps.length) {
+    tutorialStep = -1;
+    return;
+  }
+
+  tutorialStep = index;
+  const step = tutorialSteps[index];
+  const targetEl = step.targetFn ? step.targetFn() : document.querySelector(step.target);
+
+  if (!targetEl) {
+    // Target not found (e.g., no vehicle card yet), show centered
+    const bubble = document.createElement('div');
+    bubble.className = 'tutorial-bubble';
+    bubble.style.cssText = 'top:50%;left:50%;transform:translate(-50%,-50%);';
+    bubble.innerHTML = buildBubbleHTML(index, step);
+    bubbleContainer.appendChild(bubble);
+    attachBubbleEvents(bubble, index);
+    return;
+  }
+
+  targetEl.classList.add('tutorial-highlight');
+  const rect = targetEl.getBoundingClientRect();
+
+  const bubble = document.createElement('div');
+  bubble.className = 'tutorial-bubble arrow-' + step.arrow;
+
+  // Position bubble relative to target
+  if (step.arrow === 'left') {
+    bubble.style.left = (rect.right + 16) + 'px';
+    bubble.style.top = Math.max(8, rect.top - 10) + 'px';
+  } else if (step.arrow === 'right') {
+    bubble.style.left = Math.max(8, rect.left - 340) + 'px';
+    bubble.style.top = Math.max(8, rect.top + rect.height / 2 - 40) + 'px';
+  } else if (step.arrow === 'top') {
+    bubble.style.left = rect.left + 'px';
+    bubble.style.top = (rect.bottom + 16) + 'px';
+  } else if (step.arrow === 'bottom') {
+    bubble.style.left = rect.left + 'px';
+    bubble.style.top = Math.max(8, rect.top - 120) + 'px';
+  }
+
+  bubble.innerHTML = buildBubbleHTML(index, step);
+  bubbleContainer.appendChild(bubble);
+  attachBubbleEvents(bubble, index);
+}
+
+function buildBubbleHTML(index, step) {
+  const isLast = index === tutorialSteps.length - 1;
+  return `
+    <div class="step-label">Step ${index + 1} of ${tutorialSteps.length}</div>
+    <div class="step-text">${step.text}</div>
+    <div class="step-btns">
+      <button class="tutorial-btn-skip">${isLast ? 'Close' : 'Skip'}</button>
+      ${isLast ? '' : '<button class="tutorial-btn-next">Next</button>'}
+    </div>
+  `;
+}
+
+function attachBubbleEvents(bubble, index) {
+  const skipBtn = bubble.querySelector('.tutorial-btn-skip');
+  const nextBtn = bubble.querySelector('.tutorial-btn-next');
+  skipBtn.addEventListener('click', () => showTutorialStep(-1));
+  if (nextBtn) nextBtn.addEventListener('click', () => showTutorialStep(index + 1));
+}
+
+document.getElementById('guide-btn').addEventListener('click', () => {
+  showTutorialStep(0);
 });
 
 // --- Init ---
