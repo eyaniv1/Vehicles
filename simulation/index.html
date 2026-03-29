@@ -624,6 +624,13 @@ let isPanning = false;
 let panStartX = 0, panStartY = 0;
 let camStartX = 0, camStartY = 0;
 
+function clampCamera() {
+  const viewW = canvas.width / camZoom;
+  const viewH = canvas.height / camZoom;
+  camX = Math.max(0, Math.min(WORLD_W - viewW, camX));
+  camY = Math.max(0, Math.min(WORLD_H - viewH, camY));
+}
+
 function screenToWorld(sx, sy) {
   return { x: sx / camZoom + camX, y: sy / camZoom + camY };
 }
@@ -2065,6 +2072,7 @@ canvas.addEventListener('mousemove', (e) => {
     const sc = canvasScreenCoords(e);
     camX = camStartX - (sc.x - panStartX) / camZoom;
     camY = camStartY - (sc.y - panStartY) / camZoom;
+    clampCamera();
     return;
   }
   if (!dragging) return;
@@ -2105,6 +2113,7 @@ canvas.addEventListener('wheel', (e) => {
   // Adjust cam so the same world point stays under the cursor
   camX = wx - sc.x / camZoom;
   camY = wy - sc.y / camZoom;
+  clampCamera();
 }, { passive: false });
 
 canvas.addEventListener('dblclick', (e) => {
@@ -2242,6 +2251,7 @@ canvas.addEventListener('touchmove', (e) => {
     const midSy = ((t0.clientY + t1.clientY) / 2) - rect.top;
     camX = pinchMidWorld.x - midSx / camZoom;
     camY = pinchMidWorld.y - midSy / camZoom;
+    clampCamera();
     return;
   }
 
