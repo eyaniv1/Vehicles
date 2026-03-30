@@ -4715,7 +4715,7 @@ function drawEditorOverlay() {
       ctx.fillStyle = act === 'off' || act === 'offDelay' ? '#ef5350' : '#ff9800';
       ctx.font = 'bold ' + (10 / camZoom) + 'px sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      const label = act === 'off' ? 'OFF on visit' : act === 'offDelay' ? 'OFF on visit (' + (l.onVisit.delay || 2) + 's)' : 'Change on visit';
+      const label = act === 'off' ? '\u2716' : act === 'offDelay' ? '\u2716 ' + (l.onVisit.delay || 2) + 's' : '\u25d4';
       ctx.fillText(label, l.x, l.y - 20 / camZoom);
     }
   }
