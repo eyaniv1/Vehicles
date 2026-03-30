@@ -3725,7 +3725,7 @@ function enterEditor(templateLevel) {
   // Set up static lights from level data
   staticLights = editorLevel.lights.map(l => ({
     id: nextLightId++, x: l.x, y: l.y, on: l.on !== false, intensity: l.intensity || 75,
-    onVisit: l.onVisit || null,
+    onVisit: l.onVisit || null, visitRadius: l.visitRadius || null,
     path: l.path ? JSON.parse(JSON.stringify(l.path)) : null,
     _pathProgress: 0, _pathDir: 1,
   }));
@@ -3777,6 +3777,7 @@ function editorSyncLightsToLevel() {
   editorLevel.lights = staticLights.filter(l => !l._embedded).map(l => ({
     x: l.x, y: l.y, intensity: l.intensity, on: l.on,
     onVisit: l.onVisit || null,
+    visitRadius: l.visitRadius || null,
     path: l.path ? JSON.parse(JSON.stringify(l.path)) : null,
   }));
 }
@@ -4159,6 +4160,9 @@ function buildPropertiesPanel(panel) {
     props.appendChild(onDiv);
 
     buildOnVisitUI(props, light, editorSyncLightsToLevel);
+    if (light.onVisit) {
+      addSlider(props, 'Visit Radius', 15, 200, light.visitRadius || 40, (v) => { light.visitRadius = v; editorSyncLightsToLevel(); });
+    }
     buildPathUI(props, light, 'light', sel.index);
 
   } else if (sel.type === 'checkpoint') {
@@ -4724,6 +4728,14 @@ function drawEditorOverlay() {
   // On-visit indicators
   for (const l of lights) {
     if (l.onVisit) {
+      // Draw visit radius circle for standalone lights
+      const vr = l.visitRadius || 40;
+      ctx.strokeStyle = 'rgba(239, 83, 80, 0.3)';
+      ctx.lineWidth = 1 / camZoom;
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.arc(l.x, l.y, vr, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+
       const act = l.onVisit.action;
       ctx.fillStyle = act === 'off' || act === 'offDelay' ? '#ef5350' : '#ff9800';
       ctx.font = 'bold ' + (10 / camZoom) + 'px sans-serif';
@@ -4760,7 +4772,7 @@ function showBriefing(levelIndex, levelOverride) {
   WORLD_H = level.worldSize.h;
   staticLights = level.lights.map(l => ({
     id: nextLightId++, x: l.x, y: l.y, on: l.on !== false, intensity: l.intensity || 75,
-    onVisit: l.onVisit || null,
+    onVisit: l.onVisit || null, visitRadius: l.visitRadius || null,
     path: l.path ? JSON.parse(JSON.stringify(l.path)) : null,
     _pathProgress: 0, _pathDir: 1, _visited: false,
   }));
@@ -5276,7 +5288,8 @@ function updateGameState(dt) {
   const embeddedArrays = { checkpoint: level.checkpoints, danger: level.dangers, bouncer: level.bouncers, goal: level.goals };
   for (const light of staticLights) {
     if (!light.onVisit || light._visited) continue;
-    let visitRadiusSq = 40 * 40; // default for standalone lights
+    const sr = light.visitRadius || 40;
+    let visitRadiusSq = sr * sr; // standalone: use configured visitRadius
     if (light._embedded) {
       const parentArr = embeddedArrays[light._embedded];
       const parent = parentArr && parentArr[light._embeddedIdx];
