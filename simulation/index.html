@@ -4718,22 +4718,22 @@ function showBriefing(levelIndex, levelOverride) {
     path: l.path ? JSON.parse(JSON.stringify(l.path)) : null,
     _pathProgress: 0, _pathDir: 1, _visited: false,
   }));
-  // Add embedded lights from checkpoints, dangers, goals
+  // Add embedded lights from checkpoints, dangers, goals, bouncers
   if (level.checkpoints) level.checkpoints.forEach((cp, i) => {
-    if (cp.light) staticLights.push({ id: nextLightId++, x: cp.x, y: cp.y, on: cp.light.on !== false, intensity: cp.light.intensity || 50, _embedded: 'checkpoint', _embeddedIdx: i });
+    if (cp.light) staticLights.push({ id: nextLightId++, x: cp.x, y: cp.y, on: cp.light.on !== false, intensity: cp.light.intensity || 50, onVisit: cp.light.onVisit || null, _visited: false, _embedded: 'checkpoint', _embeddedIdx: i });
   });
   if (level.dangers) level.dangers.forEach((dz, i) => {
     if (dz.light) {
       const cx = dz.shape === 'circle' ? dz.x : dz.x + (dz.w || 0) / 2;
       const cy = dz.shape === 'circle' ? dz.y : dz.y + (dz.h || 0) / 2;
-      staticLights.push({ id: nextLightId++, x: cx, y: cy, on: dz.light.on !== false, intensity: dz.light.intensity || 50, _embedded: 'danger', _embeddedIdx: i });
+      staticLights.push({ id: nextLightId++, x: cx, y: cy, on: dz.light.on !== false, intensity: dz.light.intensity || 50, onVisit: dz.light.onVisit || null, _visited: false, _embedded: 'danger', _embeddedIdx: i });
     }
   });
   if (level.bouncers) level.bouncers.forEach((b, i) => {
-    if (b.light) staticLights.push({ id: nextLightId++, x: b.x, y: b.y, on: b.light.on !== false, intensity: b.light.intensity || 50, _embedded: 'bouncer', _embeddedIdx: i });
+    if (b.light) staticLights.push({ id: nextLightId++, x: b.x, y: b.y, on: b.light.on !== false, intensity: b.light.intensity || 50, onVisit: b.light.onVisit || null, _visited: false, _embedded: 'bouncer', _embeddedIdx: i });
   });
   if (level.goals) level.goals.forEach((g, i) => {
-    if (g.light) staticLights.push({ id: nextLightId++, x: g.x, y: g.y, on: g.light.on !== false, intensity: g.light.intensity || 75, _embedded: 'goal', _embeddedIdx: i });
+    if (g.light) staticLights.push({ id: nextLightId++, x: g.x, y: g.y, on: g.light.on !== false, intensity: g.light.intensity || 75, onVisit: g.light.onVisit || null, _visited: false, _embedded: 'goal', _embeddedIdx: i });
   });
   vehicles = [];
   stopped = false;
