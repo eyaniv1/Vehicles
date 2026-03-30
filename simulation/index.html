@@ -4545,8 +4545,8 @@ document.addEventListener('click', (e) => {
 
 // --- Moving light runtime ---
 function updateMovingLights(dt) {
-  // Don't animate during editing — only during game runs and briefing preview
-  if (gamePhase === 'editing') return;
+  // Only animate during active running (after gate opens)
+  if (gamePhase !== 'running' || gameStartGateOpen < 1) return;
 
   // Also update path-based movement for checkpoints, dangers, goals, bouncers
   if (currentLevel) {
@@ -4699,7 +4699,9 @@ function drawEditorOverlay() {
 // --- Briefing / configurator ---
 function showBriefing(levelIndex, levelOverride) {
   currentLevelIndex = levelIndex;
-  const level = levelOverride || GAME_LEVELS[levelIndex];
+  const source = levelOverride || GAME_LEVELS[levelIndex];
+  // Deep-copy so path mutations during gameplay don't affect the source
+  const level = JSON.parse(JSON.stringify(source));
   currentLevel = level;
   gamePhase = 'briefing';
 
