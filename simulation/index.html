@@ -3379,8 +3379,8 @@ const GAME_LEVELS = [
     worldSize: { w: 1200, h: 800 },
     lights: [{ x: 900, y: 400, intensity: 75, on: true }],
     startPos: { x: 200, y: 400, theta: 0 },
-    allowedConfig: { typeSelect: true, frontGate: false, sideEnabled: false, speed: false, contrast: false, light: false },
-    lockedDefaults: { simSpeed: 1, speedContrast: 50 },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
+    lockedDefaults: {},
     goals: [{ type: 'reach', x: 900, y: 400, radius: 60, label: 'Goal' }],
     dangers: [], checkpoints: [],
     timeLimit: 30,
@@ -3394,8 +3394,8 @@ const GAME_LEVELS = [
     worldSize: { w: 1200, h: 800 },
     lights: [{ x: 600, y: 100, intensity: 90, on: true }],
     startPos: { x: 600, y: 350, theta: Math.PI / 2 },
-    allowedConfig: { typeSelect: true, frontGate: false, sideEnabled: false, speed: false, contrast: false, light: false },
-    lockedDefaults: { simSpeed: 1, speedContrast: 50 },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
+    lockedDefaults: {},
     goals: [{ type: 'reach', x: 600, y: 700, radius: 60, label: 'Goal' }],
     dangers: [], checkpoints: [],
     timeLimit: 30,
@@ -3412,8 +3412,8 @@ const GAME_LEVELS = [
       { x: 950, y: 400, intensity: 85, on: true },
     ],
     startPos: { x: 100, y: 400, theta: 0 },
-    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: false, speed: false, contrast: false, light: false },
-    lockedDefaults: { simSpeed: 1, speedContrast: 50 },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
+    lockedDefaults: {},
     goals: [{ type: 'reach', x: 950, y: 400, radius: 60, label: 'Goal' }],
     dangers: [], checkpoints: [],
     timeLimit: 40,
@@ -3431,7 +3431,7 @@ const GAME_LEVELS = [
       { x: 1200, y: 250, intensity: 70, on: true },
     ],
     startPos: { x: 100, y: 400, theta: 0 },
-    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: false, speed: true, contrast: true, light: false },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
     lockedDefaults: {},
     checkpoints: [
       { x: 400, y: 250, radius: 55 },
@@ -3451,7 +3451,7 @@ const GAME_LEVELS = [
     worldSize: { w: 1400, h: 800 },
     lights: [{ x: 1200, y: 400, intensity: 80, on: true }],
     startPos: { x: 150, y: 400, theta: 0 },
-    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: false, speed: true, contrast: true, light: false },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
     lockedDefaults: {},
     goals: [{ type: 'reach', x: 1200, y: 400, radius: 60, label: 'Goal' }],
     checkpoints: [],
@@ -3476,7 +3476,7 @@ const GAME_LEVELS = [
       { x: 800, y: 800, intensity: 70, on: true },
     ],
     startPos: { x: 100, y: 500, theta: -0.5 },
-    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: false },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
     lockedDefaults: {},
     checkpoints: [
       { x: 300, y: 200, radius: 60 },
@@ -3776,7 +3776,10 @@ function buildEditorPanel() {
   nameDiv.innerHTML = '<label>Level Name</label>';
   const nameInput = document.createElement('input');
   nameInput.type = 'text'; nameInput.value = editorLevel.name;
+  nameInput.style.cssText = 'width:100%;background:#16213e;color:#e0e0e0;border:1px solid #444;border-radius:4px;padding:5px;font-size:13px;margin-bottom:4px;';
+  nameInput.placeholder = 'Enter level name...';
   nameInput.addEventListener('input', () => { editorLevel.name = nameInput.value; });
+  nameInput.addEventListener('change', () => { editorLevel.name = nameInput.value; });
   nameDiv.appendChild(nameInput);
 
   // World size dropdown (same options as simulation)
@@ -4734,8 +4737,8 @@ function buildBriefingPanel(level) {
   const brief = document.createElement('div');
   brief.className = 'game-briefing';
   brief.innerHTML = `
-    <h3>Level ${level.id}: ${level.name}</h3>
-    <span class="tier-badge">Tier ${level.tier}</span>
+    <h3>${level._custom ? level.name : 'Level ' + level.id + ': ' + level.name}</h3>
+    <span class="tier-badge">${level._custom ? 'Custom' : 'Tier ' + level.tier}</span>
     <p>${level.briefing}</p>
     ${level.checkpoints.length > 0 ? '<p>Visit <b>' + level.checkpoints.length + ' checkpoint' + (level.checkpoints.length > 1 ? 's' : '') + '</b> in order, then reach the goal.</p>' : ''}
     ${level.dangers.length > 0 ? '<p style="color:#ef5350;">Avoid the red danger zones!</p>' : ''}
@@ -4810,7 +4813,7 @@ function buildBriefingPanel(level) {
   speedDiv.className = ac.speed ? '' : 'locked-field';
   speedDiv.innerHTML = '<label>Speed: <span id="game-speed-val">' + gameVehicle.simSpeed + 'x</span></label>';
   const speedSlider = document.createElement('input');
-  speedSlider.type = 'range'; speedSlider.min = 1; speedSlider.max = 5; speedSlider.value = gameVehicle.simSpeed;
+  speedSlider.type = 'range'; speedSlider.min = 1; speedSlider.max = 10; speedSlider.value = gameVehicle.simSpeed;
   speedSlider.addEventListener('input', () => {
     gameVehicle.simSpeed = parseInt(speedSlider.value);
     speedDiv.querySelector('span').textContent = speedSlider.value + 'x';
@@ -4909,7 +4912,7 @@ function buildRunningPanel() {
   const panel = document.getElementById('game-panel');
   const level = currentLevel;
   panel.innerHTML = `
-    <h2 style="color:#ff9800;margin:0;">Level ${level.id}: ${level.name}</h2>
+    <h2 style="color:#ff9800;margin:0;">${level._custom ? level.name : 'Level ' + level.id + ': ' + level.name}</h2>
     <div class="game-timer" id="game-timer-display">0.0s</div>
     <div class="game-status" id="game-status-display">Running...</div>
     ${level.checkpoints.length > 0 ? '<div class="game-checkpoint-counter" id="game-cp-display">Checkpoints: 0 / ' + level.checkpoints.length + '</div>' : ''}
@@ -4921,7 +4924,8 @@ function buildRunningPanel() {
   document.getElementById('game-abort-btn').addEventListener('click', () => {
     gameRunning = false;
     gameVehicle.running = false;
-    showBriefing(currentLevelIndex);
+    if (level._custom) showBriefing(-1, level);
+    else showBriefing(currentLevelIndex);
   });
   document.getElementById('game-restart-btn').addEventListener('click', () => {
     restartLevel();
@@ -5027,7 +5031,7 @@ function endGame(outcome, message, stars) {
 
   document.getElementById('result-retry-btn').addEventListener('click', () => {
     overlay.classList.remove('open');
-    showBriefing(currentLevelIndex, isCustom ? editorLevel : undefined);
+    showBriefing(currentLevelIndex, isCustom ? level : undefined);
   });
   const nextBtn = document.getElementById('result-next-btn');
   if (nextBtn) {
