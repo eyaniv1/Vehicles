@@ -3804,13 +3804,15 @@ function buildEditorPanel() {
   nameDiv.appendChild(wsSel);
 
   // Time limit
-  nameDiv.innerHTML += '<label>Time Limit (seconds)</label>';
+  const tlLabel = document.createElement('label'); tlLabel.textContent = 'Time Limit (seconds)';
+  nameDiv.appendChild(tlLabel);
   const tlIn = document.createElement('input'); tlIn.type = 'number'; tlIn.value = editorLevel.timeLimit; tlIn.min = 0; tlIn.max = 600;
   tlIn.addEventListener('change', () => { editorLevel.timeLimit = parseInt(tlIn.value) || 60; });
   nameDiv.appendChild(tlIn);
 
   // Star thresholds
-  nameDiv.innerHTML += '<label>Stars: 3\u2605 / 2\u2605 / 1\u2605 (seconds)</label>';
+  const starsLabel = document.createElement('label'); starsLabel.textContent = 'Stars: 3\u2605 / 2\u2605 / 1\u2605 (seconds)';
+  nameDiv.appendChild(starsLabel);
   const starsDiv = document.createElement('div');
   starsDiv.className = 'prop-row';
   const s3 = document.createElement('input'); s3.type = 'number'; s3.value = editorLevel.stars.three; s3.min = 1;
