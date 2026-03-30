@@ -3342,6 +3342,11 @@ let editorPathTarget = null; // { type, index } of object whose path is being de
 let editorPathLightIdx = -1; // kept for backward compat
 let editorMouseWorld = { x: 0, y: 0 }; // tracked for ghost preview
 
+// --- Animation state for enhanced graphics ---
+let gameStartGateOpen = 0; // 0 = closed, 1 = fully open (animates on run start)
+let gameCrashEffect = null; // { x, y, timer, particles } when vehicle hits danger
+let bouncerSquish = new Map(); // bouncerId -> { timer, nx, ny } squish animation
+
 // --- Custom levels persistence ---
 function loadCustomLevels() {
   try {
@@ -4882,6 +4887,9 @@ function launchLevel() {
   gameNextCheckpoint = 0;
   gameVehicle.running = true;
   gameVehicle.trail = [];
+  gameStartGateOpen = 0;
+  gameCrashEffect = null;
+  bouncerSquish.clear();
   buildRunningPanel();
 }
 
@@ -4920,6 +4928,9 @@ function restartLevel() {
   gameNextCheckpoint = 0;
   gameRunning = true;
   gameVehicle.running = true;
+  gameStartGateOpen = 0;
+  gameCrashEffect = null;
+  bouncerSquish.clear();
   // Reset on-visit and moving light state
   for (const l of staticLights) {
     l._visited = false;
@@ -5035,6 +5046,24 @@ function updateGameState(dt) {
   const level = currentLevel;
   const v = gameVehicle;
 
+  // Animate start gate opening
+  if (gameStartGateOpen < 1) gameStartGateOpen = Math.min(1, gameStartGateOpen + dt * 1.8);
+
+  // Animate bouncer squish decay
+  for (const [key, sq] of bouncerSquish) {
+    sq.timer -= dt;
+    if (sq.timer <= 0) bouncerSquish.delete(key);
+  }
+
+  // Animate crash particles
+  if (gameCrashEffect) {
+    gameCrashEffect.timer -= dt;
+    for (const p of gameCrashEffect.particles) {
+      p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+    }
+    if (gameCrashEffect.timer <= 0) gameCrashEffect = null;
+  }
+
   // Update timer display
   const timerEl = document.getElementById('game-timer-display');
   if (timerEl) {
@@ -5052,6 +5081,14 @@ function updateGameState(dt) {
   // Check danger zones
   for (const dz of level.dangers) {
     if (isInsideDanger(v, dz)) {
+      // Spawn crash effect particles
+      const particles = [];
+      for (let i = 0; i < 12; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 40 + Math.random() * 80;
+        particles.push({ x: v.x, y: v.y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 0.8 + Math.random() * 0.4 });
+      }
+      gameCrashEffect = { x: v.x, y: v.y, timer: 1.2, particles };
       endGame('fail', 'Vehicle entered a danger zone!');
       return;
     }
@@ -5059,16 +5096,19 @@ function updateGameState(dt) {
 
   // Check bouncers — reflect vehicle on collision
   if (level.bouncers) {
-    for (const b of level.bouncers) {
+    for (let bi = 0; bi < level.bouncers.length; bi++) {
+      const b = level.bouncers[bi];
       const info = hexBounceInfo(v.x, v.y, b.x, b.y, b.radius);
       if (info) {
         // Push vehicle out along nearest edge normal
         v.x += info.nx * (info.dist + 2);
         v.y += info.ny * (info.dist + 2);
-        // Reflect heading: θ' = 2*(n·θ_dir) - θ
+        // Reflect heading
         const cosT = Math.cos(v.theta), sinT = Math.sin(v.theta);
         const dot = cosT * info.nx + sinT * info.ny;
         v.theta = Math.atan2(sinT - 2 * dot * info.ny, cosT - 2 * dot * info.nx);
+        // Trigger squish animation
+        bouncerSquish.set(bi, { timer: 0.35, nx: info.nx, ny: info.ny });
       }
     }
   }
@@ -5164,13 +5204,18 @@ function isInsideDanger(v, dz) {
 function drawGameObjects() {
   if (!gameMode || !currentLevel) return;
   const level = currentLevel;
+  const t = Date.now();
+  const s = 1 / camZoom; // convenience: size scaling factor
 
-  // Danger zones
+  // === DANGER ZONES — hazard stripes and skull ===
   for (const dz of level.dangers) {
-    ctx.fillStyle = 'rgba(198, 40, 40, 0.15)';
+    const cx = dz.shape === 'circle' ? dz.x : dz.x + dz.w / 2;
+    const cy = dz.shape === 'circle' ? dz.y : dz.y + dz.h / 2;
+
+    // Base fill
+    ctx.fillStyle = 'rgba(198, 40, 40, 0.12)';
     ctx.strokeStyle = 'rgba(198, 40, 40, 0.6)';
-    ctx.lineWidth = 2 / camZoom;
-    ctx.setLineDash([6, 4]);
+    ctx.lineWidth = 2 * s;
     if (dz.shape === 'circle') {
       ctx.beginPath(); ctx.arc(dz.x, dz.y, dz.radius, 0, Math.PI * 2);
       ctx.fill(); ctx.stroke();
@@ -5178,104 +5223,298 @@ function drawGameObjects() {
       ctx.fillRect(dz.x, dz.y, dz.w, dz.h);
       ctx.strokeRect(dz.x, dz.y, dz.w, dz.h);
     }
-    ctx.setLineDash([]);
-    // Hazard label
-    ctx.fillStyle = 'rgba(198, 40, 40, 0.7)';
-    ctx.font = (12 / camZoom) + 'px sans-serif';
-    ctx.textAlign = 'center';
-    if (dz.shape === 'circle') {
-      ctx.fillText('DANGER', dz.x, dz.y + 4 / camZoom);
-    } else {
-      ctx.fillText('DANGER', dz.x + dz.w / 2, dz.y + dz.h / 2 + 4 / camZoom);
+
+    // Diagonal hazard stripes (clipped to shape)
+    ctx.save();
+    ctx.beginPath();
+    if (dz.shape === 'circle') { ctx.arc(dz.x, dz.y, dz.radius - 1, 0, Math.PI * 2); }
+    else { ctx.rect(dz.x + 1, dz.y + 1, dz.w - 2, dz.h - 2); }
+    ctx.clip();
+    const stripeW = 12 * s;
+    const stripeColor = 'rgba(198, 40, 40, 0.18)';
+    ctx.fillStyle = stripeColor;
+    const hw = dz.shape === 'circle' ? dz.radius : Math.max(dz.w, dz.h);
+    for (let si = -hw; si < hw * 2; si += stripeW * 2.5) {
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(si - hw, -hw * 1.5, stripeW, hw * 3);
+      ctx.restore();
+    }
+    ctx.restore();
+
+    // Skull icon at center
+    const skullS = Math.min(dz.shape === 'circle' ? dz.radius * 0.4 : Math.min(dz.w, dz.h) * 0.2, 20);
+    ctx.fillStyle = 'rgba(198, 40, 40, 0.55)';
+    // skull head
+    ctx.beginPath(); ctx.arc(cx, cy - skullS * 0.15, skullS * 0.5, 0, Math.PI * 2); ctx.fill();
+    // jaw
+    ctx.fillRect(cx - skullS * 0.3, cy + skullS * 0.15, skullS * 0.6, skullS * 0.25);
+    // eyes
+    ctx.fillStyle = '#0f0f23';
+    ctx.beginPath(); ctx.arc(cx - skullS * 0.18, cy - skullS * 0.2, skullS * 0.12, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(cx + skullS * 0.18, cy - skullS * 0.2, skullS * 0.12, 0, Math.PI * 2); ctx.fill();
+  }
+
+  // === CRASH EFFECT PARTICLES ===
+  if (gameCrashEffect) {
+    for (const p of gameCrashEffect.particles) {
+      if (p.life <= 0) continue;
+      const alpha = Math.min(1, p.life);
+      const sz = (3 + Math.random() * 3) * s;
+      ctx.fillStyle = `rgba(255, ${Math.floor(60 + Math.random() * 100)}, 20, ${alpha})`;
+      ctx.fillRect(p.x - sz / 2, p.y - sz / 2, sz, sz);
+    }
+    // Flash circle
+    if (gameCrashEffect.timer > 0.8) {
+      const flashAlpha = (gameCrashEffect.timer - 0.8) / 0.4;
+      ctx.fillStyle = `rgba(255, 100, 30, ${flashAlpha * 0.3})`;
+      ctx.beginPath(); ctx.arc(gameCrashEffect.x, gameCrashEffect.y, 40 * (1 - flashAlpha * 0.5), 0, Math.PI * 2); ctx.fill();
     }
   }
 
-  // Bouncers (hexagons)
+  // === BOUNCERS — hexagons with squish animation ===
   if (level.bouncers) {
-    for (const b of level.bouncers) {
-      const verts = hexVertices(b.x, b.y, b.radius);
-      // Fill
-      ctx.fillStyle = 'rgba(100, 181, 246, 0.15)';
-      ctx.strokeStyle = 'rgba(100, 181, 246, 0.7)';
-      ctx.lineWidth = 2.5 / camZoom;
+    for (let bi = 0; bi < level.bouncers.length; bi++) {
+      const b = level.bouncers[bi];
+      const sq = bouncerSquish.get(bi);
+
+      ctx.save();
+      ctx.translate(b.x, b.y);
+      // Apply squish deformation
+      if (sq) {
+        const squishAmt = 0.15 * (sq.timer / 0.35);
+        const angle = Math.atan2(sq.ny, sq.nx);
+        ctx.rotate(angle);
+        ctx.scale(1 - squishAmt, 1 + squishAmt * 0.5);
+        ctx.rotate(-angle);
+      }
+
+      const verts = hexVertices(0, 0, b.radius);
+      // Outer glow
+      const glowPulse = 0.5 + 0.2 * Math.sin(t / 400 + bi);
+      const grad = ctx.createRadialGradient(0, 0, b.radius * 0.6, 0, 0, b.radius * 1.15);
+      grad.addColorStop(0, 'rgba(100, 181, 246, 0)');
+      grad.addColorStop(1, `rgba(100, 181, 246, ${glowPulse * 0.12})`);
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(0, 0, b.radius * 1.15, 0, Math.PI * 2); ctx.fill();
+
+      // Hexagon fill
+      ctx.fillStyle = sq ? `rgba(140, 210, 255, ${0.12 + 0.15 * (sq.timer / 0.35)})` : 'rgba(100, 181, 246, 0.1)';
+      ctx.strokeStyle = sq ? `rgba(180, 220, 255, ${0.7 + 0.3 * (sq.timer / 0.35)})` : 'rgba(100, 181, 246, 0.55)';
+      ctx.lineWidth = 2.5 * s;
       ctx.beginPath();
       ctx.moveTo(verts[0].x, verts[0].y);
       for (let i = 1; i < 6; i++) ctx.lineTo(verts[i].x, verts[i].y);
       ctx.closePath();
       ctx.fill(); ctx.stroke();
-      // Label
-      ctx.fillStyle = 'rgba(100, 181, 246, 0.8)';
-      ctx.font = (11 / camZoom) + 'px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      ctx.fillText('BOUNCE', b.x, b.y);
+
+      // Inner hex pattern (smaller concentric hexagon)
+      const innerVerts = hexVertices(0, 0, b.radius * 0.55);
+      ctx.strokeStyle = 'rgba(100, 181, 246, 0.2)';
+      ctx.lineWidth = 1 * s;
+      ctx.beginPath();
+      ctx.moveTo(innerVerts[0].x, innerVerts[0].y);
+      for (let i = 1; i < 6; i++) ctx.lineTo(innerVerts[i].x, innerVerts[i].y);
+      ctx.closePath(); ctx.stroke();
+
+      // Bounce arrows (two curved arrows in a circle)
+      ctx.strokeStyle = 'rgba(100, 181, 246, 0.5)';
+      ctx.lineWidth = 1.5 * s;
+      const arrowR = b.radius * 0.25;
+      for (let a = 0; a < 2; a++) {
+        const base = a * Math.PI;
+        ctx.beginPath();
+        ctx.arc(0, 0, arrowR, base, base + Math.PI * 0.7);
+        ctx.stroke();
+        // Arrowhead
+        const tipAngle = base + Math.PI * 0.7;
+        const tx = arrowR * Math.cos(tipAngle), ty = arrowR * Math.sin(tipAngle);
+        const ha1 = tipAngle + 2.3, ha2 = tipAngle + 0.9;
+        ctx.fillStyle = 'rgba(100, 181, 246, 0.5)';
+        ctx.beginPath();
+        ctx.moveTo(tx, ty);
+        ctx.lineTo(tx + 4 * s * Math.cos(ha1), ty + 4 * s * Math.sin(ha1));
+        ctx.lineTo(tx + 4 * s * Math.cos(ha2), ty + 4 * s * Math.sin(ha2));
+        ctx.fill();
+      }
+      ctx.restore();
     }
   }
 
-  // Checkpoints
+  // === CHECKPOINTS — flag on pole ===
   const cps = level.checkpoints;
   for (let i = 0; i < cps.length; i++) {
     const cp = cps[i];
     const visited = i < gameNextCheckpoint;
-    ctx.strokeStyle = visited ? '#555' : '#00bcd4';
-    ctx.lineWidth = 2 / camZoom;
+    const color = visited ? '#555' : '#00bcd4';
+
+    // Circle zone
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.5 * s;
     ctx.setLineDash(visited ? [] : [6, 3]);
     ctx.beginPath(); ctx.arc(cp.x, cp.y, cp.radius, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
-    // Fill
     if (!visited) {
       const grad = ctx.createRadialGradient(cp.x, cp.y, 0, cp.x, cp.y, cp.radius);
-      grad.addColorStop(0, 'rgba(0, 188, 212, 0.12)');
+      grad.addColorStop(0, 'rgba(0, 188, 212, 0.1)');
       grad.addColorStop(1, 'rgba(0, 188, 212, 0)');
       ctx.fillStyle = grad;
       ctx.beginPath(); ctx.arc(cp.x, cp.y, cp.radius, 0, Math.PI * 2); ctx.fill();
     }
-    // Number / check
+
+    // Flag pole
+    const poleH = 28;
+    const poleX = cp.x;
+    const poleTop = cp.y - poleH;
+    ctx.strokeStyle = visited ? '#555' : '#e0e0e0';
+    ctx.lineWidth = 1.5 * s;
+    ctx.beginPath(); ctx.moveTo(poleX, cp.y + 4); ctx.lineTo(poleX, poleTop); ctx.stroke();
+    // Pole base dot
+    ctx.fillStyle = visited ? '#555' : '#e0e0e0';
+    ctx.beginPath(); ctx.arc(poleX, cp.y + 4, 2 * s, 0, Math.PI * 2); ctx.fill();
+
+    // Triangular flag
+    const flagW = 16, flagH = 10;
+    const waveOffset = visited ? 0 : Math.sin(t / 300 + i * 1.5) * 2;
     ctx.fillStyle = visited ? '#555' : '#00bcd4';
-    ctx.font = 'bold ' + (14 / camZoom) + 'px sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.fillText(visited ? '\u2713' : (i + 1).toString(), cp.x, cp.y);
+    ctx.beginPath();
+    ctx.moveTo(poleX, poleTop);
+    ctx.lineTo(poleX + flagW + waveOffset, poleTop + flagH * 0.35);
+    ctx.lineTo(poleX, poleTop + flagH);
+    ctx.closePath();
+    ctx.fill();
+
+    // Number on flag
+    ctx.fillStyle = visited ? '#333' : '#fff';
+    ctx.font = 'bold ' + (7 / camZoom) + 'px sans-serif';
+    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(visited ? '\u2713' : (i + 1).toString(), poleX + 3, poleTop + flagH * 0.45);
   }
 
-  // Goal markers
+  // === GOAL — checkered flag ===
   for (const goal of level.goals) {
-    const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 300);
+    const pulse = 0.7 + 0.3 * Math.sin(t / 300);
+
     // Glow
     const grad = ctx.createRadialGradient(goal.x, goal.y, 0, goal.x, goal.y, goal.radius);
-    grad.addColorStop(0, 'rgba(76, 175, 80, 0.18)');
+    grad.addColorStop(0, 'rgba(76, 175, 80, 0.15)');
     grad.addColorStop(1, 'rgba(76, 175, 80, 0)');
     ctx.fillStyle = grad;
     ctx.beginPath(); ctx.arc(goal.x, goal.y, goal.radius, 0, Math.PI * 2); ctx.fill();
+
     // Ring
     ctx.strokeStyle = `rgba(76, 175, 80, ${pulse})`;
-    ctx.lineWidth = 3 / camZoom;
+    ctx.lineWidth = 2.5 * s;
     ctx.setLineDash([8, 4]);
     ctx.beginPath(); ctx.arc(goal.x, goal.y, goal.radius, 0, Math.PI * 2); ctx.stroke();
     ctx.setLineDash([]);
+
+    // Checkered flag pole
+    const poleX = goal.x;
+    const poleTop = goal.y - 32;
+    ctx.strokeStyle = '#e0e0e0';
+    ctx.lineWidth = 1.5 * s;
+    ctx.beginPath(); ctx.moveTo(poleX, goal.y + 4); ctx.lineTo(poleX, poleTop); ctx.stroke();
+    // Pole base
+    ctx.fillStyle = '#e0e0e0';
+    ctx.beginPath(); ctx.arc(poleX, goal.y + 4, 2 * s, 0, Math.PI * 2); ctx.fill();
+
+    // Checkered flag (4x3 grid of alternating black/white squares)
+    const flagW = 20, flagH = 14;
+    const cols = 4, rows = 3;
+    const cellW = flagW / cols, cellH = flagH / rows;
+    const wave = Math.sin(t / 250) * 1.5;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const isBlack = (r + c) % 2 === 0;
+        ctx.fillStyle = isBlack ? '#222' : '#eee';
+        const wx = poleX + c * cellW + (r === 1 ? wave * 0.5 : r === 2 ? wave : 0);
+        const wy = poleTop + r * cellH;
+        ctx.fillRect(wx, wy, cellW + 0.5, cellH + 0.5);
+      }
+    }
+    // Flag border
+    ctx.strokeStyle = '#4caf50';
+    ctx.lineWidth = 1 * s;
+    ctx.strokeRect(poleX, poleTop, flagW + wave, flagH);
+
     // Label
     ctx.fillStyle = '#4caf50';
-    ctx.font = 'bold ' + (14 / camZoom) + 'px sans-serif';
+    ctx.font = 'bold ' + (12 / camZoom) + 'px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.fillText(goal.label || 'GOAL', goal.x, goal.y - goal.radius - 6 / camZoom);
+    ctx.fillText(goal.label || 'FINISH', goal.x, goal.y - goal.radius - 6 * s);
   }
 
-  // Start position marker (during briefing)
-  if (gamePhase === 'briefing' || gamePhase === 'editing') {
+  // === START POSITION — gate that opens ===
+  if (gamePhase === 'briefing' || gamePhase === 'editing' || (gamePhase === 'running' && gameStartGateOpen < 1)) {
     const sp = level.startPos;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
-    ctx.lineWidth = 1.5 / camZoom;
-    ctx.setLineDash([4, 4]);
-    ctx.beginPath(); ctx.arc(sp.x, sp.y, 20, 0, Math.PI * 2); ctx.stroke();
-    ctx.setLineDash([]);
-    // Direction arrow
-    const ax = sp.x + 25 * Math.cos(sp.theta);
-    const ay = sp.y + 25 * Math.sin(sp.theta);
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 2 / camZoom;
+    const gateOpen = (gamePhase === 'running') ? gameStartGateOpen : 0;
+    const gateW = 30; // half-width of the gate
+    const gateH = 6;
+    const perpX = -Math.sin(sp.theta);
+    const perpY = Math.cos(sp.theta);
+    const fwdX = Math.cos(sp.theta);
+    const fwdY = Math.sin(sp.theta);
+
+    // Gate posts (two small rectangles on each side)
+    const postDist = gateW + gateOpen * 20; // posts slide apart
+    for (const side of [-1, 1]) {
+      const px = sp.x + perpX * postDist * side + fwdX * 15;
+      const py = sp.y + perpY * postDist * side + fwdY * 15;
+      ctx.fillStyle = `rgba(255, 200, 50, ${0.8 - gateOpen * 0.5})`;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(sp.theta);
+      ctx.fillRect(-2, -gateH / 2, 4, gateH);
+      ctx.restore();
+    }
+
+    // Gate bar (horizontal bar between posts)
+    if (gateOpen < 0.95) {
+      const barAlpha = 1 - gateOpen;
+      ctx.strokeStyle = `rgba(255, 200, 50, ${barAlpha * 0.7})`;
+      ctx.lineWidth = 2.5 * s;
+      const bx1 = sp.x + perpX * (-postDist) + fwdX * 15;
+      const by1 = sp.y + perpY * (-postDist) + fwdY * 15;
+      const bx2 = sp.x + perpX * postDist + fwdX * 15;
+      const by2 = sp.y + perpY * postDist + fwdY * 15;
+      ctx.beginPath(); ctx.moveTo(bx1, by1); ctx.lineTo(bx2, by2); ctx.stroke();
+
+      // Second bar (double gate bar)
+      const bx3 = sp.x + perpX * (-postDist) + fwdX * 18;
+      const by3 = sp.y + perpY * (-postDist) + fwdY * 18;
+      const bx4 = sp.x + perpX * postDist + fwdX * 18;
+      const by4 = sp.y + perpY * postDist + fwdY * 18;
+      ctx.strokeStyle = `rgba(255, 200, 50, ${barAlpha * 0.4})`;
+      ctx.lineWidth = 1.5 * s;
+      ctx.beginPath(); ctx.moveTo(bx3, by3); ctx.lineTo(bx4, by4); ctx.stroke();
+    }
+
+    // Direction arrow behind the gate
+    const ax = sp.x + 30 * fwdX;
+    const ay = sp.y + 30 * fwdY;
+    ctx.strokeStyle = 'rgba(255, 200, 50, 0.35)';
+    ctx.lineWidth = 1.5 * s;
+    ctx.setLineDash([3, 3]);
     ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(ax, ay); ctx.stroke();
-    ctx.fillStyle = 'rgba(255,255,255,0.6)';
-    ctx.font = (10 / camZoom) + 'px sans-serif';
-    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-    ctx.fillText('START', sp.x, sp.y + 22 / camZoom);
+    ctx.setLineDash([]);
+
+    // Arrowhead
+    ctx.fillStyle = 'rgba(255, 200, 50, 0.4)';
+    ctx.beginPath();
+    ctx.moveTo(ax, ay);
+    ctx.lineTo(ax - 5 * fwdX + 4 * perpX, ay - 5 * fwdY + 4 * perpY);
+    ctx.lineTo(ax - 5 * fwdX - 4 * perpX, ay - 5 * fwdY - 4 * perpY);
+    ctx.fill();
+
+    // "START" label
+    if (gamePhase === 'briefing' || gamePhase === 'editing') {
+      ctx.fillStyle = 'rgba(255, 200, 50, 0.6)';
+      ctx.font = (10 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText('START', sp.x, sp.y + 24);
+    }
   }
 }
 
