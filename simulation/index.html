@@ -5485,8 +5485,8 @@ function drawGameObjects() {
     const fwdX = Math.cos(sp.theta);
     const fwdY = Math.sin(sp.theta);
 
-    // Gate is placed ahead of the vehicle (vehicle nose is ~20px forward)
-    const gateFwd = 28; // distance ahead of start point
+    // Gate is placed ahead of the vehicle (nose ~25px + arrow ~10px from center)
+    const gateFwd = 42; // distance ahead of start point
     // Gate posts (two small rectangles on each side)
     const postDist = gateW + gateOpen * 25; // posts slide apart
     for (const side of [-1, 1]) {
