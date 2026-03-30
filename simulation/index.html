@@ -3336,7 +3336,8 @@ let gamePhase = 'select'; // 'select' | 'briefing' | 'running' | 'ended' | 'edit
 let gameRunning = false;
 let gamePaused = false;
 let gameElapsed = 0;
-let gameVisitedCheckpoints = new Set();
+let gameVisitedCheckpoints = new Set(); gameCheckpointDwell = {};
+let gameCheckpointDwell = {}; // index -> seconds spent inside
 let currentLevelIndex = -1;
 let currentLevel = null; // the active level object (built-in or custom)
 let currentLevelSource = null; // unmutated original for abort/retry
@@ -4152,6 +4153,7 @@ function buildPropertiesPanel(panel) {
     if (!cp) return;
 
     addSlider(props, 'Radius', 20, 150, cp.radius, (v) => { cp.radius = v; });
+    addSlider(props, 'Approval Time (s)', 0, 15, cp.approvalTime || 0, (v) => { cp.approvalTime = v; }, 0.5);
     buildEmbeddedLightProps(props, cp, 'checkpoint', sel.index);
     buildPathUI(props, cp, 'checkpoint', sel.index);
 
@@ -4717,6 +4719,16 @@ function drawEditorOverlay() {
       ctx.fillText(label, l.x, l.y - 20 / camZoom);
     }
   }
+
+  // Checkpoint approval time indicators
+  for (const cp of editorLevel.checkpoints) {
+    if (cp.approvalTime && cp.approvalTime > 0) {
+      ctx.fillStyle = '#00bcd4';
+      ctx.font = 'bold ' + (11 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('\u23f1 ' + cp.approvalTime + 's', cp.x, cp.y - cp.radius - 6 / camZoom);
+    }
+  }
 }
 
 // --- Briefing / configurator ---
@@ -4778,7 +4790,7 @@ function showBriefing(levelIndex, levelOverride) {
   camY = 0;
   clampCamera();
 
-  gameVisitedCheckpoints = new Set();
+  gameVisitedCheckpoints = new Set(); gameCheckpointDwell = {};
   gameElapsed = 0;
   gameRunning = false;
 
@@ -4968,7 +4980,7 @@ function launchLevel() {
   gameRunning = true;
   gamePaused = false;
   gameElapsed = 0;
-  gameVisitedCheckpoints = new Set();
+  gameVisitedCheckpoints = new Set(); gameCheckpointDwell = {};
   gameVehicle.running = false; // don't move until gate opens
   gameVehicle.trail = [];
   gameStartGateOpen = 0;
@@ -5022,7 +5034,7 @@ function restartLevel() {
   gameVehicle.leftSpeed = 0;
   gameVehicle.rightSpeed = 0;
   gameElapsed = 0;
-  gameVisitedCheckpoints = new Set();
+  gameVisitedCheckpoints = new Set(); gameCheckpointDwell = {};
   gameRunning = true;
   gameVehicle.running = false; // gate opens first, then vehicle starts
   gameStartGateOpen = 0;
@@ -5223,14 +5235,23 @@ function updateGameState(dt) {
     }
   }
 
-  // Check checkpoints (any order)
+  // Check checkpoints (any order, with optional approval time)
   for (let i = 0; i < level.checkpoints.length; i++) {
     if (gameVisitedCheckpoints.has(i)) continue;
     const cp = level.checkpoints[i];
-    if (toroidalDistSq(v.x, v.y, cp.x, cp.y) < cp.radius * cp.radius) {
+    const inside = toroidalDistSq(v.x, v.y, cp.x, cp.y) < cp.radius * cp.radius;
+    const required = cp.approvalTime || 0;
+    if (inside) {
+      if (required > 0) {
+        gameCheckpointDwell[i] = (gameCheckpointDwell[i] || 0) + dt;
+        if (gameCheckpointDwell[i] < required) continue;
+      }
       gameVisitedCheckpoints.add(i);
       const cpEl = document.getElementById('game-cp-display');
       if (cpEl) cpEl.textContent = 'Checkpoints: ' + gameVisitedCheckpoints.size + ' / ' + level.checkpoints.length;
+    } else {
+      // Reset dwell if vehicle leaves before approval
+      if (required > 0) gameCheckpointDwell[i] = 0;
     }
   }
 
@@ -5521,6 +5542,33 @@ function drawGameObjects() {
       ctx.font = 'bold ' + (7 / camZoom) + 'px sans-serif';
       ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
       ctx.fillText('\u2713', poleX + 3, poleTop + flagH * 0.45);
+    }
+
+    // Approval time indicator
+    const required = cp.approvalTime || 0;
+    if (required > 0 && !visited) {
+      // Show required time label above checkpoint
+      ctx.fillStyle = '#00bcd4';
+      ctx.font = 'bold ' + (10 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('\u23f1 ' + required + 's', cp.x, cp.y - cp.radius - 6 / camZoom);
+
+      // Progress arc while vehicle is dwelling inside
+      const dwell = gameCheckpointDwell[i] || 0;
+      if (dwell > 0) {
+        const frac = Math.min(dwell / required, 1);
+        ctx.strokeStyle = '#00e5ff';
+        ctx.lineWidth = 3 * s;
+        ctx.beginPath();
+        ctx.arc(cp.x, cp.y, cp.radius + 4, -Math.PI / 2, -Math.PI / 2 + frac * Math.PI * 2);
+        ctx.stroke();
+        // Countdown text
+        const remaining = Math.max(0, required - dwell).toFixed(1);
+        ctx.fillStyle = '#00e5ff';
+        ctx.font = 'bold ' + (14 / camZoom) + 'px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(remaining + 's', cp.x, cp.y);
+      }
     }
   }
 
