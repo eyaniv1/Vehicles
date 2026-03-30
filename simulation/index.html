@@ -1571,6 +1571,16 @@ function drawStaticLights() {
       ctx.fillText(light._offDelayTimer.toFixed(1) + 's', light.x, light.y - 14);
       ctx.restore();
     }
+
+    // Show countdown when recovery timer is active (light is off, about to come back)
+    if (light._recoveryTimer != null && light._recoveryTimer > 0) {
+      ctx.save();
+      ctx.fillStyle = '#4fc3f7';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('\u21bb' + light._recoveryTimer.toFixed(1) + 's', light.x, light.y - 14);
+      ctx.restore();
+    }
   }
 }
 
@@ -4058,6 +4068,9 @@ function buildOnVisitUI(parent, lightObj, syncFn) {
   if (lightObj.onVisit && lightObj.onVisit.action === 'offDelay') {
     addSlider(parent, 'Delay (seconds)', 0.5, 10, lightObj.onVisit.delay || 2, (v) => { lightObj.onVisit.delay = v; syncFn(); }, 0.5);
   }
+  if (lightObj.onVisit && (lightObj.onVisit.action === 'off' || lightObj.onVisit.action === 'offDelay')) {
+    addSlider(parent, 'Recovery (0=never)', 0, 30, lightObj.onVisit.recovery || 0, (v) => { lightObj.onVisit.recovery = v; syncFn(); }, 0.5);
+  }
   if (lightObj.onVisit && lightObj.onVisit.action === 'changeLuminosity') {
     addSlider(parent, 'New Intensity', 0, 100, lightObj.onVisit.newIntensity || 20, (v) => { lightObj.onVisit.newIntensity = v; syncFn(); });
   }
@@ -4715,7 +4728,8 @@ function drawEditorOverlay() {
       ctx.fillStyle = act === 'off' || act === 'offDelay' ? '#ef5350' : '#ff9800';
       ctx.font = 'bold ' + (10 / camZoom) + 'px sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      const label = act === 'off' ? '\u2716' : act === 'offDelay' ? '\u2716 ' + (l.onVisit.delay || 2) + 's' : '\u25d4';
+      const rec = l.onVisit.recovery > 0 ? ' \u21bb' + l.onVisit.recovery + 's' : '';
+      const label = act === 'off' ? '\u2716' + rec : act === 'offDelay' ? '\u2716 ' + (l.onVisit.delay || 2) + 's' + rec : '\u25d4';
       ctx.fillText(label, l.x, l.y - 20 / camZoom);
     }
   }
@@ -5227,7 +5241,10 @@ function updateGameState(dt) {
         const el = staticLights.find(l => l._embedded === 'bouncer' && l._embeddedIdx === bi);
         if (el && el.onVisit && !el._visited) {
           el._visited = true;
-          if (el.onVisit.action === 'off') el.on = false;
+          if (el.onVisit.action === 'off') {
+            el.on = false;
+            if (el.onVisit.recovery > 0) el._recoveryTimer = el.onVisit.recovery;
+          }
           else if (el.onVisit.action === 'offDelay') el._offDelayTimer = el.onVisit.delay || 2;
           else if (el.onVisit.action === 'changeLuminosity') el.intensity = el.onVisit.newIntensity || 20;
         }
@@ -5268,7 +5285,10 @@ function updateGameState(dt) {
     }
     if (toroidalDistSq(v.x, v.y, light.x, light.y) < visitRadiusSq) {
       light._visited = true;
-      if (light.onVisit.action === 'off') light.on = false;
+      if (light.onVisit.action === 'off') {
+        light.on = false;
+        if (light.onVisit.recovery > 0) light._recoveryTimer = light.onVisit.recovery;
+      }
       else if (light.onVisit.action === 'offDelay') light._offDelayTimer = light.onVisit.delay || 2;
       else if (light.onVisit.action === 'changeLuminosity') light.intensity = light.onVisit.newIntensity || 20;
     }
@@ -5281,6 +5301,19 @@ function updateGameState(dt) {
       if (light._offDelayTimer <= 0) {
         light._offDelayTimer = 0;
         light.on = false;
+        if (light.onVisit && light.onVisit.recovery > 0) light._recoveryTimer = light.onVisit.recovery;
+      }
+    }
+  }
+
+  // Count down recovery timers — turn light back on
+  for (const light of staticLights) {
+    if (light._recoveryTimer != null && light._recoveryTimer > 0) {
+      light._recoveryTimer -= dt;
+      if (light._recoveryTimer <= 0) {
+        light._recoveryTimer = 0;
+        light.on = true;
+        light._visited = false; // allow re-triggering
       }
     }
   }
