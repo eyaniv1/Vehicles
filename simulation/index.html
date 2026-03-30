@@ -4907,7 +4907,7 @@ function launchLevel() {
   gameRunning = true;
   gameElapsed = 0;
   gameNextCheckpoint = 0;
-  gameVehicle.running = true;
+  gameVehicle.running = false; // don't move until gate opens
   gameVehicle.trail = [];
   gameStartGateOpen = 0;
   gameCrashEffect = null;
@@ -4950,7 +4950,7 @@ function restartLevel() {
   gameElapsed = 0;
   gameNextCheckpoint = 0;
   gameRunning = true;
-  gameVehicle.running = true;
+  gameVehicle.running = false; // gate opens first, then vehicle starts
   gameStartGateOpen = 0;
   gameCrashEffect = null;
   bouncerSquish.clear();
@@ -5068,8 +5068,14 @@ function updateGameState(dt) {
   const level = currentLevel;
   const v = gameVehicle;
 
-  // Animate start gate opening
-  if (gameStartGateOpen < 1) gameStartGateOpen = Math.min(1, gameStartGateOpen + dt * 1.8);
+  // Animate start gate opening — vehicle starts moving only after gate is fully open
+  if (gameStartGateOpen < 1) {
+    gameStartGateOpen = Math.min(1, gameStartGateOpen + dt * 2.5);
+    if (gameStartGateOpen >= 1 && gameVehicle && !gameVehicle.running) {
+      gameVehicle.running = true;
+    }
+    return; // don't count time or check collisions while gate is opening
+  }
 
   // Animate bouncer squish decay
   for (const [key, sq] of bouncerSquish) {
@@ -5479,11 +5485,13 @@ function drawGameObjects() {
     const fwdX = Math.cos(sp.theta);
     const fwdY = Math.sin(sp.theta);
 
+    // Gate is placed ahead of the vehicle (vehicle nose is ~20px forward)
+    const gateFwd = 28; // distance ahead of start point
     // Gate posts (two small rectangles on each side)
-    const postDist = gateW + gateOpen * 20; // posts slide apart
+    const postDist = gateW + gateOpen * 25; // posts slide apart
     for (const side of [-1, 1]) {
-      const px = sp.x + perpX * postDist * side + fwdX * 15;
-      const py = sp.y + perpY * postDist * side + fwdY * 15;
+      const px = sp.x + perpX * postDist * side + fwdX * gateFwd;
+      const py = sp.y + perpY * postDist * side + fwdY * gateFwd;
       ctx.fillStyle = `rgba(255, 200, 50, ${0.8 - gateOpen * 0.5})`;
       ctx.save();
       ctx.translate(px, py);
@@ -5497,25 +5505,25 @@ function drawGameObjects() {
       const barAlpha = 1 - gateOpen;
       ctx.strokeStyle = `rgba(255, 200, 50, ${barAlpha * 0.7})`;
       ctx.lineWidth = 2.5 * s;
-      const bx1 = sp.x + perpX * (-postDist) + fwdX * 15;
-      const by1 = sp.y + perpY * (-postDist) + fwdY * 15;
-      const bx2 = sp.x + perpX * postDist + fwdX * 15;
-      const by2 = sp.y + perpY * postDist + fwdY * 15;
+      const bx1 = sp.x + perpX * (-postDist) + fwdX * gateFwd;
+      const by1 = sp.y + perpY * (-postDist) + fwdY * gateFwd;
+      const bx2 = sp.x + perpX * postDist + fwdX * gateFwd;
+      const by2 = sp.y + perpY * postDist + fwdY * gateFwd;
       ctx.beginPath(); ctx.moveTo(bx1, by1); ctx.lineTo(bx2, by2); ctx.stroke();
 
       // Second bar (double gate bar)
-      const bx3 = sp.x + perpX * (-postDist) + fwdX * 18;
-      const by3 = sp.y + perpY * (-postDist) + fwdY * 18;
-      const bx4 = sp.x + perpX * postDist + fwdX * 18;
-      const by4 = sp.y + perpY * postDist + fwdY * 18;
+      const bx3 = sp.x + perpX * (-postDist) + fwdX * (gateFwd + 3);
+      const by3 = sp.y + perpY * (-postDist) + fwdY * (gateFwd + 3);
+      const bx4 = sp.x + perpX * postDist + fwdX * (gateFwd + 3);
+      const by4 = sp.y + perpY * postDist + fwdY * (gateFwd + 3);
       ctx.strokeStyle = `rgba(255, 200, 50, ${barAlpha * 0.4})`;
       ctx.lineWidth = 1.5 * s;
       ctx.beginPath(); ctx.moveTo(bx3, by3); ctx.lineTo(bx4, by4); ctx.stroke();
     }
 
-    // Direction arrow behind the gate
-    const ax = sp.x + 30 * fwdX;
-    const ay = sp.y + 30 * fwdY;
+    // Direction arrow ahead of the gate
+    const ax = sp.x + (gateFwd + 12) * fwdX;
+    const ay = sp.y + (gateFwd + 12) * fwdY;
     ctx.strokeStyle = 'rgba(255, 200, 50, 0.35)';
     ctx.lineWidth = 1.5 * s;
     ctx.setLineDash([3, 3]);
