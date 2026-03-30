@@ -693,6 +693,92 @@
   .game-result-box .result-msg { font-size: 13px; color: #81d4fa; margin-bottom: 16px; }
   .game-result-btns { display: flex; gap: 8px; justify-content: center; }
   .game-result-btns .btn { min-width: 100px; }
+
+  /* --- Level Editor --- */
+  .editor-toolbar {
+    display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 0;
+  }
+  .editor-tool-btn {
+    flex: 1 1 auto; min-width: 50px;
+    padding: 6px 4px; border: 1px solid #444; border-radius: 6px;
+    background: #1a1a2e; color: #b0bec5; font-size: 10px;
+    cursor: pointer; text-align: center; transition: all 0.15s;
+  }
+  .editor-tool-btn:hover { border-color: #4fc3f7; color: #e0e0e0; }
+  .editor-tool-btn.active { background: #4fc3f7; color: #000; border-color: #4fc3f7; font-weight: 700; }
+
+  .editor-section { margin: 8px 0; }
+  .editor-section-title {
+    font-size: 11px; color: #4fc3f7; font-weight: 700;
+    padding: 4px 0; cursor: pointer; user-select: none;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .editor-section-title:hover { color: #81d4fa; }
+
+  .editor-obj-item {
+    padding: 5px 8px; font-size: 11px; color: #b0bec5;
+    background: #1a1a2e; border-radius: 4px; margin: 2px 0;
+    cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+  }
+  .editor-obj-item:hover { background: #253050; }
+  .editor-obj-item.selected { border: 1px solid #4fc3f7; background: #1a2840; }
+  .editor-obj-item .del-btn {
+    background: none; border: none; color: #c62828; cursor: pointer;
+    font-size: 14px; padding: 0 4px; line-height: 1;
+  }
+  .editor-obj-item .del-btn:hover { color: #ef5350; }
+
+  .editor-props {
+    background: #1a1a2e; border: 1px solid #333; border-radius: 8px;
+    padding: 10px; margin: 8px 0;
+  }
+  .editor-props label {
+    font-size: 11px; color: #81d4fa; display: block; margin: 6px 0 2px;
+  }
+  .editor-props input[type=number],
+  .editor-props input[type=text],
+  .editor-props select {
+    width: 100%; background: #16213e; color: #e0e0e0;
+    border: 1px solid #444; border-radius: 4px; padding: 4px 6px;
+    font-size: 12px; margin-bottom: 2px;
+  }
+  .editor-props input[type=range] { width: 100%; margin-bottom: 2px; }
+  .editor-props input[type=checkbox] { margin-right: 6px; }
+  .editor-props .prop-row {
+    display: flex; gap: 6px; align-items: center;
+  }
+  .editor-props .prop-row input,
+  .editor-props .prop-row select { flex: 1; }
+
+  .editor-context-menu {
+    display: none; position: absolute; z-index: 3000;
+    background: #16213e; border: 1px solid #4fc3f7; border-radius: 8px;
+    padding: 4px 0; min-width: 180px; box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  }
+  .editor-context-menu.open { display: block; }
+  .editor-context-menu .ctx-item {
+    padding: 7px 14px; font-size: 12px; color: #e0e0e0;
+    cursor: pointer; white-space: nowrap;
+  }
+  .editor-context-menu .ctx-item:hover { background: #253050; }
+  .editor-context-menu .ctx-item.danger { color: #ef5350; }
+  .editor-context-menu .ctx-sep {
+    height: 1px; background: #333; margin: 4px 0;
+  }
+  .editor-context-menu .ctx-sub {
+    padding: 4px 14px;
+  }
+  .editor-context-menu .ctx-sub label {
+    font-size: 10px; color: #81d4fa; display: block; margin-bottom: 2px;
+  }
+  .editor-context-menu .ctx-sub input[type=range] { width: 100%; }
+
+  .editor-actions { display: flex; flex-wrap: wrap; gap: 4px; margin: 8px 0; }
+  .editor-actions .btn { flex: 1 1 45%; font-size: 11px; padding: 7px 4px; }
+  .btn-test { background: #4caf50 !important; color: #fff !important; font-weight: 700; }
+  .btn-test:hover { background: #66bb6a !important; }
+  .btn-save { background: #1565c0 !important; color: #fff !important; }
+  .btn-save:hover { background: #1976d2 !important; }
 </style>
 </head>
 <body>
@@ -885,6 +971,9 @@
 <div class="game-result-overlay" id="game-result-overlay">
   <div class="game-result-box" id="game-result-box"></div>
 </div>
+
+<!-- Editor context menu -->
+<div class="editor-context-menu" id="editor-context-menu"></div>
 
 <div id="canvas-container">
   <canvas id="canvas"></canvas>
@@ -1748,6 +1837,7 @@ function draw() {
   for (const v of vehicles) drawTrail(v);
   drawStaticLights();
   if (gameMode) drawGameObjects();
+  if (gameMode) drawEditorOverlay();
   for (const v of vehicles) drawVehicle(v);
 
   ctx.restore();
@@ -2035,6 +2125,7 @@ function loop(timestamp) {
       if (v.running) stepVehicle(v, baseDt * v.simSpeed);
     }
   }
+  if (gameMode) updateMovingLights(baseDt);
   if (gameMode && gameRunning) updateGameState(baseDt);
   draw();
   drawAllInlineSchematics();
@@ -2590,6 +2681,7 @@ function closePopup() {
 canvas.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
   closePopup();
+  if (gameMode && gamePhase === 'editing') { editorMouseDown(e); return; }
   const pos = canvasCoords(e);
   mouseDownPos = pos;
   const hit = (gameMode && gameRunning) ? null : staticLightAt(pos.x, pos.y);
@@ -2609,6 +2701,11 @@ canvas.addEventListener('mousedown', (e) => {
 });
 
 canvas.addEventListener('mousemove', (e) => {
+  if (gameMode && gamePhase === 'editing' && editorDragging) {
+    const pos = canvasCoords(e);
+    editorMouseMove(pos);
+    return;
+  }
   if (isPanning) {
     const sc = canvasScreenCoords(e);
     camX = camStartX - (sc.x - panStartX) / camZoom;
@@ -2628,6 +2725,7 @@ canvas.addEventListener('mousemove', (e) => {
 });
 
 canvas.addEventListener('mouseup', (e) => {
+  if (gameMode && gamePhase === 'editing') { editorMouseUp(); }
   if (isPanning) {
     isPanning = false;
     return;
@@ -2658,6 +2756,13 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 canvas.addEventListener('dblclick', (e) => {
+  if (gameMode && gamePhase === 'editing') {
+    // Add light in editor via double-click
+    const pos = canvasCoords(e);
+    staticLights.push({ id: nextLightId++, x: pos.x, y: pos.y, on: true, intensity: 75, onVisit: null, path: null, _pathProgress: 0, _pathDir: 1 });
+    editorSyncLightsToLevel(); buildEditorPanel();
+    return;
+  }
   if (gameMode) return; // no light creation in game mode
   const pos = canvasCoords(e);
   if (!staticLightAt(pos.x, pos.y)) {
@@ -2667,6 +2772,7 @@ canvas.addEventListener('dblclick', (e) => {
 
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
+  if (gameMode && gamePhase === 'editing') { showEditorContextMenu(e); return; }
   if (gameMode) return;
   const pos = canvasCoords(e);
   const hit = staticLightAt(pos.x, pos.y);
@@ -3208,13 +3314,35 @@ document.getElementById('guide-btn').addEventListener('click', () => {
 // =============================================
 
 let gameMode = false;
-let gamePhase = 'select'; // 'select' | 'briefing' | 'running' | 'ended'
+let gamePhase = 'select'; // 'select' | 'briefing' | 'running' | 'ended' | 'editing'
 let gameRunning = false;
 let gameElapsed = 0;
 let gameNextCheckpoint = 0;
 let currentLevelIndex = -1;
+let currentLevel = null; // the active level object (built-in or custom)
 let sandboxSnapshot = null;
 let gameVehicle = null; // the single player vehicle during a game run
+
+// --- Editor state ---
+let editorLevel = null;
+let editorSelected = null; // { type: 'light'|'checkpoint'|'danger'|'goal'|'start', index: number }
+let editorDragging = null;
+let editorDragStart = null;
+let editorTool = 'select';
+let editorPathMode = false; // true while defining a moving light path
+let editorPathLightIdx = -1;
+let editorMouseWorld = { x: 0, y: 0 }; // tracked for ghost preview
+
+// --- Custom levels persistence ---
+function loadCustomLevels() {
+  try {
+    const raw = localStorage.getItem('braitenberg-custom-levels');
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+function saveCustomLevels(levels) {
+  localStorage.setItem('braitenberg-custom-levels', JSON.stringify(levels));
+}
 
 // Progress stored in localStorage
 function loadGameProgress() {
@@ -3434,6 +3562,16 @@ function buildLevelSelect() {
   const panel = document.getElementById('game-panel');
   const progress = loadGameProgress();
   panel.innerHTML = '<h2 style="color:#ff9800;margin:0;">Challenge Mode</h2><p style="font-size:12px;color:#b0bec5;margin:0;">Design a vehicle. Solve the puzzle.</p>';
+
+  // Create new level button
+  const newBtn = document.createElement('button');
+  newBtn.className = 'btn btn-launch';
+  newBtn.style.cssText = 'width:100%;margin:8px 0;font-size:13px;padding:8px;';
+  newBtn.textContent = '+ Create New Level';
+  newBtn.addEventListener('click', () => enterEditor(null));
+  panel.appendChild(newBtn);
+
+  // Built-in levels
   const grid = document.createElement('div');
   grid.className = 'game-level-grid';
 
@@ -3454,18 +3592,972 @@ function buildLevelSelect() {
     grid.appendChild(card);
   });
   panel.appendChild(grid);
+
+  // Custom levels
+  const customs = loadCustomLevels();
+  if (customs.length > 0) {
+    const ch = document.createElement('div');
+    ch.style.cssText = 'margin-top:12px;';
+    ch.innerHTML = '<div style="font-size:11px;color:#4fc3f7;font-weight:700;padding:4px 0;">Custom Levels</div>';
+    const cg = document.createElement('div');
+    cg.className = 'game-level-grid';
+    customs.forEach((cl, i) => {
+      const card = document.createElement('div');
+      card.className = 'level-card';
+      card.innerHTML = `
+        <div class="level-num" style="background:#1565c0;color:#fff;font-size:11px;">C${i+1}</div>
+        <div class="level-info">
+          <div class="level-name">${cl.name || 'Custom Level'}</div>
+          <div class="level-tier" style="color:#90caf9;">Custom</div>
+        </div>
+        <div style="display:flex;gap:4px;">
+          <button class="btn" style="font-size:10px;padding:3px 6px;background:#37474f;color:#b0bec5;" data-action="edit">Edit</button>
+          <button class="btn" style="font-size:10px;padding:3px 6px;background:#37474f;color:#b0bec5;" data-action="play">Play</button>
+          <button class="btn" style="font-size:10px;padding:3px 6px;background:none;color:#c62828;" data-action="del">&times;</button>
+        </div>
+      `;
+      card.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); enterEditor(cl); });
+      card.querySelector('[data-action="play"]').addEventListener('click', (e) => { e.stopPropagation(); cl._custom = true; showBriefing(-1, cl); });
+      card.querySelector('[data-action="del"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const all = loadCustomLevels();
+        all.splice(i, 1);
+        saveCustomLevels(all);
+        buildLevelSelect();
+      });
+      cg.appendChild(card);
+    });
+    ch.appendChild(cg);
+    panel.appendChild(ch);
+  }
+}
+
+// =============================================
+// --- LEVEL EDITOR ---
+// =============================================
+
+function blankLevel() {
+  return {
+    _custom: true,
+    id: 'custom_' + Date.now(),
+    name: 'New Level',
+    tier: 1,
+    description: '',
+    briefing: 'Configure your vehicle and reach the goal.',
+    hint: '',
+    worldSize: { w: 1200, h: 800 },
+    lights: [],
+    startPos: { x: 200, y: 400, theta: 0 },
+    goals: [{ type: 'reach', x: 1000, y: 400, radius: 60, label: 'Goal' }],
+    checkpoints: [],
+    dangers: [],
+    timeLimit: 60,
+    stars: { three: 15, two: 30, one: 60 },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
+    lockedDefaults: {},
+  };
+}
+
+function enterEditor(templateLevel) {
+  editorLevel = templateLevel ? JSON.parse(JSON.stringify(templateLevel)) : blankLevel();
+  editorLevel._custom = true;
+  gamePhase = 'editing';
+  currentLevel = editorLevel;
+  editorSelected = null;
+  editorTool = 'select';
+  editorPathMode = false;
+
+  // Set up world from editor level
+  WORLD_W = editorLevel.worldSize.w;
+  WORLD_H = editorLevel.worldSize.h;
+
+  // Set up static lights from level data
+  staticLights = editorLevel.lights.map(l => ({
+    id: nextLightId++, x: l.x, y: l.y, on: l.on !== false, intensity: l.intensity || 75,
+    onVisit: l.onVisit || null,
+    path: l.path ? JSON.parse(JSON.stringify(l.path)) : null,
+    _pathProgress: 0, _pathDir: 1,
+  }));
+  vehicles = [];
+
+  // Add embedded lights from checkpoints, dangers, goals
+  syncEmbeddedLights();
+
+  camZoom = Math.min(canvas.width / WORLD_W, canvas.height / WORLD_H);
+  camX = 0; camY = 0;
+  clampCamera();
+
+  buildEditorPanel();
+}
+
+function syncEmbeddedLights() {
+  // Remove old embedded lights
+  staticLights = staticLights.filter(l => !l._embedded);
+  // Add embedded lights from checkpoints
+  editorLevel.checkpoints.forEach((cp, i) => {
+    if (cp.light) {
+      staticLights.push({ id: nextLightId++, x: cp.x, y: cp.y, on: cp.light.on !== false, intensity: cp.light.intensity || 50, _embedded: 'checkpoint', _embeddedIdx: i });
+    }
+  });
+  // From dangers
+  editorLevel.dangers.forEach((dz, i) => {
+    if (dz.light) {
+      const cx = dz.shape === 'circle' ? dz.x : dz.x + (dz.w || 0) / 2;
+      const cy = dz.shape === 'circle' ? dz.y : dz.y + (dz.h || 0) / 2;
+      staticLights.push({ id: nextLightId++, x: cx, y: cy, on: dz.light.on !== false, intensity: dz.light.intensity || 50, _embedded: 'danger', _embeddedIdx: i });
+    }
+  });
+  // From goals
+  editorLevel.goals.forEach((g, i) => {
+    if (g.light) {
+      staticLights.push({ id: nextLightId++, x: g.x, y: g.y, on: g.light.on !== false, intensity: g.light.intensity || 75, _embedded: 'goal', _embeddedIdx: i });
+    }
+  });
+}
+
+function editorSyncLightsToLevel() {
+  // Write non-embedded static lights back to editorLevel.lights
+  editorLevel.lights = staticLights.filter(l => !l._embedded).map(l => ({
+    x: l.x, y: l.y, intensity: l.intensity, on: l.on,
+    onVisit: l.onVisit || null,
+    path: l.path ? JSON.parse(JSON.stringify(l.path)) : null,
+  }));
+}
+
+// --- Editor sidebar ---
+function buildEditorPanel() {
+  const panel = document.getElementById('game-panel');
+  panel.innerHTML = '';
+
+  // Back button
+  const backBtn = document.createElement('button');
+  backBtn.className = 'btn';
+  backBtn.textContent = '\u2190 Back to Levels';
+  backBtn.style.cssText = 'font-size:12px;padding:6px;background:#37474f;color:#b0bec5;width:100%;';
+  backBtn.addEventListener('click', () => { gamePhase = 'select'; currentLevel = null; editorLevel = null; buildLevelSelect(); });
+  panel.appendChild(backBtn);
+
+  // Level name
+  const nameDiv = document.createElement('div');
+  nameDiv.className = 'editor-props';
+  nameDiv.innerHTML = '<label>Level Name</label>';
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text'; nameInput.value = editorLevel.name;
+  nameInput.addEventListener('input', () => { editorLevel.name = nameInput.value; });
+  nameDiv.appendChild(nameInput);
+
+  // World size
+  nameDiv.innerHTML += '<label>World Size</label>';
+  const wsDiv = document.createElement('div');
+  wsDiv.className = 'prop-row';
+  const wIn = document.createElement('input'); wIn.type = 'number'; wIn.value = editorLevel.worldSize.w; wIn.min = 400; wIn.max = 6000; wIn.step = 100;
+  const hIn = document.createElement('input'); hIn.type = 'number'; hIn.value = editorLevel.worldSize.h; hIn.min = 400; hIn.max = 6000; hIn.step = 100;
+  wIn.addEventListener('change', () => { editorLevel.worldSize.w = parseInt(wIn.value) || 1200; WORLD_W = editorLevel.worldSize.w; clampCamera(); });
+  hIn.addEventListener('change', () => { editorLevel.worldSize.h = parseInt(hIn.value) || 800; WORLD_H = editorLevel.worldSize.h; clampCamera(); });
+  wsDiv.appendChild(wIn); wsDiv.appendChild(document.createTextNode(' x ')); wsDiv.appendChild(hIn);
+  nameDiv.appendChild(wsDiv);
+
+  // Time limit
+  nameDiv.innerHTML += '<label>Time Limit (seconds)</label>';
+  const tlIn = document.createElement('input'); tlIn.type = 'number'; tlIn.value = editorLevel.timeLimit; tlIn.min = 0; tlIn.max = 600;
+  tlIn.addEventListener('change', () => { editorLevel.timeLimit = parseInt(tlIn.value) || 60; });
+  nameDiv.appendChild(tlIn);
+
+  // Star thresholds
+  nameDiv.innerHTML += '<label>Stars: 3\u2605 / 2\u2605 / 1\u2605 (seconds)</label>';
+  const starsDiv = document.createElement('div');
+  starsDiv.className = 'prop-row';
+  const s3 = document.createElement('input'); s3.type = 'number'; s3.value = editorLevel.stars.three; s3.min = 1;
+  const s2 = document.createElement('input'); s2.type = 'number'; s2.value = editorLevel.stars.two; s2.min = 1;
+  const s1 = document.createElement('input'); s1.type = 'number'; s1.value = editorLevel.stars.one; s1.min = 1;
+  s3.addEventListener('change', () => { editorLevel.stars.three = parseInt(s3.value) || 10; });
+  s2.addEventListener('change', () => { editorLevel.stars.two = parseInt(s2.value) || 20; });
+  s1.addEventListener('change', () => { editorLevel.stars.one = parseInt(s1.value) || 30; });
+  starsDiv.appendChild(s3); starsDiv.appendChild(s2); starsDiv.appendChild(s1);
+  nameDiv.appendChild(starsDiv);
+  panel.appendChild(nameDiv);
+
+  // --- Toolbar ---
+  const tb = document.createElement('div');
+  tb.className = 'editor-toolbar';
+  const tools = [
+    { id: 'select', label: '\u25C7 Select' },
+    { id: 'light', label: '\u2600 Light' },
+    { id: 'checkpoint', label: '\u25CB Check' },
+    { id: 'danger', label: '\u26A0 Danger' },
+    { id: 'start', label: '\u25B7 Start' },
+    { id: 'goal', label: '\u2691 Goal' },
+  ];
+  tools.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'editor-tool-btn' + (editorTool === t.id ? ' active' : '');
+    btn.textContent = t.label;
+    btn.addEventListener('click', () => {
+      editorTool = t.id;
+      editorPathMode = false;
+      tb.querySelectorAll('.editor-tool-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    });
+    tb.appendChild(btn);
+  });
+  panel.appendChild(tb);
+
+  // --- Object lists ---
+  function buildObjSection(title, items, type, formatter) {
+    const sec = document.createElement('div');
+    sec.className = 'editor-section';
+    const header = document.createElement('div');
+    header.className = 'editor-section-title';
+    header.innerHTML = title + ' (' + items.length + ') <span style="font-size:10px;">click to select</span>';
+    sec.appendChild(header);
+    const list = document.createElement('div');
+    items.forEach((item, i) => {
+      const row = document.createElement('div');
+      row.className = 'editor-obj-item' + (editorSelected && editorSelected.type === type && editorSelected.index === i ? ' selected' : '');
+      row.innerHTML = '<span>' + formatter(item, i) + '</span>';
+      const del = document.createElement('button');
+      del.className = 'del-btn'; del.textContent = '\u00D7';
+      del.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (type === 'light') {
+          const sl = staticLights.filter(l => !l._embedded);
+          staticLights = staticLights.filter(l => l._embedded || staticLights.filter(l2 => !l2._embedded).indexOf(l) !== i);
+          // Simpler: remove by finding the non-embedded light at index i
+          let count = 0;
+          staticLights = staticLights.filter(l => {
+            if (l._embedded) return true;
+            if (count === i) { count++; return false; }
+            count++;
+            return true;
+          });
+          editorSyncLightsToLevel();
+        }
+        else if (type === 'checkpoint') editorLevel.checkpoints.splice(i, 1);
+        else if (type === 'danger') editorLevel.dangers.splice(i, 1);
+        else if (type === 'goal') editorLevel.goals.splice(i, 1);
+        if (editorSelected && editorSelected.type === type && editorSelected.index === i) editorSelected = null;
+        syncEmbeddedLights();
+        buildEditorPanel();
+      });
+      row.appendChild(del);
+      row.addEventListener('click', () => {
+        editorSelected = { type, index: i };
+        buildEditorPanel();
+      });
+      list.appendChild(row);
+    });
+    sec.appendChild(list);
+    return sec;
+  }
+
+  const nonEmbeddedLights = staticLights.filter(l => !l._embedded);
+  panel.appendChild(buildObjSection('Lights', nonEmbeddedLights, 'light', (l, i) => `Light ${i+1}: (${Math.round(l.x)}, ${Math.round(l.y)}) ${l.intensity}%${l.path ? ' \u2194' : ''}${l.onVisit ? ' \u2734' : ''}`));
+  panel.appendChild(buildObjSection('Checkpoints', editorLevel.checkpoints, 'checkpoint', (cp, i) => `CP ${i+1}: (${Math.round(cp.x)}, ${Math.round(cp.y)}) r=${cp.radius}${cp.light ? ' \u2600' : ''}`));
+  panel.appendChild(buildObjSection('Danger Zones', editorLevel.dangers, 'danger', (dz, i) => `DZ ${i+1}: ${dz.shape} (${Math.round(dz.x)}, ${Math.round(dz.y)})${dz.light ? ' \u2600' : ''}`));
+  panel.appendChild(buildObjSection('Goals', editorLevel.goals, 'goal', (g, i) => `Goal ${i+1}: (${Math.round(g.x)}, ${Math.round(g.y)})${g.light ? ' \u2600' : ''}`));
+
+  // Start point info
+  const startInfo = document.createElement('div');
+  startInfo.className = 'editor-obj-item' + (editorSelected && editorSelected.type === 'start' ? ' selected' : '');
+  startInfo.innerHTML = `<span>Start: (${Math.round(editorLevel.startPos.x)}, ${Math.round(editorLevel.startPos.y)}) \u2220${(editorLevel.startPos.theta * 180 / Math.PI).toFixed(0)}\u00B0</span>`;
+  startInfo.addEventListener('click', () => { editorSelected = { type: 'start', index: 0 }; buildEditorPanel(); });
+  panel.appendChild(startInfo);
+
+  // --- Properties panel for selected object ---
+  if (editorSelected) buildPropertiesPanel(panel);
+
+  // --- Actions ---
+  const acts = document.createElement('div');
+  acts.className = 'editor-actions';
+
+  const testBtn = document.createElement('button');
+  testBtn.className = 'btn btn-test';
+  testBtn.textContent = '\u25B6 Test Level';
+  testBtn.addEventListener('click', () => {
+    editorSyncLightsToLevel();
+    editorLevel._custom = true;
+    showBriefing(-1, editorLevel);
+  });
+  acts.appendChild(testBtn);
+
+  const saveBtn = document.createElement('button');
+  saveBtn.className = 'btn btn-save';
+  saveBtn.textContent = '\uD83D\uDCBE Save';
+  saveBtn.addEventListener('click', () => {
+    editorSyncLightsToLevel();
+    const customs = loadCustomLevels();
+    const idx = customs.findIndex(c => c.id === editorLevel.id);
+    if (idx >= 0) customs[idx] = JSON.parse(JSON.stringify(editorLevel));
+    else customs.push(JSON.parse(JSON.stringify(editorLevel)));
+    saveCustomLevels(customs);
+    alert('Level saved!');
+  });
+  acts.appendChild(saveBtn);
+
+  const exportBtn = document.createElement('button');
+  exportBtn.className = 'btn';
+  exportBtn.style.cssText = 'background:#37474f;color:#b0bec5;';
+  exportBtn.textContent = 'Export';
+  exportBtn.addEventListener('click', () => {
+    editorSyncLightsToLevel();
+    const json = JSON.stringify(editorLevel, null, 2);
+    navigator.clipboard.writeText(json).then(() => alert('Level JSON copied to clipboard!'));
+  });
+  acts.appendChild(exportBtn);
+
+  const importBtn = document.createElement('button');
+  importBtn.className = 'btn';
+  importBtn.style.cssText = 'background:#37474f;color:#b0bec5;';
+  importBtn.textContent = 'Import';
+  importBtn.addEventListener('click', () => {
+    const json = prompt('Paste level JSON:');
+    if (json) {
+      try {
+        const lvl = JSON.parse(json);
+        enterEditor(lvl);
+      } catch (e) { alert('Invalid JSON: ' + e.message); }
+    }
+  });
+  acts.appendChild(importBtn);
+
+  panel.appendChild(acts);
+}
+
+// --- Properties panel ---
+function buildPropertiesPanel(panel) {
+  const sel = editorSelected;
+  const props = document.createElement('div');
+  props.className = 'editor-props';
+  props.innerHTML = '<label style="color:#ff9800;font-weight:700;font-size:12px;">Properties</label>';
+
+  if (sel.type === 'light') {
+    const lights = staticLights.filter(l => !l._embedded);
+    const light = lights[sel.index];
+    if (!light) return;
+
+    // Intensity
+    props.innerHTML += `<label>Intensity: <span id="ep-int-val">${light.intensity}%</span></label>`;
+    const intSlider = document.createElement('input');
+    intSlider.type = 'range'; intSlider.min = 10; intSlider.max = 100; intSlider.value = light.intensity;
+    intSlider.addEventListener('input', () => {
+      light.intensity = parseInt(intSlider.value);
+      const sp = props.querySelector('#ep-int-val');
+      if (sp) sp.textContent = light.intensity + '%';
+      editorSyncLightsToLevel();
+    });
+    props.appendChild(intSlider);
+
+    // On/Off
+    const onDiv = document.createElement('div');
+    onDiv.innerHTML = '<label><input type="checkbox" ' + (light.on ? 'checked' : '') + '> Light On</label>';
+    onDiv.querySelector('input').addEventListener('change', (e) => { light.on = e.target.checked; editorSyncLightsToLevel(); });
+    props.appendChild(onDiv);
+
+    // On Visit behavior
+    props.innerHTML += '<label>On Vehicle Visit:</label>';
+    const visitSel = document.createElement('select');
+    const visitVal = light.onVisit ? light.onVisit.action : 'none';
+    ['none', 'off', 'changeLuminosity'].forEach(v => {
+      const opt = document.createElement('option');
+      opt.value = v;
+      opt.textContent = v === 'none' ? 'Nothing' : v === 'off' ? 'Turn Off' : 'Change Luminosity';
+      if (v === visitVal) opt.selected = true;
+      visitSel.appendChild(opt);
+    });
+    visitSel.addEventListener('change', () => {
+      if (visitSel.value === 'none') light.onVisit = null;
+      else if (visitSel.value === 'off') light.onVisit = { action: 'off' };
+      else light.onVisit = { action: 'changeLuminosity', newIntensity: 20 };
+      editorSyncLightsToLevel();
+      buildEditorPanel();
+    });
+    props.appendChild(visitSel);
+
+    if (light.onVisit && light.onVisit.action === 'changeLuminosity') {
+      props.innerHTML += `<label>New Intensity: <span id="ep-newint">${light.onVisit.newIntensity || 20}%</span></label>`;
+      const niSlider = document.createElement('input');
+      niSlider.type = 'range'; niSlider.min = 0; niSlider.max = 100; niSlider.value = light.onVisit.newIntensity || 20;
+      niSlider.addEventListener('input', () => {
+        light.onVisit.newIntensity = parseInt(niSlider.value);
+        const sp = props.querySelector('#ep-newint');
+        if (sp) sp.textContent = niSlider.value + '%';
+        editorSyncLightsToLevel();
+      });
+      props.appendChild(niSlider);
+    }
+
+    // Moving light path
+    const pathDiv = document.createElement('div');
+    pathDiv.style.marginTop = '8px';
+    if (light.path && light.path.waypoints.length > 0) {
+      pathDiv.innerHTML = '<label>Path: ' + light.path.waypoints.length + ' waypoints</label>';
+      const modeSel = document.createElement('select');
+      ['bounce', 'stop'].forEach(m => {
+        const opt = document.createElement('option');
+        opt.value = m; opt.textContent = m === 'bounce' ? 'Back & Forth' : 'Stop at End';
+        if (light.path.mode === m) opt.selected = true;
+        modeSel.appendChild(opt);
+      });
+      modeSel.addEventListener('change', () => { light.path.mode = modeSel.value; editorSyncLightsToLevel(); });
+      pathDiv.appendChild(modeSel);
+
+      pathDiv.innerHTML += `<label>Speed: <span id="ep-pspeed">${light.path.speed || 50}</span></label>`;
+      const psSlider = document.createElement('input');
+      psSlider.type = 'range'; psSlider.min = 10; psSlider.max = 200; psSlider.value = light.path.speed || 50;
+      psSlider.addEventListener('input', () => {
+        light.path.speed = parseInt(psSlider.value);
+        const sp = pathDiv.querySelector('#ep-pspeed');
+        if (sp) sp.textContent = psSlider.value;
+        editorSyncLightsToLevel();
+      });
+      pathDiv.appendChild(psSlider);
+
+      const clearPathBtn = document.createElement('button');
+      clearPathBtn.className = 'btn';
+      clearPathBtn.style.cssText = 'font-size:10px;padding:4px 8px;background:#c62828;color:#fff;width:100%;margin-top:4px;';
+      clearPathBtn.textContent = 'Clear Path';
+      clearPathBtn.addEventListener('click', () => { light.path = null; editorSyncLightsToLevel(); buildEditorPanel(); });
+      pathDiv.appendChild(clearPathBtn);
+    } else {
+      const addPathBtn = document.createElement('button');
+      addPathBtn.className = 'btn';
+      addPathBtn.style.cssText = 'font-size:11px;padding:5px 8px;background:#1565c0;color:#fff;width:100%;';
+      addPathBtn.textContent = '\u2194 Define Path (Click waypoints on canvas)';
+      addPathBtn.addEventListener('click', () => {
+        editorPathMode = true;
+        editorPathLightIdx = sel.index;
+        light.path = { waypoints: [{ x: light.x, y: light.y }], mode: 'bounce', speed: 50 };
+        editorSyncLightsToLevel();
+        buildEditorPanel();
+      });
+      pathDiv.appendChild(addPathBtn);
+    }
+    if (editorPathMode && editorPathLightIdx === sel.index) {
+      const finBtn = document.createElement('button');
+      finBtn.className = 'btn btn-launch';
+      finBtn.style.cssText = 'width:100%;margin-top:4px;font-size:12px;padding:6px;';
+      finBtn.textContent = '\u2713 Finish Path';
+      finBtn.addEventListener('click', () => { editorPathMode = false; editorSyncLightsToLevel(); buildEditorPanel(); });
+      pathDiv.appendChild(finBtn);
+    }
+    props.appendChild(pathDiv);
+
+  } else if (sel.type === 'checkpoint') {
+    const cp = editorLevel.checkpoints[sel.index];
+    if (!cp) return;
+
+    props.innerHTML += `<label>Radius: <span id="ep-cpr">${cp.radius}</span></label>`;
+    const rSlider = document.createElement('input');
+    rSlider.type = 'range'; rSlider.min = 20; rSlider.max = 150; rSlider.value = cp.radius;
+    rSlider.addEventListener('input', () => { cp.radius = parseInt(rSlider.value); const sp = props.querySelector('#ep-cpr'); if (sp) sp.textContent = rSlider.value; });
+    props.appendChild(rSlider);
+
+    buildEmbeddedLightProps(props, cp, 'checkpoint', sel.index);
+
+  } else if (sel.type === 'danger') {
+    const dz = editorLevel.dangers[sel.index];
+    if (!dz) return;
+
+    if (dz.shape === 'circle') {
+      props.innerHTML += `<label>Radius: <span id="ep-dzr">${dz.radius}</span></label>`;
+      const rSlider = document.createElement('input');
+      rSlider.type = 'range'; rSlider.min = 20; rSlider.max = 300; rSlider.value = dz.radius;
+      rSlider.addEventListener('input', () => { dz.radius = parseInt(rSlider.value); const sp = props.querySelector('#ep-dzr'); if (sp) sp.textContent = rSlider.value; });
+      props.appendChild(rSlider);
+    } else {
+      props.innerHTML += '<label>Width / Height</label>';
+      const szDiv = document.createElement('div');
+      szDiv.className = 'prop-row';
+      const wIn = document.createElement('input'); wIn.type = 'number'; wIn.value = dz.w; wIn.min = 20;
+      const hIn = document.createElement('input'); hIn.type = 'number'; hIn.value = dz.h; hIn.min = 20;
+      wIn.addEventListener('change', () => { dz.w = parseInt(wIn.value) || 100; });
+      hIn.addEventListener('change', () => { dz.h = parseInt(hIn.value) || 100; });
+      szDiv.appendChild(wIn); szDiv.appendChild(hIn);
+      props.appendChild(szDiv);
+    }
+
+    // Shape toggle
+    const shapeSel = document.createElement('select');
+    shapeSel.innerHTML = '<option value="rect">Rectangle</option><option value="circle">Circle</option>';
+    shapeSel.value = dz.shape;
+    shapeSel.addEventListener('change', () => {
+      if (shapeSel.value === 'circle' && dz.shape !== 'circle') {
+        dz.shape = 'circle'; dz.radius = Math.max(dz.w || 100, dz.h || 100) / 2;
+        delete dz.w; delete dz.h;
+      } else if (shapeSel.value === 'rect' && dz.shape !== 'rect') {
+        const r = dz.radius || 60;
+        dz.shape = 'rect'; dz.w = r * 2; dz.h = r * 2;
+        dz.x -= r; dz.y -= r;
+        delete dz.radius;
+      }
+      buildEditorPanel();
+    });
+    props.appendChild(shapeSel);
+
+    buildEmbeddedLightProps(props, dz, 'danger', sel.index);
+
+  } else if (sel.type === 'goal') {
+    const g = editorLevel.goals[sel.index];
+    if (!g) return;
+
+    props.innerHTML += `<label>Radius: <span id="ep-gr">${g.radius}</span></label>`;
+    const rSlider = document.createElement('input');
+    rSlider.type = 'range'; rSlider.min = 20; rSlider.max = 150; rSlider.value = g.radius;
+    rSlider.addEventListener('input', () => { g.radius = parseInt(rSlider.value); const sp = props.querySelector('#ep-gr'); if (sp) sp.textContent = rSlider.value; });
+    props.appendChild(rSlider);
+
+    const labelIn = document.createElement('input');
+    labelIn.type = 'text'; labelIn.value = g.label || 'Goal';
+    labelIn.addEventListener('input', () => { g.label = labelIn.value; });
+    props.innerHTML += '<label>Label</label>';
+    props.appendChild(labelIn);
+
+    buildEmbeddedLightProps(props, g, 'goal', sel.index);
+
+  } else if (sel.type === 'start') {
+    props.innerHTML += `<label>Angle: <span id="ep-ang">${(editorLevel.startPos.theta * 180 / Math.PI).toFixed(0)}\u00B0</span></label>`;
+    const angSlider = document.createElement('input');
+    angSlider.type = 'range'; angSlider.min = -180; angSlider.max = 180; angSlider.value = Math.round(editorLevel.startPos.theta * 180 / Math.PI);
+    angSlider.addEventListener('input', () => {
+      editorLevel.startPos.theta = parseInt(angSlider.value) * Math.PI / 180;
+      const sp = props.querySelector('#ep-ang');
+      if (sp) sp.textContent = angSlider.value + '\u00B0';
+    });
+    props.appendChild(angSlider);
+  }
+
+  panel.appendChild(props);
+}
+
+function buildEmbeddedLightProps(props, obj, parentType, parentIdx) {
+  const hasLight = !!obj.light;
+  const cb = document.createElement('div');
+  cb.innerHTML = '<label><input type="checkbox" ' + (hasLight ? 'checked' : '') + '> Contains Light</label>';
+  cb.querySelector('input').addEventListener('change', (e) => {
+    if (e.target.checked) obj.light = { on: true, intensity: 50 };
+    else delete obj.light;
+    syncEmbeddedLights();
+    buildEditorPanel();
+  });
+  props.appendChild(cb);
+
+  if (hasLight) {
+    props.innerHTML += `<label>Light Intensity: <span id="ep-eli">${obj.light.intensity}%</span></label>`;
+    const liSlider = document.createElement('input');
+    liSlider.type = 'range'; liSlider.min = 10; liSlider.max = 100; liSlider.value = obj.light.intensity;
+    liSlider.addEventListener('input', () => {
+      obj.light.intensity = parseInt(liSlider.value);
+      const sp = props.querySelector('#ep-eli');
+      if (sp) sp.textContent = liSlider.value + '%';
+      // Update the embedded static light
+      const el = staticLights.find(l => l._embedded === parentType && l._embeddedIdx === parentIdx);
+      if (el) el.intensity = obj.light.intensity;
+    });
+    props.appendChild(liSlider);
+  }
+}
+
+// --- Editor canvas interactions ---
+function editorHitTest(wx, wy) {
+  // Check goals
+  for (let i = editorLevel.goals.length - 1; i >= 0; i--) {
+    const g = editorLevel.goals[i];
+    if (toroidalDistSq(wx, wy, g.x, g.y) < g.radius * g.radius) return { type: 'goal', index: i, obj: g };
+  }
+  // Check checkpoints
+  for (let i = editorLevel.checkpoints.length - 1; i >= 0; i--) {
+    const cp = editorLevel.checkpoints[i];
+    if (toroidalDistSq(wx, wy, cp.x, cp.y) < cp.radius * cp.radius) return { type: 'checkpoint', index: i, obj: cp };
+  }
+  // Check dangers
+  for (let i = editorLevel.dangers.length - 1; i >= 0; i--) {
+    const dz = editorLevel.dangers[i];
+    if (dz.shape === 'circle') {
+      if (toroidalDistSq(wx, wy, dz.x, dz.y) < dz.radius * dz.radius) return { type: 'danger', index: i, obj: dz };
+    } else {
+      if (wx >= dz.x && wx <= dz.x + dz.w && wy >= dz.y && wy <= dz.y + dz.h) return { type: 'danger', index: i, obj: dz };
+    }
+  }
+  // Check lights (non-embedded)
+  const lights = staticLights.filter(l => !l._embedded);
+  for (let i = lights.length - 1; i >= 0; i--) {
+    if (toroidalDistSq(wx, wy, lights[i].x, lights[i].y) < 18 * 18) return { type: 'light', index: i, obj: lights[i] };
+  }
+  // Check start
+  const sp = editorLevel.startPos;
+  if ((wx - sp.x) * (wx - sp.x) + (wy - sp.y) * (wy - sp.y) < 25 * 25) return { type: 'start', index: 0, obj: sp };
+  // Check path waypoints
+  if (editorPathMode) {
+    const pl = staticLights.filter(l => !l._embedded)[editorPathLightIdx];
+    if (pl && pl.path) {
+      for (let i = 0; i < pl.path.waypoints.length; i++) {
+        const wp = pl.path.waypoints[i];
+        if ((wx - wp.x) * (wx - wp.x) + (wy - wp.y) * (wy - wp.y) < 14 * 14) return { type: 'waypoint', index: i, obj: wp };
+      }
+    }
+  }
+  return null;
+}
+
+function editorMouseDown(e) {
+  closeEditorContextMenu();
+  const pos = canvasCoords(e);
+
+  // Path mode: add waypoint on click
+  if (editorPathMode && editorTool === 'select') {
+    const pl = staticLights.filter(l => !l._embedded)[editorPathLightIdx];
+    if (pl && pl.path) {
+      // Check if clicking an existing waypoint to drag
+      const hit = editorHitTest(pos.x, pos.y);
+      if (hit && hit.type === 'waypoint') {
+        editorDragging = hit;
+        editorDragStart = { x: pos.x, y: pos.y };
+        return;
+      }
+      pl.path.waypoints.push({ x: pos.x, y: pos.y });
+      editorSyncLightsToLevel();
+      buildEditorPanel();
+      return;
+    }
+  }
+
+  if (editorTool === 'select') {
+    const hit = editorHitTest(pos.x, pos.y);
+    if (hit) {
+      editorSelected = { type: hit.type, index: hit.index };
+      editorDragging = hit;
+      editorDragStart = { x: pos.x, y: pos.y, ox: hit.obj.x, oy: hit.obj.y };
+      buildEditorPanel();
+    } else {
+      editorSelected = null;
+      // Pan
+      isPanning = true;
+      const sc = canvasScreenCoords(e);
+      panStartX = sc.x; panStartY = sc.y;
+      camStartX = camX; camStartY = camY;
+      buildEditorPanel();
+    }
+  } else if (editorTool === 'light') {
+    const light = { id: nextLightId++, x: pos.x, y: pos.y, on: true, intensity: 75, onVisit: null, path: null, _pathProgress: 0, _pathDir: 1 };
+    staticLights.push(light);
+    editorSyncLightsToLevel();
+    const idx = staticLights.filter(l => !l._embedded).length - 1;
+    editorSelected = { type: 'light', index: idx };
+    editorTool = 'select';
+    buildEditorPanel();
+  } else if (editorTool === 'checkpoint') {
+    editorLevel.checkpoints.push({ x: pos.x, y: pos.y, radius: 55 });
+    editorSelected = { type: 'checkpoint', index: editorLevel.checkpoints.length - 1 };
+    editorTool = 'select';
+    buildEditorPanel();
+  } else if (editorTool === 'danger') {
+    editorLevel.dangers.push({ shape: 'rect', x: pos.x - 70, y: pos.y - 70, w: 140, h: 140 });
+    editorSelected = { type: 'danger', index: editorLevel.dangers.length - 1 };
+    editorTool = 'select';
+    buildEditorPanel();
+  } else if (editorTool === 'start') {
+    editorLevel.startPos.x = pos.x;
+    editorLevel.startPos.y = pos.y;
+    editorSelected = { type: 'start', index: 0 };
+    editorTool = 'select';
+    buildEditorPanel();
+  } else if (editorTool === 'goal') {
+    editorLevel.goals.push({ type: 'reach', x: pos.x, y: pos.y, radius: 60, label: 'Goal' });
+    editorSelected = { type: 'goal', index: editorLevel.goals.length - 1 };
+    editorTool = 'select';
+    buildEditorPanel();
+  }
+}
+
+function editorMouseMove(pos) {
+  editorMouseWorld = pos;
+  if (!editorDragging) return;
+  const d = editorDragging;
+  if (d.type === 'light') {
+    d.obj.x = pos.x; d.obj.y = pos.y;
+    editorSyncLightsToLevel();
+  } else if (d.type === 'checkpoint') {
+    d.obj.x = pos.x; d.obj.y = pos.y;
+    // Update embedded light
+    const el = staticLights.find(l => l._embedded === 'checkpoint' && l._embeddedIdx === d.index);
+    if (el) { el.x = pos.x; el.y = pos.y; }
+  } else if (d.type === 'danger') {
+    const dz = d.obj;
+    if (dz.shape === 'circle') {
+      dz.x = pos.x; dz.y = pos.y;
+    } else {
+      const dx = pos.x - editorDragStart.x;
+      const dy = pos.y - editorDragStart.y;
+      dz.x = editorDragStart.ox + dx;
+      dz.y = editorDragStart.oy + dy;
+    }
+    const el = staticLights.find(l => l._embedded === 'danger' && l._embeddedIdx === d.index);
+    if (el) {
+      const cx = dz.shape === 'circle' ? dz.x : dz.x + (dz.w || 0) / 2;
+      const cy = dz.shape === 'circle' ? dz.y : dz.y + (dz.h || 0) / 2;
+      el.x = cx; el.y = cy;
+    }
+  } else if (d.type === 'goal') {
+    d.obj.x = pos.x; d.obj.y = pos.y;
+    const el = staticLights.find(l => l._embedded === 'goal' && l._embeddedIdx === d.index);
+    if (el) { el.x = pos.x; el.y = pos.y; }
+  } else if (d.type === 'start') {
+    editorLevel.startPos.x = pos.x;
+    editorLevel.startPos.y = pos.y;
+  } else if (d.type === 'waypoint') {
+    d.obj.x = pos.x; d.obj.y = pos.y;
+    editorSyncLightsToLevel();
+  }
+}
+
+function editorMouseUp() {
+  if (editorDragging) {
+    editorDragging = null;
+    editorSyncLightsToLevel();
+    buildEditorPanel();
+  }
+}
+
+// --- Editor context menu ---
+function showEditorContextMenu(e) {
+  const pos = canvasCoords(e);
+  const hit = editorHitTest(pos.x, pos.y);
+  const menu = document.getElementById('editor-context-menu');
+  menu.innerHTML = '';
+
+  const rect = canvas.getBoundingClientRect();
+  menu.style.left = (e.clientX) + 'px';
+  menu.style.top = (e.clientY) + 'px';
+
+  function addItem(text, onClick, cls) {
+    const item = document.createElement('div');
+    item.className = 'ctx-item' + (cls ? ' ' + cls : '');
+    item.textContent = text;
+    item.addEventListener('click', () => { closeEditorContextMenu(); onClick(); });
+    menu.appendChild(item);
+  }
+  function addSep() {
+    const sep = document.createElement('div');
+    sep.className = 'ctx-sep';
+    menu.appendChild(sep);
+  }
+
+  if (hit && hit.type === 'light') {
+    editorSelected = { type: 'light', index: hit.index };
+    const light = hit.obj;
+    addItem('Intensity: ' + light.intensity + '%', () => {});
+    // On visit submenu
+    addSep();
+    addItem('On Visit: Turn Off' + (light.onVisit && light.onVisit.action === 'off' ? ' \u2713' : ''), () => {
+      light.onVisit = { action: 'off' }; editorSyncLightsToLevel(); buildEditorPanel();
+    });
+    addItem('On Visit: Change Luminosity' + (light.onVisit && light.onVisit.action === 'changeLuminosity' ? ' \u2713' : ''), () => {
+      light.onVisit = { action: 'changeLuminosity', newIntensity: 20 }; editorSyncLightsToLevel(); buildEditorPanel();
+    });
+    addItem('On Visit: Nothing' + (!light.onVisit ? ' \u2713' : ''), () => {
+      light.onVisit = null; editorSyncLightsToLevel(); buildEditorPanel();
+    });
+    addSep();
+    if (!light.path) {
+      addItem('\u2194 Define Path', () => {
+        editorPathMode = true; editorPathLightIdx = hit.index;
+        light.path = { waypoints: [{ x: light.x, y: light.y }], mode: 'bounce', speed: 50 };
+        editorSyncLightsToLevel(); buildEditorPanel();
+      });
+    }
+    addItem('Delete Light', () => {
+      let count = 0;
+      staticLights = staticLights.filter(l => { if (l._embedded) return true; if (count === hit.index) { count++; return false; } count++; return true; });
+      editorSyncLightsToLevel(); editorSelected = null; buildEditorPanel();
+    }, 'danger');
+  } else if (hit && (hit.type === 'checkpoint' || hit.type === 'danger' || hit.type === 'goal')) {
+    editorSelected = { type: hit.type, index: hit.index };
+    const obj = hit.obj;
+    if (obj.light) {
+      addItem('Remove Embedded Light', () => { delete obj.light; syncEmbeddedLights(); buildEditorPanel(); });
+    } else {
+      addItem('Add Light Inside', () => { obj.light = { on: true, intensity: 50 }; syncEmbeddedLights(); buildEditorPanel(); });
+    }
+    addSep();
+    addItem('Delete ' + hit.type, () => {
+      if (hit.type === 'checkpoint') editorLevel.checkpoints.splice(hit.index, 1);
+      else if (hit.type === 'danger') editorLevel.dangers.splice(hit.index, 1);
+      else if (hit.type === 'goal') editorLevel.goals.splice(hit.index, 1);
+      editorSelected = null; syncEmbeddedLights(); buildEditorPanel();
+    }, 'danger');
+  } else {
+    // Empty space
+    addItem('\u2600 Add Light Here', () => {
+      staticLights.push({ id: nextLightId++, x: pos.x, y: pos.y, on: true, intensity: 75, onVisit: null, path: null, _pathProgress: 0, _pathDir: 1 });
+      editorSyncLightsToLevel(); buildEditorPanel();
+    });
+    addItem('\u25CB Add Checkpoint Here', () => {
+      editorLevel.checkpoints.push({ x: pos.x, y: pos.y, radius: 55 }); buildEditorPanel();
+    });
+    addItem('\u26A0 Add Danger Zone Here', () => {
+      editorLevel.dangers.push({ shape: 'rect', x: pos.x - 70, y: pos.y - 70, w: 140, h: 140 }); buildEditorPanel();
+    });
+    addItem('\u2691 Add Goal Here', () => {
+      editorLevel.goals.push({ type: 'reach', x: pos.x, y: pos.y, radius: 60, label: 'Goal' }); buildEditorPanel();
+    });
+    addSep();
+    addItem('Set Start Point Here', () => {
+      editorLevel.startPos.x = pos.x; editorLevel.startPos.y = pos.y; buildEditorPanel();
+    });
+  }
+
+  buildEditorPanel();
+  menu.classList.add('open');
+}
+
+function closeEditorContextMenu() {
+  document.getElementById('editor-context-menu').classList.remove('open');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.editor-context-menu')) closeEditorContextMenu();
+});
+
+// --- Moving light runtime ---
+function updateMovingLights(dt) {
+  for (const light of staticLights) {
+    if (!light.path || !light.path.waypoints || light.path.waypoints.length < 2) continue;
+    if (light._embedded) continue;
+
+    const wps = light.path.waypoints;
+    const speed = (light.path.speed || 50) * dt;
+
+    // Compute total path length and segments
+    let totalLen = 0;
+    const segs = [];
+    for (let i = 0; i < wps.length - 1; i++) {
+      const dx = wps[i+1].x - wps[i].x;
+      const dy = wps[i+1].y - wps[i].y;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      segs.push(len);
+      totalLen += len;
+    }
+    if (totalLen < 1) continue;
+
+    light._pathProgress = (light._pathProgress || 0) + speed * light._pathDir;
+
+    if (light.path.mode === 'bounce') {
+      if (light._pathProgress >= totalLen) { light._pathProgress = totalLen; light._pathDir = -1; }
+      if (light._pathProgress <= 0) { light._pathProgress = 0; light._pathDir = 1; }
+    } else {
+      // stop mode
+      if (light._pathProgress >= totalLen) light._pathProgress = totalLen;
+      if (light._pathProgress <= 0) light._pathProgress = 0;
+    }
+
+    // Find position along path
+    let remaining = Math.max(0, Math.min(totalLen, light._pathProgress));
+    for (let i = 0; i < segs.length; i++) {
+      if (remaining <= segs[i]) {
+        const t = segs[i] > 0 ? remaining / segs[i] : 0;
+        light.x = wps[i].x + (wps[i+1].x - wps[i].x) * t;
+        light.y = wps[i].y + (wps[i+1].y - wps[i].y) * t;
+        break;
+      }
+      remaining -= segs[i];
+    }
+  }
+}
+
+// --- Editor overlay rendering ---
+function drawEditorOverlay() {
+  if (gamePhase !== 'editing' || !editorLevel) return;
+
+  // Draw path lines for all lights with paths
+  const lights = staticLights.filter(l => !l._embedded);
+  for (let i = 0; i < lights.length; i++) {
+    const l = lights[i];
+    if (!l.path || !l.path.waypoints || l.path.waypoints.length < 2) continue;
+    const wps = l.path.waypoints;
+    ctx.strokeStyle = 'rgba(0, 188, 212, 0.5)';
+    ctx.lineWidth = 2 / camZoom;
+    ctx.setLineDash([6, 4]);
+    ctx.beginPath();
+    ctx.moveTo(wps[0].x, wps[0].y);
+    for (let j = 1; j < wps.length; j++) ctx.lineTo(wps[j].x, wps[j].y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Waypoint dots
+    for (let j = 0; j < wps.length; j++) {
+      ctx.fillStyle = j === 0 ? '#4fc3f7' : '#00bcd4';
+      ctx.beginPath(); ctx.arc(wps[j].x, wps[j].y, 5 / camZoom, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+
+  // Selection highlight
+  if (editorSelected) {
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2 / camZoom;
+    ctx.setLineDash([6, 4]);
+
+    if (editorSelected.type === 'light') {
+      const l = lights[editorSelected.index];
+      if (l) { ctx.beginPath(); ctx.arc(l.x, l.y, 22 / camZoom, 0, Math.PI * 2); ctx.stroke(); }
+    } else if (editorSelected.type === 'checkpoint') {
+      const cp = editorLevel.checkpoints[editorSelected.index];
+      if (cp) { ctx.beginPath(); ctx.arc(cp.x, cp.y, cp.radius + 4 / camZoom, 0, Math.PI * 2); ctx.stroke(); }
+    } else if (editorSelected.type === 'goal') {
+      const g = editorLevel.goals[editorSelected.index];
+      if (g) { ctx.beginPath(); ctx.arc(g.x, g.y, g.radius + 4 / camZoom, 0, Math.PI * 2); ctx.stroke(); }
+    } else if (editorSelected.type === 'danger') {
+      const dz = editorLevel.dangers[editorSelected.index];
+      if (dz) {
+        if (dz.shape === 'circle') { ctx.beginPath(); ctx.arc(dz.x, dz.y, dz.radius + 4 / camZoom, 0, Math.PI * 2); ctx.stroke(); }
+        else { ctx.strokeRect(dz.x - 2 / camZoom, dz.y - 2 / camZoom, dz.w + 4 / camZoom, dz.h + 4 / camZoom); }
+      }
+    } else if (editorSelected.type === 'start') {
+      const sp = editorLevel.startPos;
+      ctx.beginPath(); ctx.arc(sp.x, sp.y, 28 / camZoom, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  // On-visit indicators
+  for (const l of lights) {
+    if (l.onVisit) {
+      ctx.fillStyle = l.onVisit.action === 'off' ? '#ef5350' : '#ff9800';
+      ctx.font = 'bold ' + (10 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(l.onVisit.action === 'off' ? 'OFF on visit' : 'Change on visit', l.x, l.y - 20 / camZoom);
+    }
+  }
 }
 
 // --- Briefing / configurator ---
-function showBriefing(levelIndex) {
+function showBriefing(levelIndex, levelOverride) {
   currentLevelIndex = levelIndex;
-  const level = GAME_LEVELS[levelIndex];
+  const level = levelOverride || GAME_LEVELS[levelIndex];
+  currentLevel = level;
   gamePhase = 'briefing';
 
   // Set up the world
   WORLD_W = level.worldSize.w;
   WORLD_H = level.worldSize.h;
-  staticLights = level.lights.map(l => ({ id: nextLightId++, x: l.x, y: l.y, on: l.on, intensity: l.intensity }));
+  staticLights = level.lights.map(l => ({
+    id: nextLightId++, x: l.x, y: l.y, on: l.on !== false, intensity: l.intensity || 75,
+    onVisit: l.onVisit || null,
+    path: l.path ? JSON.parse(JSON.stringify(l.path)) : null,
+    _pathProgress: 0, _pathDir: 1, _visited: false,
+  }));
+  // Add embedded lights from checkpoints, dangers, goals
+  if (level.checkpoints) level.checkpoints.forEach((cp, i) => {
+    if (cp.light) staticLights.push({ id: nextLightId++, x: cp.x, y: cp.y, on: cp.light.on !== false, intensity: cp.light.intensity || 50, _embedded: 'checkpoint', _embeddedIdx: i });
+  });
+  if (level.dangers) level.dangers.forEach((dz, i) => {
+    if (dz.light) {
+      const cx = dz.shape === 'circle' ? dz.x : dz.x + (dz.w || 0) / 2;
+      const cy = dz.shape === 'circle' ? dz.y : dz.y + (dz.h || 0) / 2;
+      staticLights.push({ id: nextLightId++, x: cx, y: cy, on: dz.light.on !== false, intensity: dz.light.intensity || 50, _embedded: 'danger', _embeddedIdx: i });
+    }
+  });
+  if (level.goals) level.goals.forEach((g, i) => {
+    if (g.light) staticLights.push({ id: nextLightId++, x: g.x, y: g.y, on: g.light.on !== false, intensity: g.light.intensity || 75, _embedded: 'goal', _embeddedIdx: i });
+  });
   vehicles = [];
   stopped = false;
 
@@ -3505,7 +4597,10 @@ function buildBriefingPanel(level) {
   backBtn.className = 'btn';
   backBtn.textContent = '\u2190 Back to Levels';
   backBtn.style.cssText = 'font-size:12px;padding:6px;background:#37474f;color:#b0bec5;';
-  backBtn.addEventListener('click', () => { gamePhase = 'select'; buildLevelSelect(); });
+  backBtn.addEventListener('click', () => {
+    if (level._custom && editorLevel) enterEditor(editorLevel);
+    else { gamePhase = 'select'; buildLevelSelect(); }
+  });
   panel.appendChild(backBtn);
 
   // Briefing
@@ -3682,7 +4777,7 @@ function launchLevel() {
 
 function buildRunningPanel() {
   const panel = document.getElementById('game-panel');
-  const level = GAME_LEVELS[currentLevelIndex];
+  const level = currentLevel;
   panel.innerHTML = `
     <h2 style="color:#ff9800;margin:0;">Level ${level.id}: ${level.name}</h2>
     <div class="game-timer" id="game-timer-display">0.0s</div>
@@ -3704,7 +4799,7 @@ function buildRunningPanel() {
 }
 
 function restartLevel() {
-  const level = GAME_LEVELS[currentLevelIndex];
+  const level = currentLevel;
   gameVehicle.x = level.startPos.x;
   gameVehicle.y = level.startPos.y;
   gameVehicle.theta = level.startPos.theta;
@@ -3715,6 +4810,27 @@ function restartLevel() {
   gameNextCheckpoint = 0;
   gameRunning = true;
   gameVehicle.running = true;
+  // Reset on-visit and moving light state
+  for (const l of staticLights) {
+    l._visited = false;
+    l._pathProgress = 0;
+    l._pathDir = 1;
+    // Restore original intensity/on state from level data
+  }
+  // Re-create lights from level to restore original state
+  const lightData = level.lights || [];
+  const nonEmbedded = staticLights.filter(l => !l._embedded);
+  for (let i = 0; i < nonEmbedded.length && i < lightData.length; i++) {
+    nonEmbedded[i].on = lightData[i].on !== false;
+    nonEmbedded[i].intensity = lightData[i].intensity || 75;
+    if (lightData[i].path) {
+      nonEmbedded[i].x = lightData[i].path.waypoints[0].x;
+      nonEmbedded[i].y = lightData[i].path.waypoints[0].y;
+    } else {
+      nonEmbedded[i].x = lightData[i].x;
+      nonEmbedded[i].y = lightData[i].y;
+    }
+  }
 }
 
 // --- Win / Fail ---
@@ -3730,7 +4846,7 @@ function endGame(outcome, message, stars) {
   gamePhase = 'ended';
   gameVehicle.running = false;
 
-  const level = GAME_LEVELS[currentLevelIndex];
+  const level = currentLevel;
   const overlay = document.getElementById('game-result-overlay');
   const box = document.getElementById('game-result-box');
 
@@ -3738,8 +4854,10 @@ function endGame(outcome, message, stars) {
   const starsEarned = isWin ? (stars || 0) : 0;
   const starsHTML = [1, 2, 3].map(s => s <= starsEarned ? '\u2605' : '<span class="empty">\u2605</span>').join('');
 
-  // Update progress
-  if (isWin) {
+  const isCustom = level._custom;
+
+  // Update progress (only for built-in levels)
+  if (isWin && !isCustom) {
     const progress = loadGameProgress();
     const prev = progress.stars[level.id] || 0;
     if (starsEarned > prev) progress.stars[level.id] = starsEarned;
@@ -3749,6 +4867,7 @@ function endGame(outcome, message, stars) {
     saveGameProgress(progress);
   }
 
+  const showNext = isWin && !isCustom && currentLevelIndex >= 0 && currentLevelIndex < GAME_LEVELS.length - 1;
   box.innerHTML = `
     <h2 class="${isWin ? 'win' : 'fail'}">${isWin ? 'Success!' : 'Failed'}</h2>
     <div class="result-stars">${starsHTML}</div>
@@ -3756,7 +4875,8 @@ function endGame(outcome, message, stars) {
     <div class="result-msg">${message}</div>
     <div class="result-btns">
       <button class="btn" id="result-retry-btn" style="background:#37474f;color:#b0bec5;">Retry</button>
-      ${isWin && currentLevelIndex < GAME_LEVELS.length - 1 ? '<button class="btn btn-launch" id="result-next-btn">Next Level</button>' : ''}
+      ${showNext ? '<button class="btn btn-launch" id="result-next-btn">Next Level</button>' : ''}
+      ${isCustom ? '<button class="btn" id="result-editor-btn" style="background:#37474f;color:#b0bec5;">Back to Editor</button>' : ''}
       <button class="btn" id="result-levels-btn" style="background:#37474f;color:#b0bec5;">Levels</button>
     </div>
   `;
@@ -3764,13 +4884,20 @@ function endGame(outcome, message, stars) {
 
   document.getElementById('result-retry-btn').addEventListener('click', () => {
     overlay.classList.remove('open');
-    showBriefing(currentLevelIndex);
+    showBriefing(currentLevelIndex, isCustom ? editorLevel : undefined);
   });
   const nextBtn = document.getElementById('result-next-btn');
   if (nextBtn) {
     nextBtn.addEventListener('click', () => {
       overlay.classList.remove('open');
       showBriefing(currentLevelIndex + 1);
+    });
+  }
+  const editorBtn = document.getElementById('result-editor-btn');
+  if (editorBtn) {
+    editorBtn.addEventListener('click', () => {
+      overlay.classList.remove('open');
+      enterEditor(editorLevel);
     });
   }
   document.getElementById('result-levels-btn').addEventListener('click', () => {
@@ -3785,7 +4912,7 @@ function updateGameState(dt) {
   if (!gameRunning || !gameVehicle) return;
 
   gameElapsed += dt;
-  const level = GAME_LEVELS[currentLevelIndex];
+  const level = currentLevel;
   const v = gameVehicle;
 
   // Update timer display
@@ -3820,6 +4947,17 @@ function updateGameState(dt) {
     }
   }
 
+  // On-visit light behaviors
+  const VISIT_RADIUS_SQ = 40 * 40;
+  for (const light of staticLights) {
+    if (!light.onVisit || light._visited) continue;
+    if (toroidalDistSq(v.x, v.y, light.x, light.y) < VISIT_RADIUS_SQ) {
+      light._visited = true;
+      if (light.onVisit.action === 'off') light.on = false;
+      else if (light.onVisit.action === 'changeLuminosity') light.intensity = light.onVisit.newIntensity || 20;
+    }
+  }
+
   // Check goals
   const allCheckpointsDone = gameNextCheckpoint >= level.checkpoints.length;
   for (const goal of level.goals) {
@@ -3843,8 +4981,8 @@ function isInsideDanger(v, dz) {
 
 // --- Game canvas rendering ---
 function drawGameObjects() {
-  if (!gameMode || currentLevelIndex < 0) return;
-  const level = GAME_LEVELS[currentLevelIndex];
+  if (!gameMode || !currentLevel) return;
+  const level = currentLevel;
 
   // Danger zones
   for (const dz of level.dangers) {
@@ -3919,7 +5057,7 @@ function drawGameObjects() {
   }
 
   // Start position marker (during briefing)
-  if (gamePhase === 'briefing') {
+  if (gamePhase === 'briefing' || gamePhase === 'editing') {
     const sp = level.startPos;
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.lineWidth = 1.5 / camZoom;
