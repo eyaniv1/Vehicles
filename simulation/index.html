@@ -3336,7 +3336,7 @@ let gamePhase = 'select'; // 'select' | 'briefing' | 'running' | 'ended' | 'edit
 let gameRunning = false;
 let gamePaused = false;
 let gameElapsed = 0;
-let gameNextCheckpoint = 0;
+let gameVisitedCheckpoints = new Set();
 let currentLevelIndex = -1;
 let currentLevel = null; // the active level object (built-in or custom)
 let currentLevelSource = null; // unmutated original for abort/retry
@@ -3433,8 +3433,8 @@ const GAME_LEVELS = [
   },
   {
     id: 4, name: 'Slalom', tier: 2,
-    description: 'Visit three checkpoints near lights in order, then reach the finish.',
-    briefing: 'Three lights form a zigzag path. Your vehicle must pass near each checkpoint (cyan circles, numbered) in order before reaching the green goal.',
+    description: 'Visit three checkpoints near lights, then reach the finish.',
+    briefing: 'Three lights form a zigzag path. Your vehicle must pass near each checkpoint (cyan circles) before reaching the green goal.',
     hint: 'V2b Aggression with some speed should naturally chase each light in sequence. Adjust contrast for sharper turns.',
     worldSize: { w: 1600, h: 800 },
     lights: [
@@ -3914,7 +3914,7 @@ function buildEditorPanel() {
 
   const nonEmbeddedLights = staticLights.filter(l => !l._embedded);
   panel.appendChild(buildObjSection('Lights', nonEmbeddedLights, 'light', (l, i) => `Light ${i+1}: (${Math.round(l.x)}, ${Math.round(l.y)}) ${l.intensity}%${l.path ? ' \u2194' : ''}${l.onVisit ? ' \u2734' : ''}`));
-  panel.appendChild(buildObjSection('Checkpoints', editorLevel.checkpoints, 'checkpoint', (cp, i) => `CP ${i+1}: (${Math.round(cp.x)}, ${Math.round(cp.y)}) r=${cp.radius}${cp.light ? ' \u2600' : ''}`));
+  panel.appendChild(buildObjSection('Checkpoints', editorLevel.checkpoints, 'checkpoint', (cp, i) => `CP (${Math.round(cp.x)}, ${Math.round(cp.y)}) r=${cp.radius}${cp.light ? ' \u2600' : ''}`));
   panel.appendChild(buildObjSection('Danger Zones', editorLevel.dangers, 'danger', (dz, i) => `DZ ${i+1}: ${dz.shape} (${Math.round(dz.x)}, ${Math.round(dz.y)})${dz.light ? ' \u2600' : ''}`));
   panel.appendChild(buildObjSection('Bouncers', editorLevel.bouncers || [], 'bouncer', (b, i) => `Bouncer ${i+1}: (${Math.round(b.x)}, ${Math.round(b.y)}) r=${b.radius}${b.light ? ' \u2600' : ''}`));
   panel.appendChild(buildObjSection('Goals', editorLevel.goals, 'goal', (g, i) => `Goal ${i+1}: (${Math.round(g.x)}, ${Math.round(g.y)})${g.light ? ' \u2600' : ''}`));
@@ -4778,7 +4778,7 @@ function showBriefing(levelIndex, levelOverride) {
   camY = 0;
   clampCamera();
 
-  gameNextCheckpoint = 0;
+  gameVisitedCheckpoints = new Set();
   gameElapsed = 0;
   gameRunning = false;
 
@@ -4968,7 +4968,7 @@ function launchLevel() {
   gameRunning = true;
   gamePaused = false;
   gameElapsed = 0;
-  gameNextCheckpoint = 0;
+  gameVisitedCheckpoints = new Set();
   gameVehicle.running = false; // don't move until gate opens
   gameVehicle.trail = [];
   gameStartGateOpen = 0;
@@ -5022,7 +5022,7 @@ function restartLevel() {
   gameVehicle.leftSpeed = 0;
   gameVehicle.rightSpeed = 0;
   gameElapsed = 0;
-  gameNextCheckpoint = 0;
+  gameVisitedCheckpoints = new Set();
   gameRunning = true;
   gameVehicle.running = false; // gate opens first, then vehicle starts
   gameStartGateOpen = 0;
@@ -5223,13 +5223,14 @@ function updateGameState(dt) {
     }
   }
 
-  // Check checkpoints
-  if (gameNextCheckpoint < level.checkpoints.length) {
-    const cp = level.checkpoints[gameNextCheckpoint];
+  // Check checkpoints (any order)
+  for (let i = 0; i < level.checkpoints.length; i++) {
+    if (gameVisitedCheckpoints.has(i)) continue;
+    const cp = level.checkpoints[i];
     if (toroidalDistSq(v.x, v.y, cp.x, cp.y) < cp.radius * cp.radius) {
-      gameNextCheckpoint++;
+      gameVisitedCheckpoints.add(i);
       const cpEl = document.getElementById('game-cp-display');
-      if (cpEl) cpEl.textContent = 'Checkpoints: ' + gameNextCheckpoint + ' / ' + level.checkpoints.length;
+      if (cpEl) cpEl.textContent = 'Checkpoints: ' + gameVisitedCheckpoints.size + ' / ' + level.checkpoints.length;
     }
   }
 
@@ -5264,7 +5265,7 @@ function updateGameState(dt) {
   }
 
   // Check goals
-  const allCheckpointsDone = gameNextCheckpoint >= level.checkpoints.length;
+  const allCheckpointsDone = gameVisitedCheckpoints.size >= level.checkpoints.length;
   for (const goal of level.goals) {
     if (goal.type === 'reach' && allCheckpointsDone) {
       if (toroidalDistSq(v.x, v.y, goal.x, goal.y) < goal.radius * goal.radius) {
@@ -5475,7 +5476,7 @@ function drawGameObjects() {
   const cps = level.checkpoints;
   for (let i = 0; i < cps.length; i++) {
     const cp = cps[i];
-    const visited = i < gameNextCheckpoint;
+    const visited = gameVisitedCheckpoints.has(i);
     const color = visited ? '#555' : '#00bcd4';
 
     // Circle zone
@@ -5514,11 +5515,13 @@ function drawGameObjects() {
     ctx.closePath();
     ctx.fill();
 
-    // Number on flag
-    ctx.fillStyle = visited ? '#333' : '#fff';
-    ctx.font = 'bold ' + (7 / camZoom) + 'px sans-serif';
-    ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
-    ctx.fillText(visited ? '\u2713' : (i + 1).toString(), poleX + 3, poleTop + flagH * 0.45);
+    // Checkmark when visited
+    if (visited) {
+      ctx.fillStyle = '#333';
+      ctx.font = 'bold ' + (7 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      ctx.fillText('\u2713', poleX + 3, poleTop + flagH * 0.45);
+    }
   }
 
   // === GOAL — checkered flag ===
