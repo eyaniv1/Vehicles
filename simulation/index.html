@@ -3336,7 +3336,7 @@ let gamePhase = 'select'; // 'select' | 'briefing' | 'running' | 'ended' | 'edit
 let gameRunning = false;
 let gamePaused = false;
 let gameElapsed = 0;
-let gameVisitedCheckpoints = new Set(); gameCheckpointDwell = {};
+let gameVisitedCheckpoints = new Set();
 let gameCheckpointDwell = {}; // index -> seconds spent inside
 let currentLevelIndex = -1;
 let currentLevel = null; // the active level object (built-in or custom)
