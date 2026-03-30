@@ -4548,19 +4548,31 @@ function updateMovingLights(dt) {
   // Don't animate during editing — only during game runs and briefing preview
   if (gamePhase === 'editing') return;
 
-  // Also update path-based movement for checkpoints, dangers, goals
+  // Also update path-based movement for checkpoints, dangers, goals, bouncers
   if (currentLevel) {
-    const movables = [
-      ...(currentLevel.checkpoints || []),
-      ...(currentLevel.dangers || []),
-      ...(currentLevel.bouncers || []),
-      ...(currentLevel.goals || []),
+    const typedArrays = [
+      { arr: currentLevel.checkpoints || [], type: 'checkpoint' },
+      { arr: currentLevel.dangers || [], type: 'danger' },
+      { arr: currentLevel.bouncers || [], type: 'bouncer' },
+      { arr: currentLevel.goals || [], type: 'goal' },
     ];
-    for (const obj of movables) {
-      if (!obj.path || !obj.path.waypoints || obj.path.waypoints.length < 2) continue;
-      updatePathPosition(obj, dt);
-      // Sync embedded lights
-      if (obj._embSyncFn) obj._embSyncFn();
+    for (const { arr, type } of typedArrays) {
+      for (let i = 0; i < arr.length; i++) {
+        const obj = arr[i];
+        if (!obj.path || !obj.path.waypoints || obj.path.waypoints.length < 2) continue;
+        updatePathPosition(obj, dt);
+        // Sync embedded light position to parent
+        const el = staticLights.find(l => l._embedded === type && l._embeddedIdx === i);
+        if (el) {
+          if (obj.shape === 'rect') {
+            el.x = obj.x + (obj.w || 0) / 2;
+            el.y = obj.y + (obj.h || 0) / 2;
+          } else {
+            el.x = obj.x;
+            el.y = obj.y;
+          }
+        }
+      }
     }
   }
 
