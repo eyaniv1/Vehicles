@@ -2757,6 +2757,14 @@ canvas.addEventListener('wheel', (e) => {
 
 canvas.addEventListener('dblclick', (e) => {
   if (gameMode && gamePhase === 'editing') {
+    // Double-click finishes path mode
+    if (editorPathMode) {
+      editorPathMode = false;
+      editorPathTarget = null;
+      editorSyncLightsToLevel();
+      buildEditorPanel();
+      return;
+    }
     // Add light in editor via double-click
     const pos = canvasCoords(e);
     staticLights.push({ id: nextLightId++, x: pos.x, y: pos.y, on: true, intensity: 75, onVisit: null, path: null, _pathProgress: 0, _pathDir: 1 });
@@ -3329,8 +3337,9 @@ let editorSelected = null; // { type: 'light'|'checkpoint'|'danger'|'goal'|'star
 let editorDragging = null;
 let editorDragStart = null;
 let editorTool = 'select';
-let editorPathMode = false; // true while defining a moving light path
-let editorPathLightIdx = -1;
+let editorPathMode = false; // true while defining a path
+let editorPathTarget = null; // { type, index } of object whose path is being defined
+let editorPathLightIdx = -1; // kept for backward compat
 let editorMouseWorld = { x: 0, y: 0 }; // tracked for ghost preview
 
 // --- Custom levels persistence ---
@@ -3746,16 +3755,25 @@ function buildEditorPanel() {
   nameInput.addEventListener('input', () => { editorLevel.name = nameInput.value; });
   nameDiv.appendChild(nameInput);
 
-  // World size
-  nameDiv.innerHTML += '<label>World Size</label>';
-  const wsDiv = document.createElement('div');
-  wsDiv.className = 'prop-row';
-  const wIn = document.createElement('input'); wIn.type = 'number'; wIn.value = editorLevel.worldSize.w; wIn.min = 400; wIn.max = 6000; wIn.step = 100;
-  const hIn = document.createElement('input'); hIn.type = 'number'; hIn.value = editorLevel.worldSize.h; hIn.min = 400; hIn.max = 6000; hIn.step = 100;
-  wIn.addEventListener('change', () => { editorLevel.worldSize.w = parseInt(wIn.value) || 1200; WORLD_W = editorLevel.worldSize.w; clampCamera(); });
-  hIn.addEventListener('change', () => { editorLevel.worldSize.h = parseInt(hIn.value) || 800; WORLD_H = editorLevel.worldSize.h; clampCamera(); });
-  wsDiv.appendChild(wIn); wsDiv.appendChild(document.createTextNode(' x ')); wsDiv.appendChild(hIn);
-  nameDiv.appendChild(wsDiv);
+  // World size dropdown (same options as simulation)
+  const wsLabel = document.createElement('label'); wsLabel.textContent = 'World Size';
+  nameDiv.appendChild(wsLabel);
+  const wsSel = document.createElement('select');
+  wsSel.style.cssText = 'width:100%;background:#16213e;color:#e0e0e0;border:1px solid #444;border-radius:4px;padding:4px;font-size:12px;margin-bottom:4px;';
+  WORLD_SIZES.forEach((ws, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = ws.label;
+    if (ws.w === editorLevel.worldSize.w && ws.h === editorLevel.worldSize.h) opt.selected = true;
+    wsSel.appendChild(opt);
+  });
+  wsSel.addEventListener('change', () => {
+    const ws = WORLD_SIZES[parseInt(wsSel.value)];
+    editorLevel.worldSize.w = ws.w; editorLevel.worldSize.h = ws.h;
+    WORLD_W = ws.w; WORLD_H = ws.h;
+    camZoom = Math.min(canvas.width / WORLD_W, canvas.height / WORLD_H);
+    camX = 0; camY = 0; clampCamera();
+  });
+  nameDiv.appendChild(wsSel);
 
   // Time limit
   nameDiv.innerHTML += '<label>Time Limit (seconds)</label>';
@@ -3924,165 +3942,158 @@ function buildEditorPanel() {
 }
 
 // --- Properties panel ---
+// Helper: build a labeled slider that doesn't break innerHTML
+function addSlider(parent, labelText, min, max, value, onChange) {
+  const wrap = document.createElement('div');
+  const lab = document.createElement('label');
+  const valSpan = document.createElement('span');
+  valSpan.textContent = value;
+  lab.textContent = labelText + ': ';
+  lab.appendChild(valSpan);
+  wrap.appendChild(lab);
+  const slider = document.createElement('input');
+  slider.type = 'range'; slider.min = min; slider.max = max; slider.value = value;
+  slider.addEventListener('input', () => { valSpan.textContent = slider.value; onChange(parseInt(slider.value)); });
+  wrap.appendChild(slider);
+  parent.appendChild(wrap);
+  return slider;
+}
+
+// Helper: build on-visit controls for any light-like object
+function buildOnVisitUI(parent, lightObj, syncFn) {
+  const lab = document.createElement('label');
+  lab.textContent = 'On Vehicle Visit:';
+  parent.appendChild(lab);
+  const visitSel = document.createElement('select');
+  const visitVal = lightObj.onVisit ? lightObj.onVisit.action : 'none';
+  ['none', 'off', 'changeLuminosity'].forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v;
+    opt.textContent = v === 'none' ? 'Nothing' : v === 'off' ? 'Turn Off' : 'Change Luminosity';
+    if (v === visitVal) opt.selected = true;
+    visitSel.appendChild(opt);
+  });
+  visitSel.addEventListener('change', () => {
+    if (visitSel.value === 'none') lightObj.onVisit = null;
+    else if (visitSel.value === 'off') lightObj.onVisit = { action: 'off' };
+    else lightObj.onVisit = { action: 'changeLuminosity', newIntensity: 20 };
+    syncFn();
+    buildEditorPanel();
+  });
+  parent.appendChild(visitSel);
+  if (lightObj.onVisit && lightObj.onVisit.action === 'changeLuminosity') {
+    addSlider(parent, 'New Intensity', 0, 100, lightObj.onVisit.newIntensity || 20, (v) => { lightObj.onVisit.newIntensity = v; syncFn(); });
+  }
+}
+
+// Helper: build path UI for any object that can have a path
+function buildPathUI(parent, obj, objType, objIndex) {
+  const pathDiv = document.createElement('div');
+  pathDiv.style.marginTop = '8px';
+  const lab = document.createElement('label');
+  lab.style.cssText = 'color:#00bcd4;font-weight:600;';
+  lab.textContent = 'Motion Path';
+  pathDiv.appendChild(lab);
+
+  if (obj.path && obj.path.waypoints && obj.path.waypoints.length > 0) {
+    const infoLab = document.createElement('label');
+    infoLab.textContent = obj.path.waypoints.length + ' waypoints';
+    pathDiv.appendChild(infoLab);
+
+    const modeSel = document.createElement('select');
+    ['bounce', 'stop'].forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m; opt.textContent = m === 'bounce' ? 'Back & Forth' : 'Stop at End';
+      if (obj.path.mode === m) opt.selected = true;
+      modeSel.appendChild(opt);
+    });
+    modeSel.addEventListener('change', () => { obj.path.mode = modeSel.value; editorSyncLightsToLevel(); });
+    pathDiv.appendChild(modeSel);
+
+    addSlider(pathDiv, 'Speed', 10, 200, obj.path.speed || 50, (v) => { obj.path.speed = v; editorSyncLightsToLevel(); });
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'btn';
+    clearBtn.style.cssText = 'font-size:10px;padding:4px 8px;background:#c62828;color:#fff;width:100%;margin-top:4px;';
+    clearBtn.textContent = 'Clear Path';
+    clearBtn.addEventListener('click', () => { obj.path = null; editorSyncLightsToLevel(); buildEditorPanel(); });
+    pathDiv.appendChild(clearBtn);
+  } else {
+    const addBtn = document.createElement('button');
+    addBtn.className = 'btn';
+    addBtn.style.cssText = 'font-size:11px;padding:5px 8px;background:#1565c0;color:#fff;width:100%;';
+    addBtn.textContent = '\u2194 Define Path (click canvas, dbl-click to finish)';
+    addBtn.addEventListener('click', () => {
+      editorPathMode = true;
+      editorPathTarget = { type: objType, index: objIndex };
+      const startX = obj.x != null ? obj.x : (obj.shape === 'rect' ? obj.x + (obj.w||0)/2 : obj.x);
+      const startY = obj.y != null ? obj.y : (obj.shape === 'rect' ? obj.y + (obj.h||0)/2 : obj.y);
+      obj.path = { waypoints: [{ x: startX, y: startY }], mode: 'bounce', speed: 50 };
+      editorSyncLightsToLevel();
+      buildEditorPanel();
+    });
+    pathDiv.appendChild(addBtn);
+  }
+  if (editorPathMode && editorPathTarget && editorPathTarget.type === objType && editorPathTarget.index === objIndex) {
+    const notice = document.createElement('div');
+    notice.style.cssText = 'color:#00bcd4;font-size:11px;padding:4px 0;';
+    notice.textContent = 'Click canvas to add waypoints. Double-click to finish.';
+    pathDiv.appendChild(notice);
+  }
+  parent.appendChild(pathDiv);
+}
+
 function buildPropertiesPanel(panel) {
   const sel = editorSelected;
   const props = document.createElement('div');
   props.className = 'editor-props';
-  props.innerHTML = '<label style="color:#ff9800;font-weight:700;font-size:12px;">Properties</label>';
+  const titleLab = document.createElement('label');
+  titleLab.style.cssText = 'color:#ff9800;font-weight:700;font-size:12px;';
+  titleLab.textContent = 'Properties';
+  props.appendChild(titleLab);
 
   if (sel.type === 'light') {
     const lights = staticLights.filter(l => !l._embedded);
     const light = lights[sel.index];
     if (!light) return;
 
-    // Intensity
-    props.innerHTML += `<label>Intensity: <span id="ep-int-val">${light.intensity}%</span></label>`;
-    const intSlider = document.createElement('input');
-    intSlider.type = 'range'; intSlider.min = 10; intSlider.max = 100; intSlider.value = light.intensity;
-    intSlider.addEventListener('input', () => {
-      light.intensity = parseInt(intSlider.value);
-      const sp = props.querySelector('#ep-int-val');
-      if (sp) sp.textContent = light.intensity + '%';
-      editorSyncLightsToLevel();
-    });
-    props.appendChild(intSlider);
+    addSlider(props, 'Intensity', 10, 100, light.intensity, (v) => { light.intensity = v; editorSyncLightsToLevel(); });
 
-    // On/Off
     const onDiv = document.createElement('div');
-    onDiv.innerHTML = '<label><input type="checkbox" ' + (light.on ? 'checked' : '') + '> Light On</label>';
-    onDiv.querySelector('input').addEventListener('change', (e) => { light.on = e.target.checked; editorSyncLightsToLevel(); });
+    const onLab = document.createElement('label');
+    const onCb = document.createElement('input');
+    onCb.type = 'checkbox'; onCb.checked = light.on;
+    onCb.addEventListener('change', () => { light.on = onCb.checked; editorSyncLightsToLevel(); });
+    onLab.appendChild(onCb); onLab.appendChild(document.createTextNode(' Light On'));
+    onDiv.appendChild(onLab);
     props.appendChild(onDiv);
 
-    // On Visit behavior
-    props.innerHTML += '<label>On Vehicle Visit:</label>';
-    const visitSel = document.createElement('select');
-    const visitVal = light.onVisit ? light.onVisit.action : 'none';
-    ['none', 'off', 'changeLuminosity'].forEach(v => {
-      const opt = document.createElement('option');
-      opt.value = v;
-      opt.textContent = v === 'none' ? 'Nothing' : v === 'off' ? 'Turn Off' : 'Change Luminosity';
-      if (v === visitVal) opt.selected = true;
-      visitSel.appendChild(opt);
-    });
-    visitSel.addEventListener('change', () => {
-      if (visitSel.value === 'none') light.onVisit = null;
-      else if (visitSel.value === 'off') light.onVisit = { action: 'off' };
-      else light.onVisit = { action: 'changeLuminosity', newIntensity: 20 };
-      editorSyncLightsToLevel();
-      buildEditorPanel();
-    });
-    props.appendChild(visitSel);
-
-    if (light.onVisit && light.onVisit.action === 'changeLuminosity') {
-      props.innerHTML += `<label>New Intensity: <span id="ep-newint">${light.onVisit.newIntensity || 20}%</span></label>`;
-      const niSlider = document.createElement('input');
-      niSlider.type = 'range'; niSlider.min = 0; niSlider.max = 100; niSlider.value = light.onVisit.newIntensity || 20;
-      niSlider.addEventListener('input', () => {
-        light.onVisit.newIntensity = parseInt(niSlider.value);
-        const sp = props.querySelector('#ep-newint');
-        if (sp) sp.textContent = niSlider.value + '%';
-        editorSyncLightsToLevel();
-      });
-      props.appendChild(niSlider);
-    }
-
-    // Moving light path
-    const pathDiv = document.createElement('div');
-    pathDiv.style.marginTop = '8px';
-    if (light.path && light.path.waypoints.length > 0) {
-      pathDiv.innerHTML = '<label>Path: ' + light.path.waypoints.length + ' waypoints</label>';
-      const modeSel = document.createElement('select');
-      ['bounce', 'stop'].forEach(m => {
-        const opt = document.createElement('option');
-        opt.value = m; opt.textContent = m === 'bounce' ? 'Back & Forth' : 'Stop at End';
-        if (light.path.mode === m) opt.selected = true;
-        modeSel.appendChild(opt);
-      });
-      modeSel.addEventListener('change', () => { light.path.mode = modeSel.value; editorSyncLightsToLevel(); });
-      pathDiv.appendChild(modeSel);
-
-      pathDiv.innerHTML += `<label>Speed: <span id="ep-pspeed">${light.path.speed || 50}</span></label>`;
-      const psSlider = document.createElement('input');
-      psSlider.type = 'range'; psSlider.min = 10; psSlider.max = 200; psSlider.value = light.path.speed || 50;
-      psSlider.addEventListener('input', () => {
-        light.path.speed = parseInt(psSlider.value);
-        const sp = pathDiv.querySelector('#ep-pspeed');
-        if (sp) sp.textContent = psSlider.value;
-        editorSyncLightsToLevel();
-      });
-      pathDiv.appendChild(psSlider);
-
-      const clearPathBtn = document.createElement('button');
-      clearPathBtn.className = 'btn';
-      clearPathBtn.style.cssText = 'font-size:10px;padding:4px 8px;background:#c62828;color:#fff;width:100%;margin-top:4px;';
-      clearPathBtn.textContent = 'Clear Path';
-      clearPathBtn.addEventListener('click', () => { light.path = null; editorSyncLightsToLevel(); buildEditorPanel(); });
-      pathDiv.appendChild(clearPathBtn);
-    } else {
-      const addPathBtn = document.createElement('button');
-      addPathBtn.className = 'btn';
-      addPathBtn.style.cssText = 'font-size:11px;padding:5px 8px;background:#1565c0;color:#fff;width:100%;';
-      addPathBtn.textContent = '\u2194 Define Path (Click waypoints on canvas)';
-      addPathBtn.addEventListener('click', () => {
-        editorPathMode = true;
-        editorPathLightIdx = sel.index;
-        light.path = { waypoints: [{ x: light.x, y: light.y }], mode: 'bounce', speed: 50 };
-        editorSyncLightsToLevel();
-        buildEditorPanel();
-      });
-      pathDiv.appendChild(addPathBtn);
-    }
-    if (editorPathMode && editorPathLightIdx === sel.index) {
-      const finBtn = document.createElement('button');
-      finBtn.className = 'btn btn-launch';
-      finBtn.style.cssText = 'width:100%;margin-top:4px;font-size:12px;padding:6px;';
-      finBtn.textContent = '\u2713 Finish Path';
-      finBtn.addEventListener('click', () => { editorPathMode = false; editorSyncLightsToLevel(); buildEditorPanel(); });
-      pathDiv.appendChild(finBtn);
-    }
-    props.appendChild(pathDiv);
+    buildOnVisitUI(props, light, editorSyncLightsToLevel);
+    buildPathUI(props, light, 'light', sel.index);
 
   } else if (sel.type === 'checkpoint') {
     const cp = editorLevel.checkpoints[sel.index];
     if (!cp) return;
 
-    props.innerHTML += `<label>Radius: <span id="ep-cpr">${cp.radius}</span></label>`;
-    const rSlider = document.createElement('input');
-    rSlider.type = 'range'; rSlider.min = 20; rSlider.max = 150; rSlider.value = cp.radius;
-    rSlider.addEventListener('input', () => { cp.radius = parseInt(rSlider.value); const sp = props.querySelector('#ep-cpr'); if (sp) sp.textContent = rSlider.value; });
-    props.appendChild(rSlider);
-
+    addSlider(props, 'Radius', 20, 150, cp.radius, (v) => { cp.radius = v; });
     buildEmbeddedLightProps(props, cp, 'checkpoint', sel.index);
+    buildPathUI(props, cp, 'checkpoint', sel.index);
 
   } else if (sel.type === 'danger') {
     const dz = editorLevel.dangers[sel.index];
     if (!dz) return;
 
-    if (dz.shape === 'circle') {
-      props.innerHTML += `<label>Radius: <span id="ep-dzr">${dz.radius}</span></label>`;
-      const rSlider = document.createElement('input');
-      rSlider.type = 'range'; rSlider.min = 20; rSlider.max = 300; rSlider.value = dz.radius;
-      rSlider.addEventListener('input', () => { dz.radius = parseInt(rSlider.value); const sp = props.querySelector('#ep-dzr'); if (sp) sp.textContent = rSlider.value; });
-      props.appendChild(rSlider);
-    } else {
-      props.innerHTML += '<label>Width / Height</label>';
-      const szDiv = document.createElement('div');
-      szDiv.className = 'prop-row';
-      const wIn = document.createElement('input'); wIn.type = 'number'; wIn.value = dz.w; wIn.min = 20;
-      const hIn = document.createElement('input'); hIn.type = 'number'; hIn.value = dz.h; hIn.min = 20;
-      wIn.addEventListener('change', () => { dz.w = parseInt(wIn.value) || 100; });
-      hIn.addEventListener('change', () => { dz.h = parseInt(hIn.value) || 100; });
-      szDiv.appendChild(wIn); szDiv.appendChild(hIn);
-      props.appendChild(szDiv);
-    }
-
     // Shape toggle
+    const shapeLab = document.createElement('label'); shapeLab.textContent = 'Shape';
+    props.appendChild(shapeLab);
     const shapeSel = document.createElement('select');
     shapeSel.innerHTML = '<option value="rect">Rectangle</option><option value="circle">Circle</option>';
     shapeSel.value = dz.shape;
     shapeSel.addEventListener('change', () => {
       if (shapeSel.value === 'circle' && dz.shape !== 'circle') {
+        const cx = dz.x + (dz.w || 0) / 2, cy = dz.y + (dz.h || 0) / 2;
         dz.shape = 'circle'; dz.radius = Math.max(dz.w || 100, dz.h || 100) / 2;
+        dz.x = cx; dz.y = cy;
         delete dz.w; delete dz.h;
       } else if (shapeSel.value === 'rect' && dz.shape !== 'rect') {
         const r = dz.radius || 60;
@@ -4094,36 +4105,36 @@ function buildPropertiesPanel(panel) {
     });
     props.appendChild(shapeSel);
 
+    if (dz.shape === 'circle') {
+      addSlider(props, 'Radius', 20, 300, dz.radius, (v) => { dz.radius = v; });
+    } else {
+      addSlider(props, 'Width', 20, 600, dz.w, (v) => { dz.w = v; });
+      addSlider(props, 'Height', 20, 600, dz.h, (v) => { dz.h = v; });
+    }
+
     buildEmbeddedLightProps(props, dz, 'danger', sel.index);
+    buildPathUI(props, dz, 'danger', sel.index);
 
   } else if (sel.type === 'goal') {
     const g = editorLevel.goals[sel.index];
     if (!g) return;
 
-    props.innerHTML += `<label>Radius: <span id="ep-gr">${g.radius}</span></label>`;
-    const rSlider = document.createElement('input');
-    rSlider.type = 'range'; rSlider.min = 20; rSlider.max = 150; rSlider.value = g.radius;
-    rSlider.addEventListener('input', () => { g.radius = parseInt(rSlider.value); const sp = props.querySelector('#ep-gr'); if (sp) sp.textContent = rSlider.value; });
-    props.appendChild(rSlider);
+    addSlider(props, 'Radius', 20, 150, g.radius, (v) => { g.radius = v; });
 
+    const labelLab = document.createElement('label'); labelLab.textContent = 'Label';
+    props.appendChild(labelLab);
     const labelIn = document.createElement('input');
     labelIn.type = 'text'; labelIn.value = g.label || 'Goal';
     labelIn.addEventListener('input', () => { g.label = labelIn.value; });
-    props.innerHTML += '<label>Label</label>';
     props.appendChild(labelIn);
 
     buildEmbeddedLightProps(props, g, 'goal', sel.index);
+    buildPathUI(props, g, 'goal', sel.index);
 
   } else if (sel.type === 'start') {
-    props.innerHTML += `<label>Angle: <span id="ep-ang">${(editorLevel.startPos.theta * 180 / Math.PI).toFixed(0)}\u00B0</span></label>`;
-    const angSlider = document.createElement('input');
-    angSlider.type = 'range'; angSlider.min = -180; angSlider.max = 180; angSlider.value = Math.round(editorLevel.startPos.theta * 180 / Math.PI);
-    angSlider.addEventListener('input', () => {
-      editorLevel.startPos.theta = parseInt(angSlider.value) * Math.PI / 180;
-      const sp = props.querySelector('#ep-ang');
-      if (sp) sp.textContent = angSlider.value + '\u00B0';
+    addSlider(props, 'Angle', -180, 180, Math.round(editorLevel.startPos.theta * 180 / Math.PI), (v) => {
+      editorLevel.startPos.theta = v * Math.PI / 180;
     });
-    props.appendChild(angSlider);
   }
 
   panel.appendChild(props);
@@ -4132,28 +4143,45 @@ function buildPropertiesPanel(panel) {
 function buildEmbeddedLightProps(props, obj, parentType, parentIdx) {
   const hasLight = !!obj.light;
   const cb = document.createElement('div');
-  cb.innerHTML = '<label><input type="checkbox" ' + (hasLight ? 'checked' : '') + '> Contains Light</label>';
-  cb.querySelector('input').addEventListener('change', (e) => {
-    if (e.target.checked) obj.light = { on: true, intensity: 50 };
+  const cbLab = document.createElement('label');
+  const cbIn = document.createElement('input');
+  cbIn.type = 'checkbox'; cbIn.checked = hasLight;
+  cbIn.addEventListener('change', (e) => {
+    if (e.target.checked) obj.light = { on: true, intensity: 50, onVisit: null };
     else delete obj.light;
     syncEmbeddedLights();
     buildEditorPanel();
   });
+  cbLab.appendChild(cbIn); cbLab.appendChild(document.createTextNode(' Contains Light'));
+  cb.appendChild(cbLab);
   props.appendChild(cb);
 
   if (hasLight) {
-    props.innerHTML += `<label>Light Intensity: <span id="ep-eli">${obj.light.intensity}%</span></label>`;
-    const liSlider = document.createElement('input');
-    liSlider.type = 'range'; liSlider.min = 10; liSlider.max = 100; liSlider.value = obj.light.intensity;
-    liSlider.addEventListener('input', () => {
-      obj.light.intensity = parseInt(liSlider.value);
-      const sp = props.querySelector('#ep-eli');
-      if (sp) sp.textContent = liSlider.value + '%';
-      // Update the embedded static light
+    addSlider(props, 'Light Intensity', 10, 100, obj.light.intensity, (v) => {
+      obj.light.intensity = v;
       const el = staticLights.find(l => l._embedded === parentType && l._embeddedIdx === parentIdx);
-      if (el) el.intensity = obj.light.intensity;
+      if (el) el.intensity = v;
     });
-    props.appendChild(liSlider);
+
+    const onDiv = document.createElement('div');
+    const onLab = document.createElement('label');
+    const onCb = document.createElement('input');
+    onCb.type = 'checkbox'; onCb.checked = obj.light.on !== false;
+    onCb.addEventListener('change', () => {
+      obj.light.on = onCb.checked;
+      const el = staticLights.find(l => l._embedded === parentType && l._embeddedIdx === parentIdx);
+      if (el) el.on = onCb.checked;
+    });
+    onLab.appendChild(onCb); onLab.appendChild(document.createTextNode(' Light On'));
+    onDiv.appendChild(onLab);
+    props.appendChild(onDiv);
+
+    // Full on-visit behavior for embedded lights
+    if (!obj.light.onVisit) obj.light.onVisit = null;
+    buildOnVisitUI(props, obj.light, () => {
+      const el = staticLights.find(l => l._embedded === parentType && l._embeddedIdx === parentIdx);
+      if (el) el.onVisit = obj.light.onVisit;
+    });
   }
 }
 
@@ -4187,15 +4215,26 @@ function editorHitTest(wx, wy) {
   const sp = editorLevel.startPos;
   if ((wx - sp.x) * (wx - sp.x) + (wy - sp.y) * (wy - sp.y) < 25 * 25) return { type: 'start', index: 0, obj: sp };
   // Check path waypoints
-  if (editorPathMode) {
-    const pl = staticLights.filter(l => !l._embedded)[editorPathLightIdx];
-    if (pl && pl.path) {
-      for (let i = 0; i < pl.path.waypoints.length; i++) {
-        const wp = pl.path.waypoints[i];
+  if (editorPathMode && editorPathTarget) {
+    const pathObj = getEditorPathObj();
+    if (pathObj && pathObj.path) {
+      for (let i = 0; i < pathObj.path.waypoints.length; i++) {
+        const wp = pathObj.path.waypoints[i];
         if ((wx - wp.x) * (wx - wp.x) + (wy - wp.y) * (wy - wp.y) < 14 * 14) return { type: 'waypoint', index: i, obj: wp };
       }
     }
   }
+  return null;
+}
+
+// Get the object currently being path-edited
+function getEditorPathObj() {
+  if (!editorPathTarget) return null;
+  const t = editorPathTarget;
+  if (t.type === 'light') return staticLights.filter(l => !l._embedded)[t.index];
+  if (t.type === 'checkpoint') return editorLevel.checkpoints[t.index];
+  if (t.type === 'danger') return editorLevel.dangers[t.index];
+  if (t.type === 'goal') return editorLevel.goals[t.index];
   return null;
 }
 
@@ -4204,9 +4243,9 @@ function editorMouseDown(e) {
   const pos = canvasCoords(e);
 
   // Path mode: add waypoint on click
-  if (editorPathMode && editorTool === 'select') {
-    const pl = staticLights.filter(l => !l._embedded)[editorPathLightIdx];
-    if (pl && pl.path) {
+  if (editorPathMode) {
+    const pathObj = getEditorPathObj();
+    if (pathObj && pathObj.path) {
       // Check if clicking an existing waypoint to drag
       const hit = editorHitTest(pos.x, pos.y);
       if (hit && hit.type === 'waypoint') {
@@ -4214,7 +4253,7 @@ function editorMouseDown(e) {
         editorDragStart = { x: pos.x, y: pos.y };
         return;
       }
-      pl.path.waypoints.push({ x: pos.x, y: pos.y });
+      pathObj.path.waypoints.push({ x: pos.x, y: pos.y });
       editorSyncLightsToLevel();
       buildEditorPanel();
       return;
@@ -4419,47 +4458,66 @@ document.addEventListener('click', (e) => {
 
 // --- Moving light runtime ---
 function updateMovingLights(dt) {
+  // Don't animate during editing — only during game runs and briefing preview
+  if (gamePhase === 'editing') return;
+
+  // Also update path-based movement for checkpoints, dangers, goals
+  if (currentLevel) {
+    const movables = [
+      ...(currentLevel.checkpoints || []),
+      ...(currentLevel.dangers || []),
+      ...(currentLevel.goals || []),
+    ];
+    for (const obj of movables) {
+      if (!obj.path || !obj.path.waypoints || obj.path.waypoints.length < 2) continue;
+      updatePathPosition(obj, dt);
+      // Sync embedded lights
+      if (obj._embSyncFn) obj._embSyncFn();
+    }
+  }
+
   for (const light of staticLights) {
     if (!light.path || !light.path.waypoints || light.path.waypoints.length < 2) continue;
     if (light._embedded) continue;
+    updatePathPosition(light, dt);
+  }
+}
 
-    const wps = light.path.waypoints;
-    const speed = (light.path.speed || 50) * dt;
+function updatePathPosition(obj, dt) {
+  if (!obj.path || !obj.path.waypoints || obj.path.waypoints.length < 2) return;
+  const wps = obj.path.waypoints;
+  const speed = (obj.path.speed || 50) * dt;
 
-    // Compute total path length and segments
-    let totalLen = 0;
-    const segs = [];
-    for (let i = 0; i < wps.length - 1; i++) {
-      const dx = wps[i+1].x - wps[i].x;
-      const dy = wps[i+1].y - wps[i].y;
-      const len = Math.sqrt(dx * dx + dy * dy);
-      segs.push(len);
-      totalLen += len;
+  let totalLen = 0;
+  const segs = [];
+  for (let i = 0; i < wps.length - 1; i++) {
+    const dx = wps[i+1].x - wps[i].x;
+    const dy = wps[i+1].y - wps[i].y;
+    segs.push(Math.sqrt(dx * dx + dy * dy));
+    totalLen += segs[i];
+  }
+  if (totalLen < 1) return;
+
+  if (!obj._pathDir) obj._pathDir = 1;
+  obj._pathProgress = (obj._pathProgress || 0) + speed * obj._pathDir;
+
+  if (obj.path.mode === 'bounce') {
+    if (obj._pathProgress >= totalLen) { obj._pathProgress = totalLen; obj._pathDir = -1; }
+    if (obj._pathProgress <= 0) { obj._pathProgress = 0; obj._pathDir = 1; }
+  } else {
+    if (obj._pathProgress >= totalLen) obj._pathProgress = totalLen;
+    if (obj._pathProgress <= 0) obj._pathProgress = 0;
+  }
+
+  let remaining = Math.max(0, Math.min(totalLen, obj._pathProgress));
+  for (let i = 0; i < segs.length; i++) {
+    if (remaining <= segs[i]) {
+      const t = segs[i] > 0 ? remaining / segs[i] : 0;
+      obj.x = wps[i].x + (wps[i+1].x - wps[i].x) * t;
+      obj.y = wps[i].y + (wps[i+1].y - wps[i].y) * t;
+      break;
     }
-    if (totalLen < 1) continue;
-
-    light._pathProgress = (light._pathProgress || 0) + speed * light._pathDir;
-
-    if (light.path.mode === 'bounce') {
-      if (light._pathProgress >= totalLen) { light._pathProgress = totalLen; light._pathDir = -1; }
-      if (light._pathProgress <= 0) { light._pathProgress = 0; light._pathDir = 1; }
-    } else {
-      // stop mode
-      if (light._pathProgress >= totalLen) light._pathProgress = totalLen;
-      if (light._pathProgress <= 0) light._pathProgress = 0;
-    }
-
-    // Find position along path
-    let remaining = Math.max(0, Math.min(totalLen, light._pathProgress));
-    for (let i = 0; i < segs.length; i++) {
-      if (remaining <= segs[i]) {
-        const t = segs[i] > 0 ? remaining / segs[i] : 0;
-        light.x = wps[i].x + (wps[i+1].x - wps[i].x) * t;
-        light.y = wps[i].y + (wps[i+1].y - wps[i].y) * t;
-        break;
-      }
-      remaining -= segs[i];
-    }
+    remaining -= segs[i];
   }
 }
 
@@ -4467,13 +4525,11 @@ function updateMovingLights(dt) {
 function drawEditorOverlay() {
   if (gamePhase !== 'editing' || !editorLevel) return;
 
-  // Draw path lines for all lights with paths
-  const lights = staticLights.filter(l => !l._embedded);
-  for (let i = 0; i < lights.length; i++) {
-    const l = lights[i];
-    if (!l.path || !l.path.waypoints || l.path.waypoints.length < 2) continue;
-    const wps = l.path.waypoints;
-    ctx.strokeStyle = 'rgba(0, 188, 212, 0.5)';
+  // Draw path lines for all objects with paths (lights, checkpoints, dangers, goals)
+  function drawObjPath(obj, color) {
+    if (!obj.path || !obj.path.waypoints || obj.path.waypoints.length < 2) return;
+    const wps = obj.path.waypoints;
+    ctx.strokeStyle = color || 'rgba(0, 188, 212, 0.5)';
     ctx.lineWidth = 2 / camZoom;
     ctx.setLineDash([6, 4]);
     ctx.beginPath();
@@ -4481,13 +4537,16 @@ function drawEditorOverlay() {
     for (let j = 1; j < wps.length; j++) ctx.lineTo(wps[j].x, wps[j].y);
     ctx.stroke();
     ctx.setLineDash([]);
-
-    // Waypoint dots
     for (let j = 0; j < wps.length; j++) {
       ctx.fillStyle = j === 0 ? '#4fc3f7' : '#00bcd4';
       ctx.beginPath(); ctx.arc(wps[j].x, wps[j].y, 5 / camZoom, 0, Math.PI * 2); ctx.fill();
     }
   }
+  const lights = staticLights.filter(l => !l._embedded);
+  for (const l of lights) drawObjPath(l, 'rgba(0, 188, 212, 0.5)');
+  for (const cp of editorLevel.checkpoints) drawObjPath(cp, 'rgba(0, 188, 212, 0.4)');
+  for (const dz of editorLevel.dangers) drawObjPath(dz, 'rgba(239, 83, 80, 0.4)');
+  for (const g of editorLevel.goals) drawObjPath(g, 'rgba(76, 175, 80, 0.4)');
 
   // Selection highlight
   if (editorSelected) {
