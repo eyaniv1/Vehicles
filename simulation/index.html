@@ -5212,11 +5212,18 @@ function updateGameState(dt) {
     }
   }
 
-  // On-visit light behaviors
-  const VISIT_RADIUS_SQ = 40 * 40;
+  // On-visit light behaviors — use parent object radius for embedded lights
+  const embeddedArrays = { checkpoint: level.checkpoints, danger: level.dangers, bouncer: level.bouncers, goal: level.goals };
   for (const light of staticLights) {
     if (!light.onVisit || light._visited) continue;
-    if (toroidalDistSq(v.x, v.y, light.x, light.y) < VISIT_RADIUS_SQ) {
+    let visitRadiusSq = 40 * 40; // default for standalone lights
+    if (light._embedded) {
+      const parentArr = embeddedArrays[light._embedded];
+      const parent = parentArr && parentArr[light._embeddedIdx];
+      if (parent && parent.radius) visitRadiusSq = parent.radius * parent.radius;
+      else if (parent && parent.w) visitRadiusSq = ((parent.w + parent.h) / 4) ** 2;
+    }
+    if (toroidalDistSq(v.x, v.y, light.x, light.y) < visitRadiusSq) {
       light._visited = true;
       if (light.onVisit.action === 'off') light.on = false;
       else if (light.onVisit.action === 'changeLuminosity') light.intensity = light.onVisit.newIntensity || 20;
