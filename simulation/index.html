@@ -3324,6 +3324,7 @@ document.getElementById('guide-btn').addEventListener('click', () => {
 let gameMode = false;
 let gamePhase = 'select'; // 'select' | 'briefing' | 'running' | 'ended' | 'editing'
 let gameRunning = false;
+let gamePaused = false;
 let gameElapsed = 0;
 let gameNextCheckpoint = 0;
 let currentLevelIndex = -1;
@@ -4942,6 +4943,7 @@ function buildBriefingPanel(level) {
 function launchLevel() {
   gamePhase = 'running';
   gameRunning = true;
+  gamePaused = false;
   gameElapsed = 0;
   gameNextCheckpoint = 0;
   gameVehicle.running = false; // don't move until gate opens
@@ -4961,17 +4963,29 @@ function buildRunningPanel() {
     <div class="game-status" id="game-status-display">Running...</div>
     ${level.checkpoints.length > 0 ? '<div class="game-checkpoint-counter" id="game-cp-display">Checkpoints: 0 / ' + level.checkpoints.length + '</div>' : ''}
     <div class="game-run-bar">
-      <button class="btn btn-abort" id="game-abort-btn">Abort</button>
+      <button class="btn" id="game-pause-btn" style="background:#f57f17;color:#fff;">Pause</button>
       <button class="btn" id="game-restart-btn" style="background:#37474f;color:#b0bec5;">Restart</button>
+      <button class="btn btn-abort" id="game-abort-btn">Abort</button>
     </div>
   `;
+  document.getElementById('game-pause-btn').addEventListener('click', () => {
+    gamePaused = !gamePaused;
+    gameVehicle.running = !gamePaused;
+    const btn = document.getElementById('game-pause-btn');
+    btn.textContent = gamePaused ? '\u25B6 Resume' : 'Pause';
+    btn.style.background = gamePaused ? '#2e7d32' : '#f57f17';
+    const statusEl = document.getElementById('game-status-display');
+    if (statusEl) statusEl.textContent = gamePaused ? 'Paused' : 'Running...';
+  });
   document.getElementById('game-abort-btn').addEventListener('click', () => {
     gameRunning = false;
+    gamePaused = false;
     gameVehicle.running = false;
     if (level._custom) showBriefing(-1, level);
     else showBriefing(currentLevelIndex);
   });
   document.getElementById('game-restart-btn').addEventListener('click', () => {
+    gamePaused = false;
     restartLevel();
   });
 }
@@ -5099,7 +5113,7 @@ function endGame(outcome, message, stars) {
 
 // --- Game state update (called from loop) ---
 function updateGameState(dt) {
-  if (!gameRunning || !gameVehicle) return;
+  if (!gameRunning || !gameVehicle || gamePaused) return;
 
   gameElapsed += dt;
   const level = currentLevel;
