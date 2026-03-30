@@ -3947,6 +3947,29 @@ function buildEditorPanel() {
   });
   acts.appendChild(saveBtn);
 
+  const saveCopyBtn = document.createElement('button');
+  saveCopyBtn.className = 'btn';
+  saveCopyBtn.style.cssText = 'background:#1565c0;color:#fff;';
+  saveCopyBtn.textContent = '\uD83D\uDCCB Save Copy';
+  saveCopyBtn.addEventListener('click', () => {
+    const nameEl = document.getElementById('editor-level-name');
+    if (nameEl) editorLevel.name = nameEl.value;
+    editorSyncLightsToLevel();
+    const copy = JSON.parse(JSON.stringify(editorLevel));
+    copy.id = 'custom_' + Date.now();
+    copy.name = copy.name + ' (copy)';
+    copy._custom = true;
+    const customs = loadCustomLevels();
+    customs.push(copy);
+    saveCustomLevels(customs);
+    // Switch editor to the new copy
+    editorLevel = copy;
+    const nameInput = document.getElementById('editor-level-name');
+    if (nameInput) nameInput.value = copy.name;
+    alert('Saved as "' + copy.name + '"');
+  });
+  acts.appendChild(saveCopyBtn);
+
   const exportBtn = document.createElement('button');
   exportBtn.className = 'btn';
   exportBtn.style.cssText = 'background:#37474f;color:#b0bec5;';
