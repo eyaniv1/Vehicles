@@ -3775,7 +3775,8 @@ function buildEditorPanel() {
   nameDiv.className = 'editor-props';
   nameDiv.innerHTML = '<label>Level Name</label>';
   const nameInput = document.createElement('input');
-  nameInput.type = 'text'; nameInput.value = editorLevel.name;
+  nameInput.type = 'text'; nameInput.id = 'editor-level-name';
+  nameInput.value = editorLevel.name;
   nameInput.style.cssText = 'width:100%;background:#16213e;color:#e0e0e0;border:1px solid #444;border-radius:4px;padding:5px;font-size:13px;margin-bottom:4px;';
   nameInput.placeholder = 'Enter level name...';
   nameInput.addEventListener('input', () => { editorLevel.name = nameInput.value; });
@@ -3931,13 +3932,16 @@ function buildEditorPanel() {
   saveBtn.className = 'btn btn-save';
   saveBtn.textContent = '\uD83D\uDCBE Save';
   saveBtn.addEventListener('click', () => {
+    // Sync name from input in case events didn't propagate
+    const nameEl = document.getElementById('editor-level-name');
+    if (nameEl) editorLevel.name = nameEl.value;
     editorSyncLightsToLevel();
     const customs = loadCustomLevels();
     const idx = customs.findIndex(c => c.id === editorLevel.id);
     if (idx >= 0) customs[idx] = JSON.parse(JSON.stringify(editorLevel));
     else customs.push(JSON.parse(JSON.stringify(editorLevel)));
     saveCustomLevels(customs);
-    alert('Level saved!');
+    alert('Level "' + editorLevel.name + '" saved!');
   });
   acts.appendChild(saveBtn);
 
