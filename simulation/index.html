@@ -3572,6 +3572,17 @@ document.getElementById('game-toggle-btn').addEventListener('click', () => {
 });
 
 // --- Level select UI ---
+function goToLevelSelect() {
+  gamePhase = 'select';
+  gameRunning = false;
+  currentLevel = null;
+  gameVehicle = null;
+  gameCrashEffect = null;
+  vehicles = [];
+  staticLights = [];
+  buildLevelSelect();
+}
+
 function buildLevelSelect() {
   const panel = document.getElementById('game-panel');
   const progress = loadGameProgress();
@@ -3630,8 +3641,9 @@ function buildLevelSelect() {
           <button class="btn" style="font-size:10px;padding:3px 6px;background:none;color:#c62828;" data-action="del">&times;</button>
         </div>
       `;
-      card.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); enterEditor(cl); });
-      card.querySelector('[data-action="play"]').addEventListener('click', (e) => { e.stopPropagation(); cl._custom = true; showBriefing(-1, cl); });
+      card.addEventListener('click', () => { cl._custom = true; showBriefing(-1, JSON.parse(JSON.stringify(cl))); });
+      card.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); enterEditor(JSON.parse(JSON.stringify(cl))); });
+      card.querySelector('[data-action="play"]').addEventListener('click', (e) => { e.stopPropagation(); cl._custom = true; showBriefing(-1, JSON.parse(JSON.stringify(cl))); });
       card.querySelector('[data-action="del"]').addEventListener('click', (e) => {
         e.stopPropagation();
         const all = loadCustomLevels();
@@ -3755,7 +3767,7 @@ function buildEditorPanel() {
   backBtn.className = 'btn';
   backBtn.textContent = '\u2190 Back to Levels';
   backBtn.style.cssText = 'font-size:12px;padding:6px;background:#37474f;color:#b0bec5;width:100%;';
-  backBtn.addEventListener('click', () => { gamePhase = 'select'; currentLevel = null; editorLevel = null; buildLevelSelect(); });
+  backBtn.addEventListener('click', () => { editorLevel = null; goToLevelSelect(); });
   panel.appendChild(backBtn);
 
   // Level name
@@ -4714,7 +4726,7 @@ function buildBriefingPanel(level) {
   backBtn.style.cssText = 'font-size:12px;padding:6px;background:#37474f;color:#b0bec5;';
   backBtn.addEventListener('click', () => {
     if (level._custom && editorLevel) enterEditor(editorLevel);
-    else { gamePhase = 'select'; buildLevelSelect(); }
+    else goToLevelSelect();
   });
   panel.appendChild(backBtn);
 
@@ -5033,8 +5045,7 @@ function endGame(outcome, message, stars) {
   }
   document.getElementById('result-levels-btn').addEventListener('click', () => {
     overlay.classList.remove('open');
-    gamePhase = 'select';
-    buildLevelSelect();
+    goToLevelSelect();
   });
 }
 
