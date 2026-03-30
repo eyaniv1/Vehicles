@@ -3329,6 +3329,7 @@ let gameElapsed = 0;
 let gameNextCheckpoint = 0;
 let currentLevelIndex = -1;
 let currentLevel = null; // the active level object (built-in or custom)
+let currentLevelSource = null; // unmutated original for abort/retry
 let sandboxSnapshot = null;
 let gameVehicle = null; // the single player vehicle during a game run
 
@@ -3577,6 +3578,7 @@ function goToLevelSelect() {
   gamePhase = 'select';
   gameRunning = false;
   currentLevel = null;
+  currentLevelSource = null;
   gameVehicle = null;
   gameCrashEffect = null;
   vehicles = [];
@@ -4701,7 +4703,8 @@ function drawEditorOverlay() {
 function showBriefing(levelIndex, levelOverride) {
   currentLevelIndex = levelIndex;
   const source = levelOverride || GAME_LEVELS[levelIndex];
-  // Deep-copy so path mutations during gameplay don't affect the source
+  // Store unmutated source for abort/retry; deep-copy for gameplay
+  currentLevelSource = JSON.parse(JSON.stringify(source));
   const level = JSON.parse(JSON.stringify(source));
   currentLevel = level;
   gamePhase = 'briefing';
@@ -4981,7 +4984,7 @@ function buildRunningPanel() {
     gameRunning = false;
     gamePaused = false;
     gameVehicle.running = false;
-    if (level._custom) showBriefing(-1, level);
+    if (currentLevelSource._custom) showBriefing(-1, currentLevelSource);
     else showBriefing(currentLevelIndex);
   });
   document.getElementById('game-restart-btn').addEventListener('click', () => {
@@ -5089,7 +5092,7 @@ function endGame(outcome, message, stars) {
 
   document.getElementById('result-retry-btn').addEventListener('click', () => {
     overlay.classList.remove('open');
-    showBriefing(currentLevelIndex, isCustom ? level : undefined);
+    showBriefing(currentLevelIndex, isCustom ? currentLevelSource : undefined);
   });
   const nextBtn = document.getElementById('result-next-btn');
   if (nextBtn) {
