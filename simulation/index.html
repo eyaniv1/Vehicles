@@ -568,44 +568,174 @@
     border-radius: 8px;
     margin: 10px 0;
   }
+
+  /* --- Game Mode --- */
+  .btn-game-toggle {
+    width: 100%;
+    padding: 10px;
+    border: 2px solid #ff9800;
+    border-radius: 8px;
+    background: transparent;
+    color: #ff9800;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    letter-spacing: 0.5px;
+  }
+  .btn-game-toggle:hover { background: #ff9800; color: #000; }
+  body.game-mode .btn-game-toggle { background: #ff9800; color: #000; border-color: #ff9800; }
+
+  body.game-mode .sandbox-only { display: none !important; }
+  #game-panel { display: none; flex-direction: column; gap: 10px; }
+  body.game-mode #game-panel { display: flex; }
+
+  .game-level-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .level-card {
+    background: #1a1a2e;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px 12px;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .level-card:hover { border-color: #4fc3f7; }
+  .level-card.locked { opacity: 0.4; cursor: default; }
+  .level-card.locked:hover { border-color: #333; }
+  .level-card .level-num {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    background: #37474f;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 14px; color: #4fc3f7;
+    flex-shrink: 0;
+  }
+  .level-card.locked .level-num { color: #555; }
+  .level-card .level-info { flex: 1; min-width: 0; }
+  .level-card .level-name { font-size: 13px; font-weight: 600; color: #e0e0e0; }
+  .level-card.locked .level-name { color: #555; }
+  .level-card .level-tier { font-size: 10px; color: #81d4fa; }
+  .level-card .level-stars { color: #ff9800; font-size: 14px; letter-spacing: 2px; }
+  .level-card .level-stars .empty { color: #333; }
+
+  .game-briefing { background: #1a1a2e; border-radius: 8px; padding: 14px; }
+  .game-briefing h3 { color: #ff9800; font-size: 15px; margin: 0 0 4px; }
+  .game-briefing .tier-badge {
+    display: inline-block; font-size: 10px; padding: 2px 8px;
+    border-radius: 10px; background: #37474f; color: #81d4fa; margin-bottom: 8px;
+  }
+  .game-briefing p { font-size: 12px; color: #b0bec5; margin: 6px 0; line-height: 1.5; }
+  .game-briefing .hint { color: #ffcc80; font-style: italic; font-size: 11px; margin-top: 8px; }
+
+  .game-config { background: #16213e; border: 1px solid #333; border-radius: 8px; padding: 10px; }
+  .game-config label { font-size: 11px; color: #81d4fa; display: block; margin-bottom: 4px; }
+  .game-config select, .game-config input[type=range] {
+    width: 100%; margin-bottom: 8px;
+    background: #1a1a2e; color: #e0e0e0; border: 1px solid #444;
+    border-radius: 4px; padding: 4px; font-size: 12px;
+  }
+  .game-config .locked-field {
+    opacity: 0.4; pointer-events: none;
+  }
+
+  .game-run-bar {
+    display: flex; gap: 6px;
+  }
+  .game-run-bar .btn { flex: 1; }
+
+  .btn-launch {
+    background: #4caf50 !important; color: #fff !important;
+    font-weight: 700; font-size: 14px; padding: 10px;
+  }
+  .btn-launch:hover { background: #66bb6a !important; }
+
+  .btn-abort { background: #c62828 !important; color: #fff !important; }
+  .btn-abort:hover { background: #e53935 !important; }
+
+  .game-timer {
+    text-align: center; font-size: 28px; font-weight: 700;
+    color: #4fc3f7; font-family: monospace; padding: 4px 0;
+  }
+  .game-timer.warning { color: #ff9800; }
+  .game-timer.critical { color: #ef5350; }
+
+  .game-status {
+    text-align: center; font-size: 12px; color: #b0bec5; padding: 2px 0;
+  }
+  .game-checkpoint-counter {
+    text-align: center; font-size: 12px; color: #00bcd4; padding: 2px 0;
+  }
+
+  .game-result-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 2000;
+    justify-content: center; align-items: center;
+  }
+  .game-result-overlay.open { display: flex; }
+  .game-result-box {
+    background: #16213e; border: 2px solid #333; border-radius: 16px;
+    padding: 32px 40px; text-align: center; max-width: 360px;
+  }
+  .game-result-box h2 { margin: 0 0 8px; font-size: 22px; }
+  .game-result-box h2.win { color: #4caf50; }
+  .game-result-box h2.fail { color: #ef5350; }
+  .game-result-box .result-stars { font-size: 36px; color: #ff9800; letter-spacing: 6px; margin: 12px 0; }
+  .game-result-box .result-stars .empty { color: #333; }
+  .game-result-box .result-time { font-size: 16px; color: #b0bec5; margin: 8px 0 16px; }
+  .game-result-box .result-msg { font-size: 13px; color: #81d4fa; margin-bottom: 16px; }
+  .game-result-btns { display: flex; gap: 8px; justify-content: center; }
+  .game-result-btns .btn { min-width: 100px; }
 </style>
 </head>
 <body>
 
 <div id="controls">
   <h1>Braitenberg Vehicles</h1>
-  <div class="btn-row">
+  <button class="btn-game-toggle" id="game-toggle-btn">&#9889; Challenge Mode</button>
+
+  <div class="btn-row sandbox-only">
     <button class="btn btn-guide" id="guide-btn">Getting Started</button>
     <button class="btn btn-ref" id="ref-btn">Reference</button>
   </div>
 
-  <h2>Simulation</h2>
-  <div class="btn-row">
+  <!-- Game Mode Panel (hidden in sandbox) -->
+  <div id="game-panel"></div>
+
+  <h2 class="sandbox-only">Simulation</h2>
+  <div class="btn-row sandbox-only">
     <button class="btn btn-stop" id="stop-btn">Stop All</button>
     <button class="btn btn-reset" id="reset-btn">Reset All</button>
   </div>
-  <div class="slider-row">
+  <div class="slider-row sandbox-only">
     <label>World Size</label>
     <select id="world-size-select" style="background:#16213e;color:#e0e0e0;border:1px solid #444;border-radius:4px;padding:4px;font-size:12px;cursor:pointer;"></select>
   </div>
-  <button class="btn btn-record" id="record-btn">Record Video</button>
+  <button class="btn btn-record sandbox-only" id="record-btn">Record Video</button>
 
-  <h2>Vehicles</h2>
-  <button class="btn btn-add" id="add-vehicle-btn">+ Add Vehicle</button>
-  <div id="vehicle-list"></div>
+  <h2 class="sandbox-only">Vehicles</h2>
+  <button class="btn btn-add sandbox-only" id="add-vehicle-btn">+ Add Vehicle</button>
+  <div id="vehicle-list" class="sandbox-only"></div>
 
-  <h2>Presets</h2>
-  <button class="btn btn-preset" id="social-btn">Social Mode: Lights + Side Fear</button>
-  <div class="preset-grid">
+  <h2 class="sandbox-only">Presets</h2>
+  <button class="btn btn-preset sandbox-only" id="social-btn">Social Mode: Lights + Side Fear</button>
+  <div class="preset-grid sandbox-only">
     <button class="btn btn-preset" id="preset-focused">Focused Hunter</button>
     <button class="btn btn-preset" id="preset-edge">Edge Follower</button>
     <button class="btn btn-preset" id="preset-cautious">Cautious Social</button>
     <button class="btn btn-preset" id="preset-swarm">Swarm</button>
   </div>
 
-  <h2>Selected Vehicle</h2>
-  <div class="readout-vehicle-name" id="readout-name">--</div>
-  <div class="sensor-readout">
+  <h2 class="sandbox-only">Selected Vehicle</h2>
+  <div class="readout-vehicle-name sandbox-only" id="readout-name">--</div>
+  <div class="sensor-readout sandbox-only">
     <div>
       <div class="label">Left Eye</div>
       <div class="value" id="sensor-l">0</div>
@@ -615,7 +745,7 @@
       <div class="value" id="sensor-r">0</div>
     </div>
   </div>
-  <div class="sensor-readout" style="margin-top: 4px;" id="side-readout">
+  <div class="sensor-readout sandbox-only" style="margin-top: 4px;" id="side-readout">
     <div>
       <div class="label">Side L</div>
       <div class="value" id="sensor-sl">0</div>
@@ -625,7 +755,7 @@
       <div class="value" id="sensor-sr">0</div>
     </div>
   </div>
-  <div class="sensor-readout" style="margin-top: 4px;">
+  <div class="sensor-readout sandbox-only" style="margin-top: 4px;">
     <div class="motor-l">
       <div class="label">Left Motor</div>
       <div class="value" id="motor-l">0</div>
@@ -636,8 +766,8 @@
     </div>
   </div>
 
-  <h2>Static Lights</h2>
-  <p class="info-text">
+  <h2 class="sandbox-only">Static Lights</h2>
+  <p class="info-text sandbox-only">
     Double-click/tap canvas to add a light.<br>
     Click/tap light to toggle. Drag to move.<br>
     Right-click or long-press for intensity / delete.<br>
@@ -749,6 +879,11 @@
     <canvas class="ref-diagram" id="ref-diagram-gates" width="580" height="160"></canvas>
     <p>Gates let you create complex behaviors: an AND gate makes a vehicle ignore peripheral light; an XOR gate makes it follow light boundaries instead of heading to the center.</p>
   </div>
+</div>
+
+<!-- Game result overlay -->
+<div class="game-result-overlay" id="game-result-overlay">
+  <div class="game-result-box" id="game-result-box"></div>
 </div>
 
 <div id="canvas-container">
@@ -1612,6 +1747,7 @@ function draw() {
   drawLightGradients();
   for (const v of vehicles) drawTrail(v);
   drawStaticLights();
+  if (gameMode) drawGameObjects();
   for (const v of vehicles) drawVehicle(v);
 
   ctx.restore();
@@ -1899,6 +2035,7 @@ function loop(timestamp) {
       if (v.running) stepVehicle(v, baseDt * v.simSpeed);
     }
   }
+  if (gameMode && gameRunning) updateGameState(baseDt);
   draw();
   drawAllInlineSchematics();
   requestAnimationFrame(loop);
@@ -2455,7 +2592,7 @@ canvas.addEventListener('mousedown', (e) => {
   closePopup();
   const pos = canvasCoords(e);
   mouseDownPos = pos;
-  const hit = staticLightAt(pos.x, pos.y);
+  const hit = (gameMode && gameRunning) ? null : staticLightAt(pos.x, pos.y);
   if (hit) {
     // Drag the light
     dragging = hit;
@@ -2496,7 +2633,7 @@ canvas.addEventListener('mouseup', (e) => {
     return;
   }
   if (e.button !== 0) return;
-  if (dragging && !dragStarted) {
+  if (dragging && !dragStarted && !gameMode) {
     dragging.on = !dragging.on;
   }
   dragging = null;
@@ -2521,6 +2658,7 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 canvas.addEventListener('dblclick', (e) => {
+  if (gameMode) return; // no light creation in game mode
   const pos = canvasCoords(e);
   if (!staticLightAt(pos.x, pos.y)) {
     createStaticLight(pos.x, pos.y);
@@ -2529,6 +2667,7 @@ canvas.addEventListener('dblclick', (e) => {
 
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
+  if (gameMode) return;
   const pos = canvasCoords(e);
   const hit = staticLightAt(pos.x, pos.y);
   if (hit) {
@@ -3063,6 +3202,745 @@ function attachBubbleEvents(bubble, index) {
 document.getElementById('guide-btn').addEventListener('click', () => {
   showTutorialStep(0);
 });
+
+// =============================================
+// --- CHALLENGE MODE ---
+// =============================================
+
+let gameMode = false;
+let gamePhase = 'select'; // 'select' | 'briefing' | 'running' | 'ended'
+let gameRunning = false;
+let gameElapsed = 0;
+let gameNextCheckpoint = 0;
+let currentLevelIndex = -1;
+let sandboxSnapshot = null;
+let gameVehicle = null; // the single player vehicle during a game run
+
+// Progress stored in localStorage
+function loadGameProgress() {
+  try {
+    const raw = localStorage.getItem('braitenberg-game-progress');
+    return raw ? JSON.parse(raw) : { unlockedLevel: 1, stars: {} };
+  } catch { return { unlockedLevel: 1, stars: {} }; }
+}
+function saveGameProgress(progress) {
+  localStorage.setItem('braitenberg-game-progress', JSON.stringify(progress));
+}
+
+// --- Level definitions ---
+const GAME_LEVELS = [
+  {
+    id: 1, name: 'First Light', tier: 1,
+    description: 'A single beacon glows in the distance. Configure a vehicle that approaches light.',
+    briefing: 'The goal marker pulses green near the light. Pick a vehicle type that is attracted to light and hit Launch.',
+    hint: 'Try V2b Aggression — it steers toward light sources.',
+    worldSize: { w: 1200, h: 800 },
+    lights: [{ x: 900, y: 400, intensity: 75, on: true }],
+    startPos: { x: 200, y: 400, theta: 0 },
+    allowedConfig: { typeSelect: true, frontGate: false, sideEnabled: false, speed: false, contrast: false, light: false },
+    lockedDefaults: { simSpeed: 1, speedContrast: 50 },
+    goals: [{ type: 'reach', x: 900, y: 400, radius: 60, label: 'Goal' }],
+    dangers: [], checkpoints: [],
+    timeLimit: 30,
+    stars: { three: 8, two: 15, one: 30 },
+  },
+  {
+    id: 2, name: 'The Wrong Way', tier: 1,
+    description: 'The light is a trap — your goal is on the opposite side. Find a vehicle that flees.',
+    briefing: 'A bright light sits above your vehicle, but the goal is below. You need a vehicle type that runs away from light.',
+    hint: 'V2a Fear has direct wiring with excitatory response — it turns away from light and accelerates.',
+    worldSize: { w: 1200, h: 800 },
+    lights: [{ x: 600, y: 100, intensity: 90, on: true }],
+    startPos: { x: 600, y: 350, theta: Math.PI / 2 },
+    allowedConfig: { typeSelect: true, frontGate: false, sideEnabled: false, speed: false, contrast: false, light: false },
+    lockedDefaults: { simSpeed: 1, speedContrast: 50 },
+    goals: [{ type: 'reach', x: 600, y: 700, radius: 60, label: 'Goal' }],
+    dangers: [], checkpoints: [],
+    timeLimit: 30,
+    stars: { three: 8, two: 15, one: 30 },
+  },
+  {
+    id: 3, name: 'Bright Not Dim', tier: 1,
+    description: 'Two lights — one dim decoy, one bright target. Use a gate to ignore weak signals.',
+    briefing: 'A dim light sits between you and the bright goal. A Threshold gate can filter out weak light so your vehicle ignores the decoy.',
+    hint: 'Use V2b Aggression with a Threshold front gate. Set threshold around 25-35.',
+    worldSize: { w: 1200, h: 800 },
+    lights: [
+      { x: 450, y: 400, intensity: 25, on: true },
+      { x: 950, y: 400, intensity: 85, on: true },
+    ],
+    startPos: { x: 100, y: 400, theta: 0 },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: false, speed: false, contrast: false, light: false },
+    lockedDefaults: { simSpeed: 1, speedContrast: 50 },
+    goals: [{ type: 'reach', x: 950, y: 400, radius: 60, label: 'Goal' }],
+    dangers: [], checkpoints: [],
+    timeLimit: 40,
+    stars: { three: 12, two: 25, one: 40 },
+  },
+  {
+    id: 4, name: 'Slalom', tier: 2,
+    description: 'Visit three checkpoints near lights in order, then reach the finish.',
+    briefing: 'Three lights form a zigzag path. Your vehicle must pass near each checkpoint (cyan circles, numbered) in order before reaching the green goal.',
+    hint: 'V2b Aggression with some speed should naturally chase each light in sequence. Adjust contrast for sharper turns.',
+    worldSize: { w: 1600, h: 800 },
+    lights: [
+      { x: 400, y: 250, intensity: 70, on: true },
+      { x: 800, y: 550, intensity: 70, on: true },
+      { x: 1200, y: 250, intensity: 70, on: true },
+    ],
+    startPos: { x: 100, y: 400, theta: 0 },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: false, speed: true, contrast: true, light: false },
+    lockedDefaults: {},
+    checkpoints: [
+      { x: 400, y: 250, radius: 55 },
+      { x: 800, y: 550, radius: 55 },
+      { x: 1200, y: 250, radius: 55 },
+    ],
+    goals: [{ type: 'reach', x: 1500, y: 400, radius: 60, label: 'Finish' }],
+    dangers: [],
+    timeLimit: 60,
+    stars: { three: 20, two: 35, one: 60 },
+  },
+  {
+    id: 5, name: 'Danger Corridor', tier: 2,
+    description: 'Navigate through danger zones to reach the beacon. One wrong move and it\'s over.',
+    briefing: 'Red zones are deadly. The light at the end guides you, but the path is narrow. Tune your vehicle to steer accurately.',
+    hint: 'V2b Aggression with moderate contrast helps steer precisely. Too much speed and you may overshoot into danger.',
+    worldSize: { w: 1400, h: 800 },
+    lights: [{ x: 1200, y: 400, intensity: 80, on: true }],
+    startPos: { x: 150, y: 400, theta: 0 },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: false, speed: true, contrast: true, light: false },
+    lockedDefaults: {},
+    goals: [{ type: 'reach', x: 1200, y: 400, radius: 60, label: 'Goal' }],
+    checkpoints: [],
+    dangers: [
+      { shape: 'rect', x: 350, y: 0, w: 200, h: 300 },
+      { shape: 'rect', x: 350, y: 500, w: 200, h: 300 },
+      { shape: 'rect', x: 700, y: 150, w: 200, h: 250 },
+      { shape: 'rect', x: 700, y: 500, w: 200, h: 250 },
+    ],
+    timeLimit: 45,
+    stars: { three: 15, two: 28, one: 45 },
+  },
+  {
+    id: 6, name: 'Light Hop', tier: 2,
+    description: 'Three lights in a triangle. Visit all checkpoints — your vehicle must hop between them.',
+    briefing: 'Lights form a wide triangle. The vehicle must visit each checkpoint then reach the center goal. Explorer-type vehicles may curve between them naturally.',
+    hint: 'Try V3b Explorer — it approaches light but veers away up close, naturally hopping to the next source.',
+    worldSize: { w: 1600, h: 1000 },
+    lights: [
+      { x: 300, y: 200, intensity: 70, on: true },
+      { x: 1300, y: 200, intensity: 70, on: true },
+      { x: 800, y: 800, intensity: 70, on: true },
+    ],
+    startPos: { x: 100, y: 500, theta: -0.5 },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: false },
+    lockedDefaults: {},
+    checkpoints: [
+      { x: 300, y: 200, radius: 60 },
+      { x: 1300, y: 200, radius: 60 },
+      { x: 800, y: 800, radius: 60 },
+    ],
+    goals: [{ type: 'reach', x: 800, y: 400, radius: 70, label: 'Finish' }],
+    dangers: [],
+    timeLimit: 90,
+    stars: { three: 30, two: 55, one: 90 },
+  },
+  {
+    id: 7, name: 'The Gauntlet', tier: 3,
+    description: 'Everything at once — danger zones, checkpoints, multiple lights, and a tight time limit.',
+    briefing: 'Navigate a complex environment with obstacles, decoys, and checkpoints. Use everything you\'ve learned: vehicle type, gates, speed, contrast, and side sensors.',
+    hint: 'Full configuration is unlocked. Combine V2b with threshold gates to ignore dim decoys, and tune contrast/speed for precise navigation.',
+    worldSize: { w: 2000, h: 1200 },
+    lights: [
+      { x: 500, y: 300, intensity: 30, on: true },
+      { x: 800, y: 900, intensity: 75, on: true },
+      { x: 1400, y: 300, intensity: 80, on: true },
+      { x: 1700, y: 800, intensity: 85, on: true },
+    ],
+    startPos: { x: 150, y: 600, theta: 0 },
+    allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
+    lockedDefaults: {},
+    checkpoints: [
+      { x: 800, y: 900, radius: 60 },
+      { x: 1400, y: 300, radius: 60 },
+    ],
+    goals: [{ type: 'reach', x: 1700, y: 800, radius: 70, label: 'Finish' }],
+    dangers: [
+      { shape: 'rect', x: 600, y: 0, w: 120, h: 500 },
+      { shape: 'rect', x: 1100, y: 500, w: 120, h: 700 },
+      { shape: 'circle', x: 500, y: 300, radius: 80 },
+    ],
+    timeLimit: 90,
+    stars: { three: 35, two: 55, one: 90 },
+  },
+];
+
+// --- Enter / Exit game mode ---
+function enterGameMode() {
+  gameMode = true;
+  document.body.classList.add('game-mode');
+  // Save sandbox state
+  sandboxSnapshot = {
+    vehicles: JSON.parse(JSON.stringify(vehicles)),
+    staticLights: JSON.parse(JSON.stringify(staticLights)),
+    camX, camY, camZoom, stopped, selectedVehicleId, nextVehicleId, nextLightId, colorIndex,
+    WORLD_W, WORLD_H, worldSizeIndex,
+  };
+  vehicles = [];
+  staticLights = [];
+  gamePhase = 'select';
+  gameRunning = false;
+  gameVehicle = null;
+  buildLevelSelect();
+  document.getElementById('game-toggle-btn').textContent = '\u2190 Back to Sandbox';
+}
+
+function exitGameMode() {
+  gameMode = false;
+  gameRunning = false;
+  gamePhase = 'select';
+  document.body.classList.remove('game-mode');
+  document.getElementById('game-result-overlay').classList.remove('open');
+  // Restore sandbox state
+  if (sandboxSnapshot) {
+    vehicles = sandboxSnapshot.vehicles;
+    staticLights = sandboxSnapshot.staticLights;
+    camX = sandboxSnapshot.camX;
+    camY = sandboxSnapshot.camY;
+    camZoom = sandboxSnapshot.camZoom;
+    stopped = sandboxSnapshot.stopped;
+    selectedVehicleId = sandboxSnapshot.selectedVehicleId;
+    nextVehicleId = sandboxSnapshot.nextVehicleId;
+    nextLightId = sandboxSnapshot.nextLightId;
+    colorIndex = sandboxSnapshot.colorIndex;
+    WORLD_W = sandboxSnapshot.WORLD_W;
+    WORLD_H = sandboxSnapshot.WORLD_H;
+    worldSizeIndex = sandboxSnapshot.worldSizeIndex;
+    sandboxSnapshot = null;
+  }
+  buildVehicleCards();
+  updateReadoutName();
+  document.getElementById('game-toggle-btn').textContent = '\u26A1 Challenge Mode';
+}
+
+document.getElementById('game-toggle-btn').addEventListener('click', () => {
+  if (gameMode) exitGameMode();
+  else enterGameMode();
+});
+
+// --- Level select UI ---
+function buildLevelSelect() {
+  const panel = document.getElementById('game-panel');
+  const progress = loadGameProgress();
+  panel.innerHTML = '<h2 style="color:#ff9800;margin:0;">Challenge Mode</h2><p style="font-size:12px;color:#b0bec5;margin:0;">Design a vehicle. Solve the puzzle.</p>';
+  const grid = document.createElement('div');
+  grid.className = 'game-level-grid';
+
+  GAME_LEVELS.forEach((level, i) => {
+    const unlocked = (i + 1) <= progress.unlockedLevel;
+    const card = document.createElement('div');
+    card.className = 'level-card' + (unlocked ? '' : ' locked');
+    const earnedStars = progress.stars[level.id] || 0;
+    const starsHTML = [1, 2, 3].map(s => s <= earnedStars ? '\u2605' : '<span class="empty">\u2605</span>').join('');
+    card.innerHTML = `
+      <div class="level-num">${unlocked ? level.id : '\uD83D\uDD12'}</div>
+      <div class="level-info">
+        <div class="level-name">${level.name}</div>
+        <div class="level-tier">Tier ${level.tier}</div>
+      </div>
+      <div class="level-stars">${unlocked ? starsHTML : ''}</div>
+    `;
+    if (unlocked) {
+      card.addEventListener('click', () => showBriefing(i));
+    }
+    grid.appendChild(card);
+  });
+  panel.appendChild(grid);
+}
+
+// --- Briefing / configurator ---
+function showBriefing(levelIndex) {
+  currentLevelIndex = levelIndex;
+  const level = GAME_LEVELS[levelIndex];
+  gamePhase = 'briefing';
+
+  // Set up the world
+  WORLD_W = level.worldSize.w;
+  WORLD_H = level.worldSize.h;
+  staticLights = level.lights.map(l => ({ id: nextLightId++, x: l.x, y: l.y, on: l.on, intensity: l.intensity }));
+  vehicles = [];
+  stopped = false;
+
+  // Create the player vehicle at start position
+  const v = createVehicle(2); // default Aggression
+  v.x = level.startPos.x;
+  v.y = level.startPos.y;
+  v.theta = level.startPos.theta;
+  v.running = false;
+  v.trail = [];
+  gameVehicle = v;
+
+  // Apply locked defaults
+  if (level.lockedDefaults.simSpeed != null) v.simSpeed = level.lockedDefaults.simSpeed;
+  if (level.lockedDefaults.speedContrast != null) v.speedContrast = level.lockedDefaults.speedContrast;
+
+  // Center camera on the level
+  camZoom = Math.min(canvas.width / WORLD_W, canvas.height / WORLD_H);
+  camX = 0;
+  camY = 0;
+  clampCamera();
+
+  gameNextCheckpoint = 0;
+  gameElapsed = 0;
+  gameRunning = false;
+
+  buildBriefingPanel(level);
+}
+
+function buildBriefingPanel(level) {
+  const panel = document.getElementById('game-panel');
+  const ac = level.allowedConfig;
+  panel.innerHTML = '';
+
+  // Back button
+  const backBtn = document.createElement('button');
+  backBtn.className = 'btn';
+  backBtn.textContent = '\u2190 Back to Levels';
+  backBtn.style.cssText = 'font-size:12px;padding:6px;background:#37474f;color:#b0bec5;';
+  backBtn.addEventListener('click', () => { gamePhase = 'select'; buildLevelSelect(); });
+  panel.appendChild(backBtn);
+
+  // Briefing
+  const brief = document.createElement('div');
+  brief.className = 'game-briefing';
+  brief.innerHTML = `
+    <h3>Level ${level.id}: ${level.name}</h3>
+    <span class="tier-badge">Tier ${level.tier}</span>
+    <p>${level.briefing}</p>
+    ${level.checkpoints.length > 0 ? '<p>Visit <b>' + level.checkpoints.length + ' checkpoint' + (level.checkpoints.length > 1 ? 's' : '') + '</b> in order, then reach the goal.</p>' : ''}
+    ${level.dangers.length > 0 ? '<p style="color:#ef5350;">Avoid the red danger zones!</p>' : ''}
+    <p style="color:#81d4fa;">Time limit: <b>${level.timeLimit}s</b></p>
+    ${level.hint ? '<div class="hint">\uD83D\uDCA1 ' + level.hint + '</div>' : ''}
+  `;
+  panel.appendChild(brief);
+
+  // Configurator
+  const config = document.createElement('div');
+  config.className = 'game-config';
+  config.innerHTML = '<label style="font-size:13px;color:#ff9800;font-weight:600;margin-bottom:8px;">Configure Your Vehicle</label>';
+
+  // Vehicle type
+  const typeDiv = document.createElement('div');
+  typeDiv.className = ac.typeSelect ? '' : 'locked-field';
+  typeDiv.innerHTML = '<label>Vehicle Type</label>';
+  const typeSel = document.createElement('select');
+  VEHICLE_TYPES.forEach((t, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = t.name;
+    if (i === gameVehicle.typeIndex) opt.selected = true;
+    typeSel.appendChild(opt);
+  });
+  typeSel.addEventListener('change', () => {
+    gameVehicle.typeIndex = parseInt(typeSel.value);
+    gameVehicle.trail = [];
+  });
+  typeDiv.appendChild(typeSel);
+  config.appendChild(typeDiv);
+
+  // Front gate
+  const gateDiv = document.createElement('div');
+  gateDiv.className = ac.frontGate ? '' : 'locked-field';
+  gateDiv.innerHTML = '<label>Front Gate</label>';
+  const gateSel = document.createElement('select');
+  GATE_TYPES.forEach((g, i) => {
+    const opt = document.createElement('option');
+    opt.value = i; opt.textContent = g.name;
+    if (i === gameVehicle.gate.front.type) opt.selected = true;
+    gateSel.appendChild(opt);
+  });
+  gateSel.addEventListener('change', () => { gameVehicle.gate.front.type = parseInt(gateSel.value); });
+  gateDiv.appendChild(gateSel);
+
+  // Threshold + sharpness for front gate
+  const threshDiv = document.createElement('div');
+  threshDiv.innerHTML = '<label>Threshold: <span id="game-thresh-val">' + gameVehicle.gate.front.threshold + '</span></label>';
+  const threshSlider = document.createElement('input');
+  threshSlider.type = 'range'; threshSlider.min = 0; threshSlider.max = 80; threshSlider.value = gameVehicle.gate.front.threshold;
+  threshSlider.addEventListener('input', () => {
+    gameVehicle.gate.front.threshold = parseInt(threshSlider.value);
+    threshDiv.querySelector('span').textContent = threshSlider.value;
+  });
+  threshDiv.appendChild(threshSlider);
+  gateDiv.appendChild(threshDiv);
+
+  const sharpDiv = document.createElement('div');
+  sharpDiv.innerHTML = '<label>Sharpness: <span id="game-sharp-val">' + gameVehicle.gate.front.sharpness + '</span></label>';
+  const sharpSlider = document.createElement('input');
+  sharpSlider.type = 'range'; sharpSlider.min = 1; sharpSlider.max = 20; sharpSlider.value = gameVehicle.gate.front.sharpness;
+  sharpSlider.addEventListener('input', () => {
+    gameVehicle.gate.front.sharpness = parseInt(sharpSlider.value);
+    sharpDiv.querySelector('span').textContent = sharpSlider.value;
+  });
+  sharpDiv.appendChild(sharpSlider);
+  gateDiv.appendChild(sharpDiv);
+  config.appendChild(gateDiv);
+
+  // Speed
+  const speedDiv = document.createElement('div');
+  speedDiv.className = ac.speed ? '' : 'locked-field';
+  speedDiv.innerHTML = '<label>Speed: <span id="game-speed-val">' + gameVehicle.simSpeed + 'x</span></label>';
+  const speedSlider = document.createElement('input');
+  speedSlider.type = 'range'; speedSlider.min = 1; speedSlider.max = 5; speedSlider.value = gameVehicle.simSpeed;
+  speedSlider.addEventListener('input', () => {
+    gameVehicle.simSpeed = parseInt(speedSlider.value);
+    speedDiv.querySelector('span').textContent = speedSlider.value + 'x';
+  });
+  speedDiv.appendChild(speedSlider);
+  config.appendChild(speedDiv);
+
+  // Contrast
+  const contrastDiv = document.createElement('div');
+  contrastDiv.className = ac.contrast ? '' : 'locked-field';
+  contrastDiv.innerHTML = '<label>Contrast: <span id="game-contrast-val">' + gameVehicle.speedContrast + '</span></label>';
+  const contrastSlider = document.createElement('input');
+  contrastSlider.type = 'range'; contrastSlider.min = 0; contrastSlider.max = 100; contrastSlider.value = gameVehicle.speedContrast;
+  contrastSlider.addEventListener('input', () => {
+    gameVehicle.speedContrast = parseInt(contrastSlider.value);
+    contrastDiv.querySelector('span').textContent = contrastSlider.value;
+  });
+  contrastDiv.appendChild(contrastSlider);
+  config.appendChild(contrastDiv);
+
+  // Side sensors
+  if (ac.sideEnabled) {
+    const sideDiv = document.createElement('div');
+    sideDiv.innerHTML = '<label><input type="checkbox" id="game-side-check"' + (gameVehicle.sidePair.enabled ? ' checked' : '') + '> Enable Side Sensors</label>';
+    const sideCheck = sideDiv.querySelector('input');
+
+    const sideBehaviorDiv = document.createElement('div');
+    sideBehaviorDiv.innerHTML = '<label>Side Behavior</label>';
+    const sideSel = document.createElement('select');
+    VEHICLE_TYPES.forEach((t, i) => {
+      if (t.sensors < 2) return;
+      const opt = document.createElement('option');
+      opt.value = i; opt.textContent = t.name;
+      if (i === gameVehicle.sidePair.behaviorIndex) opt.selected = true;
+      sideSel.appendChild(opt);
+    });
+    sideSel.addEventListener('change', () => { gameVehicle.sidePair.behaviorIndex = parseInt(sideSel.value); });
+    sideBehaviorDiv.appendChild(sideSel);
+
+    const blendDiv = document.createElement('div');
+    blendDiv.innerHTML = '<label>Blend: <span>' + gameVehicle.sidePair.weight + '%</span></label>';
+    const blendSlider = document.createElement('input');
+    blendSlider.type = 'range'; blendSlider.min = 0; blendSlider.max = 100; blendSlider.value = gameVehicle.sidePair.weight;
+    blendSlider.addEventListener('input', () => {
+      gameVehicle.sidePair.weight = parseInt(blendSlider.value);
+      blendDiv.querySelector('span').textContent = blendSlider.value + '%';
+    });
+    blendDiv.appendChild(blendSlider);
+
+    function updateSideVisibility() {
+      gameVehicle.sidePair.enabled = sideCheck.checked;
+      sideBehaviorDiv.style.display = sideCheck.checked ? '' : 'none';
+      blendDiv.style.display = sideCheck.checked ? '' : 'none';
+    }
+    sideCheck.addEventListener('change', updateSideVisibility);
+
+    sideDiv.appendChild(sideBehaviorDiv);
+    sideDiv.appendChild(blendDiv);
+    config.appendChild(sideDiv);
+    updateSideVisibility();
+  }
+
+  // Vehicle light
+  if (ac.light) {
+    const lightDiv = document.createElement('div');
+    lightDiv.innerHTML = '<label><input type="checkbox" id="game-light-check"' + (gameVehicle.light.on ? ' checked' : '') + '> Vehicle Light</label>';
+    lightDiv.querySelector('input').addEventListener('change', (e) => { gameVehicle.light.on = e.target.checked; });
+    config.appendChild(lightDiv);
+  }
+
+  panel.appendChild(config);
+
+  // Launch button
+  const launchBtn = document.createElement('button');
+  launchBtn.className = 'btn btn-launch';
+  launchBtn.textContent = '\u25B6 Launch';
+  launchBtn.addEventListener('click', () => launchLevel());
+  panel.appendChild(launchBtn);
+}
+
+// --- Launch & run ---
+function launchLevel() {
+  gamePhase = 'running';
+  gameRunning = true;
+  gameElapsed = 0;
+  gameNextCheckpoint = 0;
+  gameVehicle.running = true;
+  gameVehicle.trail = [];
+  buildRunningPanel();
+}
+
+function buildRunningPanel() {
+  const panel = document.getElementById('game-panel');
+  const level = GAME_LEVELS[currentLevelIndex];
+  panel.innerHTML = `
+    <h2 style="color:#ff9800;margin:0;">Level ${level.id}: ${level.name}</h2>
+    <div class="game-timer" id="game-timer-display">0.0s</div>
+    <div class="game-status" id="game-status-display">Running...</div>
+    ${level.checkpoints.length > 0 ? '<div class="game-checkpoint-counter" id="game-cp-display">Checkpoints: 0 / ' + level.checkpoints.length + '</div>' : ''}
+    <div class="game-run-bar">
+      <button class="btn btn-abort" id="game-abort-btn">Abort</button>
+      <button class="btn" id="game-restart-btn" style="background:#37474f;color:#b0bec5;">Restart</button>
+    </div>
+  `;
+  document.getElementById('game-abort-btn').addEventListener('click', () => {
+    gameRunning = false;
+    gameVehicle.running = false;
+    showBriefing(currentLevelIndex);
+  });
+  document.getElementById('game-restart-btn').addEventListener('click', () => {
+    restartLevel();
+  });
+}
+
+function restartLevel() {
+  const level = GAME_LEVELS[currentLevelIndex];
+  gameVehicle.x = level.startPos.x;
+  gameVehicle.y = level.startPos.y;
+  gameVehicle.theta = level.startPos.theta;
+  gameVehicle.trail = [];
+  gameVehicle.leftSpeed = 0;
+  gameVehicle.rightSpeed = 0;
+  gameElapsed = 0;
+  gameNextCheckpoint = 0;
+  gameRunning = true;
+  gameVehicle.running = true;
+}
+
+// --- Win / Fail ---
+function calcStars(elapsed, thresholds) {
+  if (elapsed <= thresholds.three) return 3;
+  if (elapsed <= thresholds.two) return 2;
+  if (elapsed <= thresholds.one) return 1;
+  return 0;
+}
+
+function endGame(outcome, message, stars) {
+  gameRunning = false;
+  gamePhase = 'ended';
+  gameVehicle.running = false;
+
+  const level = GAME_LEVELS[currentLevelIndex];
+  const overlay = document.getElementById('game-result-overlay');
+  const box = document.getElementById('game-result-box');
+
+  const isWin = outcome === 'win';
+  const starsEarned = isWin ? (stars || 0) : 0;
+  const starsHTML = [1, 2, 3].map(s => s <= starsEarned ? '\u2605' : '<span class="empty">\u2605</span>').join('');
+
+  // Update progress
+  if (isWin) {
+    const progress = loadGameProgress();
+    const prev = progress.stars[level.id] || 0;
+    if (starsEarned > prev) progress.stars[level.id] = starsEarned;
+    if (currentLevelIndex + 2 > progress.unlockedLevel) {
+      progress.unlockedLevel = Math.min(currentLevelIndex + 2, GAME_LEVELS.length);
+    }
+    saveGameProgress(progress);
+  }
+
+  box.innerHTML = `
+    <h2 class="${isWin ? 'win' : 'fail'}">${isWin ? 'Success!' : 'Failed'}</h2>
+    <div class="result-stars">${starsHTML}</div>
+    <div class="result-time">${gameElapsed.toFixed(1)}s</div>
+    <div class="result-msg">${message}</div>
+    <div class="result-btns">
+      <button class="btn" id="result-retry-btn" style="background:#37474f;color:#b0bec5;">Retry</button>
+      ${isWin && currentLevelIndex < GAME_LEVELS.length - 1 ? '<button class="btn btn-launch" id="result-next-btn">Next Level</button>' : ''}
+      <button class="btn" id="result-levels-btn" style="background:#37474f;color:#b0bec5;">Levels</button>
+    </div>
+  `;
+  overlay.classList.add('open');
+
+  document.getElementById('result-retry-btn').addEventListener('click', () => {
+    overlay.classList.remove('open');
+    showBriefing(currentLevelIndex);
+  });
+  const nextBtn = document.getElementById('result-next-btn');
+  if (nextBtn) {
+    nextBtn.addEventListener('click', () => {
+      overlay.classList.remove('open');
+      showBriefing(currentLevelIndex + 1);
+    });
+  }
+  document.getElementById('result-levels-btn').addEventListener('click', () => {
+    overlay.classList.remove('open');
+    gamePhase = 'select';
+    buildLevelSelect();
+  });
+}
+
+// --- Game state update (called from loop) ---
+function updateGameState(dt) {
+  if (!gameRunning || !gameVehicle) return;
+
+  gameElapsed += dt;
+  const level = GAME_LEVELS[currentLevelIndex];
+  const v = gameVehicle;
+
+  // Update timer display
+  const timerEl = document.getElementById('game-timer-display');
+  if (timerEl) {
+    const remaining = level.timeLimit - gameElapsed;
+    timerEl.textContent = gameElapsed.toFixed(1) + 's';
+    timerEl.className = 'game-timer' + (remaining < 10 ? ' critical' : remaining < 20 ? ' warning' : '');
+  }
+
+  // Check time limit
+  if (level.timeLimit > 0 && gameElapsed >= level.timeLimit) {
+    endGame('fail', 'Time ran out!');
+    return;
+  }
+
+  // Check danger zones
+  for (const dz of level.dangers) {
+    if (isInsideDanger(v, dz)) {
+      endGame('fail', 'Vehicle entered a danger zone!');
+      return;
+    }
+  }
+
+  // Check checkpoints
+  if (gameNextCheckpoint < level.checkpoints.length) {
+    const cp = level.checkpoints[gameNextCheckpoint];
+    if (toroidalDistSq(v.x, v.y, cp.x, cp.y) < cp.radius * cp.radius) {
+      gameNextCheckpoint++;
+      const cpEl = document.getElementById('game-cp-display');
+      if (cpEl) cpEl.textContent = 'Checkpoints: ' + gameNextCheckpoint + ' / ' + level.checkpoints.length;
+    }
+  }
+
+  // Check goals
+  const allCheckpointsDone = gameNextCheckpoint >= level.checkpoints.length;
+  for (const goal of level.goals) {
+    if (goal.type === 'reach' && allCheckpointsDone) {
+      if (toroidalDistSq(v.x, v.y, goal.x, goal.y) < goal.radius * goal.radius) {
+        const stars = calcStars(gameElapsed, level.stars);
+        endGame('win', 'Reached the goal in ' + gameElapsed.toFixed(1) + 's!', stars);
+        return;
+      }
+    }
+  }
+}
+
+function isInsideDanger(v, dz) {
+  if (dz.shape === 'circle') {
+    return toroidalDistSq(v.x, v.y, dz.x, dz.y) < dz.radius * dz.radius;
+  }
+  // rect — simple AABB (no torus wrapping for danger zones, they're within world bounds)
+  return v.x >= dz.x && v.x <= dz.x + dz.w && v.y >= dz.y && v.y <= dz.y + dz.h;
+}
+
+// --- Game canvas rendering ---
+function drawGameObjects() {
+  if (!gameMode || currentLevelIndex < 0) return;
+  const level = GAME_LEVELS[currentLevelIndex];
+
+  // Danger zones
+  for (const dz of level.dangers) {
+    ctx.fillStyle = 'rgba(198, 40, 40, 0.15)';
+    ctx.strokeStyle = 'rgba(198, 40, 40, 0.6)';
+    ctx.lineWidth = 2 / camZoom;
+    ctx.setLineDash([6, 4]);
+    if (dz.shape === 'circle') {
+      ctx.beginPath(); ctx.arc(dz.x, dz.y, dz.radius, 0, Math.PI * 2);
+      ctx.fill(); ctx.stroke();
+    } else {
+      ctx.fillRect(dz.x, dz.y, dz.w, dz.h);
+      ctx.strokeRect(dz.x, dz.y, dz.w, dz.h);
+    }
+    ctx.setLineDash([]);
+    // Hazard label
+    ctx.fillStyle = 'rgba(198, 40, 40, 0.7)';
+    ctx.font = (12 / camZoom) + 'px sans-serif';
+    ctx.textAlign = 'center';
+    if (dz.shape === 'circle') {
+      ctx.fillText('DANGER', dz.x, dz.y + 4 / camZoom);
+    } else {
+      ctx.fillText('DANGER', dz.x + dz.w / 2, dz.y + dz.h / 2 + 4 / camZoom);
+    }
+  }
+
+  // Checkpoints
+  const cps = level.checkpoints;
+  for (let i = 0; i < cps.length; i++) {
+    const cp = cps[i];
+    const visited = i < gameNextCheckpoint;
+    ctx.strokeStyle = visited ? '#555' : '#00bcd4';
+    ctx.lineWidth = 2 / camZoom;
+    ctx.setLineDash(visited ? [] : [6, 3]);
+    ctx.beginPath(); ctx.arc(cp.x, cp.y, cp.radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    // Fill
+    if (!visited) {
+      const grad = ctx.createRadialGradient(cp.x, cp.y, 0, cp.x, cp.y, cp.radius);
+      grad.addColorStop(0, 'rgba(0, 188, 212, 0.12)');
+      grad.addColorStop(1, 'rgba(0, 188, 212, 0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath(); ctx.arc(cp.x, cp.y, cp.radius, 0, Math.PI * 2); ctx.fill();
+    }
+    // Number / check
+    ctx.fillStyle = visited ? '#555' : '#00bcd4';
+    ctx.font = 'bold ' + (14 / camZoom) + 'px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(visited ? '\u2713' : (i + 1).toString(), cp.x, cp.y);
+  }
+
+  // Goal markers
+  for (const goal of level.goals) {
+    const pulse = 0.7 + 0.3 * Math.sin(Date.now() / 300);
+    // Glow
+    const grad = ctx.createRadialGradient(goal.x, goal.y, 0, goal.x, goal.y, goal.radius);
+    grad.addColorStop(0, 'rgba(76, 175, 80, 0.18)');
+    grad.addColorStop(1, 'rgba(76, 175, 80, 0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(goal.x, goal.y, goal.radius, 0, Math.PI * 2); ctx.fill();
+    // Ring
+    ctx.strokeStyle = `rgba(76, 175, 80, ${pulse})`;
+    ctx.lineWidth = 3 / camZoom;
+    ctx.setLineDash([8, 4]);
+    ctx.beginPath(); ctx.arc(goal.x, goal.y, goal.radius, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    // Label
+    ctx.fillStyle = '#4caf50';
+    ctx.font = 'bold ' + (14 / camZoom) + 'px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+    ctx.fillText(goal.label || 'GOAL', goal.x, goal.y - goal.radius - 6 / camZoom);
+  }
+
+  // Start position marker (during briefing)
+  if (gamePhase === 'briefing') {
+    const sp = level.startPos;
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+    ctx.lineWidth = 1.5 / camZoom;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.arc(sp.x, sp.y, 20, 0, Math.PI * 2); ctx.stroke();
+    ctx.setLineDash([]);
+    // Direction arrow
+    const ax = sp.x + 25 * Math.cos(sp.theta);
+    const ay = sp.y + 25 * Math.sin(sp.theta);
+    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+    ctx.lineWidth = 2 / camZoom;
+    ctx.beginPath(); ctx.moveTo(sp.x, sp.y); ctx.lineTo(ax, ay); ctx.stroke();
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.font = (10 / camZoom) + 'px sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    ctx.fillText('START', sp.x, sp.y + 22 / camZoom);
+  }
+}
 
 // --- Init ---
 buildVehicleCards();
