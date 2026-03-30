@@ -1561,6 +1561,16 @@ function drawStaticLights() {
         ctx.stroke();
       }
     }
+
+    // Show countdown when off-delay timer is active
+    if (light._offDelayTimer != null && light._offDelayTimer > 0) {
+      ctx.save();
+      ctx.fillStyle = '#ef5350';
+      ctx.font = 'bold 10px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText(light._offDelayTimer.toFixed(1) + 's', light.x, light.y - 14);
+      ctx.restore();
+    }
   }
 }
 
@@ -4004,7 +4014,7 @@ function buildEditorPanel() {
 
 // --- Properties panel ---
 // Helper: build a labeled slider that doesn't break innerHTML
-function addSlider(parent, labelText, min, max, value, onChange) {
+function addSlider(parent, labelText, min, max, value, onChange, step) {
   const wrap = document.createElement('div');
   const lab = document.createElement('label');
   const valSpan = document.createElement('span');
@@ -4014,7 +4024,8 @@ function addSlider(parent, labelText, min, max, value, onChange) {
   wrap.appendChild(lab);
   const slider = document.createElement('input');
   slider.type = 'range'; slider.min = min; slider.max = max; slider.value = value;
-  slider.addEventListener('input', () => { valSpan.textContent = slider.value; onChange(parseInt(slider.value)); });
+  if (step) slider.step = step;
+  slider.addEventListener('input', () => { valSpan.textContent = slider.value; onChange(step ? parseFloat(slider.value) : parseInt(slider.value)); });
   wrap.appendChild(slider);
   parent.appendChild(wrap);
   return slider;
@@ -4027,21 +4038,25 @@ function buildOnVisitUI(parent, lightObj, syncFn) {
   parent.appendChild(lab);
   const visitSel = document.createElement('select');
   const visitVal = lightObj.onVisit ? lightObj.onVisit.action : 'none';
-  ['none', 'off', 'changeLuminosity'].forEach(v => {
+  ['none', 'off', 'offDelay', 'changeLuminosity'].forEach(v => {
     const opt = document.createElement('option');
     opt.value = v;
-    opt.textContent = v === 'none' ? 'Nothing' : v === 'off' ? 'Turn Off' : 'Change Luminosity';
+    opt.textContent = v === 'none' ? 'Nothing' : v === 'off' ? 'Turn Off' : v === 'offDelay' ? 'Turn Off (Delay)' : 'Change Luminosity';
     if (v === visitVal) opt.selected = true;
     visitSel.appendChild(opt);
   });
   visitSel.addEventListener('change', () => {
     if (visitSel.value === 'none') lightObj.onVisit = null;
     else if (visitSel.value === 'off') lightObj.onVisit = { action: 'off' };
+    else if (visitSel.value === 'offDelay') lightObj.onVisit = { action: 'offDelay', delay: 2 };
     else lightObj.onVisit = { action: 'changeLuminosity', newIntensity: 20 };
     syncFn();
     buildEditorPanel();
   });
   parent.appendChild(visitSel);
+  if (lightObj.onVisit && lightObj.onVisit.action === 'offDelay') {
+    addSlider(parent, 'Delay (seconds)', 0.5, 10, lightObj.onVisit.delay || 2, (v) => { lightObj.onVisit.delay = v; syncFn(); }, 0.5);
+  }
   if (lightObj.onVisit && lightObj.onVisit.action === 'changeLuminosity') {
     addSlider(parent, 'New Intensity', 0, 100, lightObj.onVisit.newIntensity || 20, (v) => { lightObj.onVisit.newIntensity = v; syncFn(); });
   }
@@ -4475,6 +4490,9 @@ function showEditorContextMenu(e) {
     addItem('On Visit: Turn Off' + (light.onVisit && light.onVisit.action === 'off' ? ' \u2713' : ''), () => {
       light.onVisit = { action: 'off' }; editorSyncLightsToLevel(); buildEditorPanel();
     });
+    addItem('On Visit: Turn Off (Delay)' + (light.onVisit && light.onVisit.action === 'offDelay' ? ' \u2713' : ''), () => {
+      light.onVisit = { action: 'offDelay', delay: 2 }; editorSyncLightsToLevel(); buildEditorPanel();
+    });
     addItem('On Visit: Change Luminosity' + (light.onVisit && light.onVisit.action === 'changeLuminosity' ? ' \u2713' : ''), () => {
       light.onVisit = { action: 'changeLuminosity', newIntensity: 20 }; editorSyncLightsToLevel(); buildEditorPanel();
     });
@@ -4691,10 +4709,12 @@ function drawEditorOverlay() {
   // On-visit indicators
   for (const l of lights) {
     if (l.onVisit) {
-      ctx.fillStyle = l.onVisit.action === 'off' ? '#ef5350' : '#ff9800';
+      const act = l.onVisit.action;
+      ctx.fillStyle = act === 'off' || act === 'offDelay' ? '#ef5350' : '#ff9800';
       ctx.font = 'bold ' + (10 / camZoom) + 'px sans-serif';
       ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-      ctx.fillText(l.onVisit.action === 'off' ? 'OFF on visit' : 'Change on visit', l.x, l.y - 20 / camZoom);
+      const label = act === 'off' ? 'OFF on visit' : act === 'offDelay' ? 'OFF on visit (' + (l.onVisit.delay || 2) + 's)' : 'Change on visit';
+      ctx.fillText(label, l.x, l.y - 20 / camZoom);
     }
   }
 }
@@ -5196,6 +5216,7 @@ function updateGameState(dt) {
         if (el && el.onVisit && !el._visited) {
           el._visited = true;
           if (el.onVisit.action === 'off') el.on = false;
+          else if (el.onVisit.action === 'offDelay') el._offDelayTimer = el.onVisit.delay || 2;
           else if (el.onVisit.action === 'changeLuminosity') el.intensity = el.onVisit.newIntensity || 20;
         }
       }
@@ -5226,7 +5247,19 @@ function updateGameState(dt) {
     if (toroidalDistSq(v.x, v.y, light.x, light.y) < visitRadiusSq) {
       light._visited = true;
       if (light.onVisit.action === 'off') light.on = false;
+      else if (light.onVisit.action === 'offDelay') light._offDelayTimer = light.onVisit.delay || 2;
       else if (light.onVisit.action === 'changeLuminosity') light.intensity = light.onVisit.newIntensity || 20;
+    }
+  }
+
+  // Count down off-delay timers
+  for (const light of staticLights) {
+    if (light._offDelayTimer != null && light._offDelayTimer > 0) {
+      light._offDelayTimer -= dt;
+      if (light._offDelayTimer <= 0) {
+        light._offDelayTimer = 0;
+        light.on = false;
+      }
     }
   }
 
