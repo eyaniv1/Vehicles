@@ -5191,6 +5191,13 @@ function updateGameState(dt) {
         v.theta = Math.atan2(sinT - 2 * dot * info.ny, cosT - 2 * dot * info.nx);
         // Trigger squish animation
         bouncerSquish.set(bi, { timer: 0.35, nx: info.nx, ny: info.ny });
+        // Trigger on-visit for embedded light on bounce
+        const el = staticLights.find(l => l._embedded === 'bouncer' && l._embeddedIdx === bi);
+        if (el && el.onVisit && !el._visited) {
+          el._visited = true;
+          if (el.onVisit.action === 'off') el.on = false;
+          else if (el.onVisit.action === 'changeLuminosity') el.intensity = el.onVisit.newIntensity || 20;
+        }
       }
     }
   }
