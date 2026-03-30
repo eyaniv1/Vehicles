@@ -4089,7 +4089,7 @@ function buildPathUI(parent, obj, objType, objIndex) {
       editorPathTarget = { type: objType, index: objIndex };
       const startX = obj.x != null ? obj.x : (obj.shape === 'rect' ? obj.x + (obj.w||0)/2 : obj.x);
       const startY = obj.y != null ? obj.y : (obj.shape === 'rect' ? obj.y + (obj.h||0)/2 : obj.y);
-      obj.path = { waypoints: [{ x: startX, y: startY }], mode: 'bounce', speed: 50 };
+      obj.path = { waypoints: [{ x: startX, y: startY }], mode: 'bounce', speed: 25 };
       editorSyncLightsToLevel();
       buildEditorPanel();
     });
@@ -4485,7 +4485,7 @@ function showEditorContextMenu(e) {
     if (!light.path) {
       addItem('\u2194 Define Path', () => {
         editorPathMode = true; editorPathLightIdx = hit.index;
-        light.path = { waypoints: [{ x: light.x, y: light.y }], mode: 'bounce', speed: 50 };
+        light.path = { waypoints: [{ x: light.x, y: light.y }], mode: 'bounce', speed: 25 };
         editorSyncLightsToLevel(); buildEditorPanel();
       });
     }
