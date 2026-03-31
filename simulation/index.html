@@ -3926,7 +3926,7 @@ async function showAdminUserList() {
     cb.type = 'checkbox';
     cb.className = 'admin-user-check';
     cb.dataset.userId = u.id;
-    if (u.id === currentUser.id) { cb.disabled = true; cb.title = 'Cannot select yourself'; }
+    if (u.email === 'eyaniv1@gmail.com') { cb.disabled = true; cb.title = 'Protected account'; }
     cb.addEventListener('click', (e) => e.stopPropagation());
 
     const info = document.createElement('div');

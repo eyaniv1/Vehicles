@@ -238,9 +238,10 @@ app.delete('/api/admin/users', authMiddleware, adminMiddleware, (req, res) => {
     if (!Array.isArray(user_ids) || user_ids.length === 0) {
         return res.status(400).json({ error: 'user_ids array required' });
     }
-    // Prevent deleting yourself
-    if (user_ids.includes(req.user.id)) {
-        return res.status(400).json({ error: 'Cannot delete your own account' });
+    // Prevent deleting protected account
+    const protectedUser = stmts.getUserByEmail.get('eyaniv1@gmail.com');
+    if (protectedUser && user_ids.includes(protectedUser.id)) {
+        return res.status(400).json({ error: 'Cannot delete protected account' });
     }
     const deleteMany = db.transaction((ids) => {
         const delScenarios = db.prepare('DELETE FROM user_scenarios WHERE user_id = ?');
