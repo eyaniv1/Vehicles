@@ -455,16 +455,18 @@
   .tutorial-bubble::after {
     content: '';
     position: absolute;
-    width: 14px;
-    height: 14px;
+    width: 12px;
+    height: 12px;
     background: #1a1a2e;
-    border: 1px solid rgba(79, 195, 247, 0.3);
     transform: rotate(45deg);
+    border: 1px solid rgba(79, 195, 247, 0.3);
+    clip-path: none;
   }
-  .tutorial-bubble.arrow-left::after { left: -8px; top: 20px; border-right: none; border-top: none; }
-  .tutorial-bubble.arrow-right::after { right: -8px; top: 20px; border-left: none; border-bottom: none; }
-  .tutorial-bubble.arrow-top::after { top: -8px; left: var(--arrow-x, 30px); border-bottom: none; border-right: none; }
-  .tutorial-bubble.arrow-bottom::after { bottom: -8px; left: var(--arrow-x, 30px); border-top: none; border-left: none; }
+  .tutorial-bubble.arrow-left::after { left: -7px; top: 20px; border-right: none; border-top: none; }
+  .tutorial-bubble.arrow-right::after { right: -7px; top: 20px; border-left: none; border-bottom: none; }
+  .tutorial-bubble.arrow-top::after { top: -7px; left: var(--arrow-x, 30px); border-bottom: none; border-right: none; }
+  .tutorial-bubble.arrow-bottom::after { bottom: -7px; left: var(--arrow-x, 30px); border-top: none; border-left: none; }
+  .tutorial-bubble.no-arrow::after { display: none; }
 
   .tutorial-bubble .step-label {
     font-size: 10px;
@@ -496,7 +498,7 @@
   .tutorial-btn-skip:hover { color: #fff; border-color: rgba(255,255,255,0.4) !important; }
   .tutorial-btn-rec { background: #ff9800 !important; color: #0a0a1a !important; }
   .tutorial-btn-rec:hover { background: #ffb74d !important; transform: translateY(-1px); }
-  .bubble-close { position:absolute; top:6px; right:10px; background:none; border:none; color:rgba(255,255,255,0.4); font-size:18px; cursor:pointer; padding:2px 6px; transition: color 0.15s; }
+  .bubble-close { position:absolute; top:4px; right:6px; background:none; border:none; color:rgba(255,255,255,0.5); font-size:20px; line-height:1; cursor:pointer; padding:4px 8px; transition: color 0.15s; z-index:2; }
   .bubble-close:hover { color:#4fc3f7; }
 
   .tutorial-highlight {
@@ -5923,7 +5925,7 @@ function showElementInfoBubble(hit) {
   const screenY = rect.top + sc.y;
 
   const bubble = document.createElement('div');
-  bubble.innerHTML = `<button class="bubble-close">&times;</button><div class="step-text" style="margin-top:4px;">${text}</div>`;
+  bubble.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;"><div class="step-text" style="flex:1;">${text}</div><button class="bubble-close" style="position:static;padding:0;margin:-2px -4px 0 0;font-size:20px;">&times;</button></div>`;
   container.appendChild(bubble);
   _positionBubble(bubble, screenX, screenY);
   bubble.querySelector('.bubble-close').addEventListener('click', () => { container.innerHTML = ''; });
