@@ -1,0 +1,16 @@
+{
+  "name": "vehicles-server",
+  "version": "1.0.0",
+  "description": "Braitenberg Vehicles backend - Express + SQLite",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "type": "commonjs",
+  "dependencies": {
+    "better-sqlite3": "^12.8.0",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "uuid": "^13.0.0"
+  }
+}
