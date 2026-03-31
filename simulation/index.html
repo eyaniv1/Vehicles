@@ -622,8 +622,6 @@
   .level-card .level-name { font-size: 13px; font-weight: 600; color: #e0e0e0; }
   .level-card.locked .level-name { color: #555; }
   .level-card .level-tier { font-size: 10px; color: #81d4fa; }
-  .level-card .level-stars { color: #ff9800; font-size: 14px; letter-spacing: 2px; }
-  .level-card .level-stars .empty { color: #333; }
 
   .game-briefing { background: #1a1a2e; border-radius: 8px; padding: 14px; }
   .game-briefing h3 { color: #ff9800; font-size: 15px; margin: 0 0 4px; }
@@ -687,8 +685,6 @@
   .game-result-box h2 { margin: 0 0 8px; font-size: 22px; }
   .game-result-box h2.win { color: #4caf50; }
   .game-result-box h2.fail { color: #ef5350; }
-  .game-result-box .result-stars { font-size: 36px; color: #ff9800; letter-spacing: 6px; margin: 12px 0; }
-  .game-result-box .result-stars .empty { color: #333; }
   .game-result-box .result-time { font-size: 16px; color: #b0bec5; margin: 8px 0 16px; }
   .game-result-box .result-msg { font-size: 13px; color: #81d4fa; margin-bottom: 16px; }
   .game-result-btns { display: flex; gap: 8px; justify-content: center; }
@@ -4307,19 +4303,6 @@ function buildEditorPanel() {
   tlIn.addEventListener('change', () => { editorLevel.timeLimit = parseInt(tlIn.value) || 60; });
   nameDiv.appendChild(tlIn);
 
-  // Star thresholds
-  const starsLabel = document.createElement('label'); starsLabel.textContent = 'Stars: 3\u2605 / 2\u2605 / 1\u2605 (seconds)';
-  nameDiv.appendChild(starsLabel);
-  const starsDiv = document.createElement('div');
-  starsDiv.className = 'prop-row';
-  const s3 = document.createElement('input'); s3.type = 'number'; s3.value = editorLevel.stars.three; s3.min = 1;
-  const s2 = document.createElement('input'); s2.type = 'number'; s2.value = editorLevel.stars.two; s2.min = 1;
-  const s1 = document.createElement('input'); s1.type = 'number'; s1.value = editorLevel.stars.one; s1.min = 1;
-  s3.addEventListener('change', () => { editorLevel.stars.three = parseInt(s3.value) || 10; });
-  s2.addEventListener('change', () => { editorLevel.stars.two = parseInt(s2.value) || 20; });
-  s1.addEventListener('change', () => { editorLevel.stars.one = parseInt(s1.value) || 30; });
-  starsDiv.appendChild(s3); starsDiv.appendChild(s2); starsDiv.appendChild(s1);
-  nameDiv.appendChild(starsDiv);
   panel.appendChild(nameDiv);
 
   // --- Toolbar ---
@@ -5654,14 +5637,7 @@ function restartLevel() {
 }
 
 // --- Win / Fail ---
-function calcStars(elapsed, thresholds) {
-  if (elapsed <= thresholds.three) return 3;
-  if (elapsed <= thresholds.two) return 2;
-  if (elapsed <= thresholds.one) return 1;
-  return 0;
-}
-
-function endGame(outcome, message, stars) {
+function endGame(outcome, message) {
   gameRunning = false;
   gamePhase = 'ended';
   gameVehicle.running = false;
@@ -5671,8 +5647,6 @@ function endGame(outcome, message, stars) {
   const box = document.getElementById('game-result-box');
 
   const isWin = outcome === 'win';
-  const starsEarned = isWin ? (stars || 0) : 0;
-  const starsHTML = [1, 2, 3].map(s => s <= starsEarned ? '\u2605' : '<span class="empty">\u2605</span>').join('');
 
   // Save attempt to server
   if (currentUser && gameVehicle) {
@@ -5693,7 +5667,6 @@ function endGame(outcome, message, stars) {
 
   box.innerHTML = `
     <h2 class="${isWin ? 'win' : 'fail'}">${isWin ? 'Success!' : 'Failed'}</h2>
-    <div class="result-stars">${starsHTML}</div>
     <div class="result-time">${gameElapsed.toFixed(1)}s</div>
     <div class="result-msg">${message}</div>
     <div class="result-btns">
@@ -5885,8 +5858,7 @@ function updateGameState(dt) {
   for (const goal of level.goals) {
     if (goal.type === 'reach' && allCheckpointsDone) {
       if (toroidalDistSq(v.x, v.y, goal.x, goal.y) < goal.radius * goal.radius) {
-        const stars = calcStars(gameElapsed, level.stars);
-        endGame('win', 'Reached the goal in ' + gameElapsed.toFixed(1) + 's!', stars);
+        endGame('win', 'Reached the goal in ' + gameElapsed.toFixed(1) + 's!');
         return;
       }
     }
