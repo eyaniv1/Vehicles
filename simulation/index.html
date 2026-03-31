@@ -754,7 +754,16 @@
 
   /* --- Best time on level card --- */
   .level-best-time {
-    font-size: 10px; color: #4fc3f7; margin-top: 2px;
+    margin-left: auto; text-align: right; flex-shrink: 0; padding-left: 8px;
+  }
+  .level-best-time .time-value {
+    font-size: 18px; font-weight: 700; color: #4caf50; line-height: 1;
+  }
+  .level-best-time .time-unit {
+    font-size: 10px; color: #4caf50; font-weight: 400;
+  }
+  .level-best-time .time-fail {
+    font-size: 16px; font-weight: 700; color: #ef5350; line-height: 1;
   }
 
   /* --- Admin Panel --- */
@@ -4100,9 +4109,16 @@ function buildLevelSelect() {
     const card = document.createElement('div');
     card.className = 'level-card';
     const scenarioData = userScenarioData[level.id];
-    const bestTimeStr = scenarioData && scenarioData.best_time ? scenarioData.best_time.toFixed(1) + 's' : '--';
+    const hasAttempt = !!scenarioData;
+    const hasBestTime = scenarioData && scenarioData.best_time;
+    let timeHTML = '';
+    if (hasBestTime) {
+      timeHTML = '<span class="time-value">' + scenarioData.best_time.toFixed(1) + '</span> <span class="time-unit">sec</span>';
+    } else if (hasAttempt) {
+      timeHTML = '<span class="time-fail">--</span>';
+    }
     const adminBtns = isAdmin ? `
-      <div style="display:flex;gap:3px;margin-left:auto;">
+      <div style="display:flex;gap:3px;flex-shrink:0;">
         <button class="btn" style="font-size:9px;padding:2px 5px;background:#37474f;color:#b0bec5;" data-action="edit">Edit</button>
         <button class="btn" style="font-size:9px;padding:2px 5px;background:none;color:#c62828;" data-action="del">&times;</button>
       </div>
@@ -4111,8 +4127,8 @@ function buildLevelSelect() {
       <div class="level-num">${i + 1}</div>
       <div class="level-info">
         <div class="level-name">${level.name}</div>
-        <div class="level-best-time">Best: ${bestTimeStr}</div>
       </div>
+      <div class="level-best-time">${timeHTML}</div>
       ${adminBtns}
     `;
     card.addEventListener('click', () => {
@@ -5673,10 +5689,6 @@ function endGame(outcome, message, stars) {
     });
   }
 
-  // Find current scenario index in unified list for "Next" button
-  const allScenarios = loadAllScenarios();
-  const currentScenarioIdx = allScenarios.findIndex(s => s.id === level.id);
-  const showNext = isWin && currentScenarioIdx >= 0 && currentScenarioIdx < allScenarios.length - 1;
   const isAdmin = currentUser && currentUser.role === 'admin';
 
   box.innerHTML = `
@@ -5686,7 +5698,6 @@ function endGame(outcome, message, stars) {
     <div class="result-msg">${message}</div>
     <div class="result-btns">
       <button class="btn" id="result-retry-btn" style="background:#37474f;color:#b0bec5;">Retry</button>
-      ${showNext ? '<button class="btn btn-launch" id="result-next-btn">Next Scenario</button>' : ''}
       ${isAdmin && editorLevel ? '<button class="btn" id="result-editor-btn" style="background:#37474f;color:#b0bec5;">Back to Editor</button>' : ''}
       <button class="btn" id="result-levels-btn" style="background:#37474f;color:#b0bec5;">Scenarios</button>
     </div>
@@ -5697,16 +5708,6 @@ function endGame(outcome, message, stars) {
     overlay.classList.remove('open');
     showBriefing(-1, currentLevelSource);
   });
-  const nextBtn = document.getElementById('result-next-btn');
-  if (nextBtn) {
-    nextBtn.addEventListener('click', () => {
-      overlay.classList.remove('open');
-      const nextScenario = allScenarios[currentScenarioIdx + 1];
-      const copy = JSON.parse(JSON.stringify(nextScenario));
-      copy._custom = true;
-      showBriefing(-1, copy);
-    });
-  }
   const editorBtn = document.getElementById('result-editor-btn');
   if (editorBtn) {
     editorBtn.addEventListener('click', () => {
