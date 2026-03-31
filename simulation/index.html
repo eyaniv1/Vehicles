@@ -488,6 +488,8 @@
   .tutorial-btn-next:hover { background: #e3f2fd; }
   .tutorial-btn-skip { background: transparent; color: rgba(255,255,255,0.7); }
   .tutorial-btn-skip:hover { color: #fff; }
+  .bubble-close { position:absolute; top:4px; right:8px; background:none; border:none; color:rgba(255,255,255,0.7); font-size:18px; cursor:pointer; padding:2px 6px; }
+  .bubble-close:hover { color:#fff; }
 
   .tutorial-highlight {
     position: relative;
@@ -2036,6 +2038,12 @@ function draw() {
   ctx.fillStyle = '#0f0f23';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
 
+  // Schematic view intercept
+  if (schematicViewActive && gameMode && gamePhase === 'briefing' && gameVehicle) {
+    drawFullSchematic(gameVehicle);
+    return;
+  }
+
   // Apply camera transform for world-space drawing
   ctx.save();
   ctx.scale(camZoom, camZoom);
@@ -2903,6 +2911,7 @@ function closePopup() {
 canvas.addEventListener('mousedown', (e) => {
   if (e.button !== 0) return;
   closePopup();
+  if (schematicViewActive && gameMode && gamePhase === 'briefing') return;
   if (gameMode && gamePhase === 'editing') { editorMouseDown(e); return; }
   const pos = canvasCoords(e);
   mouseDownPos = pos;
@@ -2953,6 +2962,12 @@ canvas.addEventListener('mouseup', (e) => {
     return;
   }
   if (e.button !== 0) return;
+  // Click-to-info on canvas elements during briefing
+  if (gameMode && gamePhase === 'briefing' && !dragging && !dragStarted && !schematicViewActive) {
+    const pos = canvasCoords(e);
+    const hit = gameObjectAt(pos.x, pos.y);
+    if (hit) { showElementInfoBubble(hit); }
+  }
   if (dragging && !dragStarted && !gameMode) {
     dragging.on = !dragging.on;
   }
@@ -3555,6 +3570,10 @@ let currentLevel = null; // the active level object (built-in or custom)
 let currentLevelSource = null; // unmutated original for abort/retry
 let sandboxSnapshot = null;
 let gameVehicle = null; // the single player vehicle during a game run
+let walkthroughActive = false;
+let walkthroughSteps = [];
+let walkthroughStepIndex = -1;
+let schematicViewActive = false;
 
 // --- Editor state ---
 let editorLevel = null;
@@ -3836,6 +3855,8 @@ document.getElementById('game-toggle-btn').addEventListener('click', () => {
 
 // --- Level select UI ---
 function goToLevelSelect() {
+  dismissWalkthrough();
+  schematicViewActive = false;
   gamePhase = 'select';
   gameRunning = false;
   currentLevel = null;
@@ -5344,18 +5365,19 @@ function buildBriefingPanel(level) {
   });
   panel.appendChild(backBtn);
 
-  // Briefing
+  // Briefing header
   const brief = document.createElement('div');
   brief.className = 'game-briefing';
-  brief.innerHTML = `
-    <h3>${level.name}</h3>
-    <p>${level.briefing}</p>
-    ${level.checkpoints.length > 0 ? '<p>Visit <b>' + level.checkpoints.length + ' checkpoint' + (level.checkpoints.length > 1 ? 's' : '') + '</b> in order, then reach the goal.</p>' : ''}
-    ${level.dangers.length > 0 ? '<p style="color:#ef5350;">Avoid the red danger zones!</p>' : ''}
-    <p style="color:#81d4fa;">Time limit: <b>${level.timeLimit}s</b></p>
-    ${level.hint ? '<div class="hint">\uD83D\uDCA1 ' + level.hint + '</div>' : ''}
-  `;
+  brief.innerHTML = `<h3>${level.name}</h3><p style="color:#81d4fa;">Time limit: <b>${level.timeLimit}s</b></p>`;
   panel.appendChild(brief);
+
+  // Walkthrough button
+  const wtBtn = document.createElement('button');
+  wtBtn.className = 'btn';
+  wtBtn.style.cssText = 'font-size:11px;padding:5px 10px;background:#1565c0;color:#fff;margin-top:4px;';
+  wtBtn.textContent = '\uD83D\uDCD6 Walkthrough';
+  wtBtn.addEventListener('click', () => startWalkthrough(level));
+  panel.appendChild(wtBtn);
 
   // Leaderboard button
   const lbBtn = document.createElement('button');
@@ -5539,6 +5561,17 @@ function buildBriefingPanel(level) {
 
   panel.appendChild(config);
 
+  // Schematic view toggle
+  const schematicBtn = document.createElement('button');
+  schematicBtn.className = 'btn';
+  schematicBtn.style.cssText = 'font-size:11px;padding:6px;background:#0f3460;color:#4fc3f7;border:1px solid #1565c0;margin-top:4px;';
+  schematicBtn.textContent = schematicViewActive ? '\uD83C\uDF0D Map View' : '\uD83D\uDD27 Schematic View';
+  schematicBtn.addEventListener('click', () => {
+    schematicViewActive = !schematicViewActive;
+    schematicBtn.textContent = schematicViewActive ? '\uD83C\uDF0D Map View' : '\uD83D\uDD27 Schematic View';
+  });
+  panel.appendChild(schematicBtn);
+
   // Launch button
   const launchBtn = document.createElement('button');
   launchBtn.className = 'btn btn-launch';
@@ -5547,8 +5580,202 @@ function buildBriefingPanel(level) {
   panel.appendChild(launchBtn);
 }
 
+// --- Walkthrough ---
+
+const ELEMENT_DESCRIPTIONS = {
+  light: 'Light sources attract or repel vehicles depending on their wiring. You can drag lights to reposition them.',
+  danger: 'Red danger zones destroy your vehicle on contact. Avoid them!',
+  checkpoint: 'Checkpoints must be visited in order before reaching the goal.',
+  goal: 'Reach the goal to complete the scenario.',
+  bouncer: 'Bouncers deflect your vehicle on contact. Use them to redirect your path.',
+};
+
+function startWalkthrough(level) {
+  walkthroughSteps = [];
+  if (staticLights.length > 0) {
+    walkthroughSteps.push({ type: 'light', getPos: () => ({ x: staticLights[0].x, y: staticLights[0].y }), text: ELEMENT_DESCRIPTIONS.light });
+  }
+  if (level.dangers.length > 0) {
+    const dz = level.dangers[0];
+    walkthroughSteps.push({ type: 'danger', getPos: () => ({ x: dz.shape === 'circle' ? dz.x : dz.x + dz.w / 2, y: dz.shape === 'circle' ? dz.y : dz.y + dz.h / 2 }), text: ELEMENT_DESCRIPTIONS.danger });
+  }
+  if (level.bouncers && level.bouncers.length > 0) {
+    walkthroughSteps.push({ type: 'bouncer', getPos: () => ({ x: level.bouncers[0].x, y: level.bouncers[0].y }), text: ELEMENT_DESCRIPTIONS.bouncer });
+  }
+  if (level.checkpoints.length > 0) {
+    const cp = level.checkpoints[0];
+    let cpText = ELEMENT_DESCRIPTIONS.checkpoint;
+    if (cp.approvalTime) cpText += ` You must stay inside for ${cp.approvalTime}s.`;
+    walkthroughSteps.push({ type: 'checkpoint', getPos: () => ({ x: cp.x, y: cp.y }), text: cpText });
+  }
+  if (level.goals.length > 0) {
+    walkthroughSteps.push({ type: 'goal', getPos: () => ({ x: level.goals[0].x, y: level.goals[0].y }), text: ELEMENT_DESCRIPTIONS.goal });
+  }
+  if (walkthroughSteps.length > 0) {
+    walkthroughActive = true;
+    showWalkthroughStep(0);
+  }
+}
+
+function dismissWalkthrough() {
+  walkthroughActive = false;
+  walkthroughStepIndex = -1;
+  walkthroughSteps = [];
+  const container = document.getElementById('tutorial-bubble-container');
+  if (container) container.innerHTML = '';
+}
+
+function showWalkthroughStep(index) {
+  const container = document.getElementById('tutorial-bubble-container');
+  container.innerHTML = '';
+  if (index < 0 || index >= walkthroughSteps.length) { dismissWalkthrough(); return; }
+  walkthroughStepIndex = index;
+  const step = walkthroughSteps[index];
+  const wp = step.getPos();
+
+  // Pan camera to center on element
+  camX = wp.x - (canvas.width / camZoom) / 2;
+  camY = wp.y - (canvas.height / camZoom) / 2;
+  clampCamera();
+
+  // Compute screen position
+  const rect = canvas.getBoundingClientRect();
+  const sc = worldToScreen(wp.x, wp.y);
+  const screenX = rect.left + sc.x;
+  const screenY = rect.top + sc.y;
+
+  // Determine arrow direction
+  let arrowDir = 'top';
+  if (screenY > window.innerHeight * 0.6) arrowDir = 'bottom';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'tutorial-bubble arrow-' + arrowDir;
+  bubble.style.left = Math.max(8, Math.min(screenX - 140, window.innerWidth - 340)) + 'px';
+  bubble.style.top = (arrowDir === 'top' ? screenY + 28 : Math.max(8, screenY - 120)) + 'px';
+
+  const isLast = index === walkthroughSteps.length - 1;
+  bubble.innerHTML = `
+    <div class="step-label">Step ${index + 1} of ${walkthroughSteps.length}</div>
+    <div class="step-text">${step.text}</div>
+    <div class="step-btns">
+      <button class="tutorial-btn-skip">Skip</button>
+      <button class="tutorial-btn-next" ${isLast ? 'style="background:#4caf50;color:#fff;"' : ''}>${isLast ? 'Done' : 'Next'}</button>
+    </div>
+  `;
+  container.appendChild(bubble);
+  bubble.querySelector('.tutorial-btn-skip').addEventListener('click', dismissWalkthrough);
+  bubble.querySelector('.tutorial-btn-next').addEventListener('click', () => {
+    if (isLast) dismissWalkthrough();
+    else showWalkthroughStep(index + 1);
+  });
+}
+
+// --- Click-to-info on canvas elements ---
+
+function gameObjectAt(wx, wy) {
+  if (!currentLevel) return null;
+  const level = currentLevel;
+  // Check lights
+  for (const l of staticLights) {
+    if (toroidalDistSq(wx, wy, l.x, l.y) < 20 * 20) return { type: 'light', obj: l, x: l.x, y: l.y };
+  }
+  // Check dangers
+  for (const dz of level.dangers) {
+    if (dz.shape === 'circle') {
+      if (toroidalDistSq(wx, wy, dz.x, dz.y) < dz.radius * dz.radius) return { type: 'danger', obj: dz, x: dz.x, y: dz.y };
+    } else {
+      if (wx >= dz.x && wx <= dz.x + dz.w && wy >= dz.y && wy <= dz.y + dz.h) return { type: 'danger', obj: dz, x: dz.x + dz.w / 2, y: dz.y + dz.h / 2 };
+    }
+  }
+  // Check bouncers
+  if (level.bouncers) {
+    for (const b of level.bouncers) {
+      if (toroidalDistSq(wx, wy, b.x, b.y) < b.radius * b.radius) return { type: 'bouncer', obj: b, x: b.x, y: b.y };
+    }
+  }
+  // Check checkpoints
+  for (const cp of level.checkpoints) {
+    if (toroidalDistSq(wx, wy, cp.x, cp.y) < cp.radius * cp.radius) return { type: 'checkpoint', obj: cp, x: cp.x, y: cp.y };
+  }
+  // Check goals
+  for (const g of level.goals) {
+    if (toroidalDistSq(wx, wy, g.x, g.y) < g.radius * g.radius) return { type: 'goal', obj: g, x: g.x, y: g.y };
+  }
+  return null;
+}
+
+function showElementInfoBubble(hit) {
+  dismissWalkthrough();
+  const container = document.getElementById('tutorial-bubble-container');
+  container.innerHTML = '';
+
+  let text = ELEMENT_DESCRIPTIONS[hit.type] || '';
+  if (hit.type === 'checkpoint' && hit.obj.approvalTime) {
+    text += ` You must stay inside for ${hit.obj.approvalTime}s.`;
+  }
+
+  const rect = canvas.getBoundingClientRect();
+  const sc = worldToScreen(hit.x, hit.y);
+  const screenX = rect.left + sc.x;
+  const screenY = rect.top + sc.y;
+
+  let arrowDir = 'top';
+  if (screenY > window.innerHeight * 0.6) arrowDir = 'bottom';
+
+  const bubble = document.createElement('div');
+  bubble.className = 'tutorial-bubble arrow-' + arrowDir;
+  bubble.style.left = Math.max(8, Math.min(screenX - 140, window.innerWidth - 340)) + 'px';
+  bubble.style.top = (arrowDir === 'top' ? screenY + 28 : Math.max(8, screenY - 120)) + 'px';
+  bubble.innerHTML = `<button class="bubble-close">&times;</button><div class="step-text" style="margin-top:4px;">${text}</div>`;
+  container.appendChild(bubble);
+  bubble.querySelector('.bubble-close').addEventListener('click', () => { container.innerHTML = ''; });
+}
+
+// --- Vehicle Schematic Main View ---
+
+let _schematicOffscreen = null;
+function drawFullSchematic(v) {
+  const type = getVehicleType(v);
+
+  // Title
+  ctx.fillStyle = '#81d4fa'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center';
+  ctx.fillText('Vehicle Schematic', canvas.width / 2, 30);
+  ctx.fillStyle = '#ff9800'; ctx.font = '13px sans-serif';
+  ctx.fillText(VEHICLE_TYPES[v.typeIndex].name, canvas.width / 2, 52);
+
+  // Offscreen canvas for schematic
+  const margin = 60;
+  const schW = Math.max(200, canvas.width - margin * 2);
+  const schH = Math.max(150, canvas.height - margin - 30);
+  if (!_schematicOffscreen) _schematicOffscreen = document.createElement('canvas');
+  _schematicOffscreen.width = schW;
+  _schematicOffscreen.height = schH;
+
+  // Inject demo sensor values so the schematic looks alive
+  const saved = { fl: v._frontL, fr: v._frontR, gfl: v._gatedFrontL, gfr: v._gatedFrontR, sl: v._sideL, sr: v._sideR, gsl: v._gatedSideL, gsr: v._gatedSideR, fml: v._frontMotorL, fmr: v._frontMotorR, sml: v._sideMotorL, smr: v._sideMotorR, ls: v.leftSpeed, rs: v.rightSpeed };
+  v._frontL = 0.6; v._frontR = 0.3;
+  v._gatedFrontL = 0.6; v._gatedFrontR = 0.3;
+  v._sideL = 0.4; v._sideR = 0.7;
+  v._gatedSideL = 0.4; v._gatedSideR = 0.7;
+  v._frontMotorL = 0.5; v._frontMotorR = 0.4;
+  v._sideMotorL = 0.3; v._sideMotorR = 0.5;
+  v.leftSpeed = type.inhibitory ? 0.4 : 0.6; v.rightSpeed = type.inhibitory ? 0.7 : 0.3;
+
+  drawInlineSchematic(v, _schematicOffscreen);
+
+  // Restore
+  v._frontL = saved.fl; v._frontR = saved.fr; v._gatedFrontL = saved.gfl; v._gatedFrontR = saved.gfr;
+  v._sideL = saved.sl; v._sideR = saved.sr; v._gatedSideL = saved.gsl; v._gatedSideR = saved.gsr;
+  v._frontMotorL = saved.fml; v._frontMotorR = saved.fmr; v._sideMotorL = saved.sml; v._sideMotorR = saved.smr;
+  v.leftSpeed = saved.ls; v.rightSpeed = saved.rs;
+
+  ctx.drawImage(_schematicOffscreen, margin, margin);
+}
+
 // --- Launch & run ---
 function launchLevel() {
+  dismissWalkthrough();
+  schematicViewActive = false;
   gamePhase = 'running';
   gameRunning = true;
   gamePaused = false;
