@@ -680,15 +680,27 @@
   .game-result-overlay.open { display: flex; }
   .game-result-box {
     background: #16213e; border: 2px solid #333; border-radius: 16px;
-    padding: 32px 40px; text-align: center; max-width: 360px;
+    padding: 32px 40px; text-align: center; max-width: 440px; width: 90vw;
+    position: relative; overflow: hidden;
   }
   .game-result-box h2 { margin: 0 0 8px; font-size: 22px; }
   .game-result-box h2.win { color: #4caf50; }
   .game-result-box h2.fail { color: #ef5350; }
-  .game-result-box .result-time { font-size: 16px; color: #b0bec5; margin: 8px 0 16px; }
-  .game-result-box .result-msg { font-size: 13px; color: #81d4fa; margin-bottom: 16px; }
+  .game-result-box .result-time { font-size: 16px; color: #b0bec5; margin: 8px 0 12px; }
+  .game-result-box .result-msg { font-size: 13px; color: #81d4fa; margin-bottom: 12px; }
   .game-result-btns { display: flex; gap: 8px; justify-content: center; }
   .game-result-btns .btn { min-width: 100px; }
+  .result-leaderboard { margin: 12px 0 16px; text-align: left; }
+  .result-leaderboard h3 { font-size: 14px; color: #90caf9; margin: 0 0 8px; text-align: center; }
+  .result-leaderboard table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .result-leaderboard th { color: #78909c; font-weight: 600; padding: 4px 8px; border-bottom: 1px solid #263238; text-align: left; }
+  .result-leaderboard td { padding: 4px 8px; color: #b0bec5; }
+  .result-leaderboard tr.lb-you td { color: #ffd54f; font-weight: 700; background: rgba(255,213,79,0.1); }
+  .result-leaderboard tr.lb-first td { color: #4caf50; font-weight: 700; }
+  .result-congrats { font-size: 18px; font-weight: 700; color: #ffd54f; margin: 8px 0; animation: congrats-pulse 0.6s ease-in-out infinite alternate; }
+  @keyframes congrats-pulse { from { transform: scale(1); } to { transform: scale(1.05); } }
+  .firework-canvas { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+  .game-result-box > *:not(.firework-canvas) { position: relative; z-index: 1; }
 
   /* --- Login Overlay --- */
   .login-overlay {
@@ -5634,7 +5646,7 @@ function restartLevel() {
 }
 
 // --- Win / Fail ---
-function endGame(outcome, message) {
+async function endGame(outcome, message) {
   gameRunning = false;
   gamePhase = 'ended';
   gameVehicle.running = false;
@@ -5644,28 +5656,70 @@ function endGame(outcome, message) {
   const box = document.getElementById('game-result-box');
 
   const isWin = outcome === 'win';
+  const isAdmin = currentUser && currentUser.role === 'admin';
+  const finishedTime = gameElapsed;
 
-  // Save attempt to server
+  // Save attempt to server first, then fetch leaderboard
   if (currentUser && gameVehicle) {
     const config = extractVehicleConfig(gameVehicle);
-    const time = isWin ? gameElapsed : null;
-    apiSaveAttempt(level.id, time, config).then(() => {
-      // Update local cache
-      if (!userScenarioData[level.id]) userScenarioData[level.id] = {};
-      userScenarioData[level.id].last_vehicle_config = config;
-      if (time && (!userScenarioData[level.id].best_time || time < userScenarioData[level.id].best_time)) {
-        userScenarioData[level.id].best_time = time;
-        userScenarioData[level.id].best_vehicle_config = config;
-      }
-    });
+    const time = isWin ? finishedTime : null;
+    await apiSaveAttempt(level.id, time, config);
+    // Update local cache
+    if (!userScenarioData[level.id]) userScenarioData[level.id] = {};
+    userScenarioData[level.id].last_vehicle_config = config;
+    if (time && (!userScenarioData[level.id].best_time || time < userScenarioData[level.id].best_time)) {
+      userScenarioData[level.id].best_time = time;
+      userScenarioData[level.id].best_vehicle_config = config;
+    }
   }
 
-  const isAdmin = currentUser && currentUser.role === 'admin';
+  // Fetch leaderboard
+  let leaderboard = [];
+  if (isWin) {
+    leaderboard = await apiFetchLeaderboard(level.id);
+  }
+
+  // Find user's position
+  const userRank = currentUser ? leaderboard.findIndex(e => e.user_id === currentUser.id) + 1 : 0;
+  const isFirst = userRank === 1;
+  const inTopTen = userRank > 0 && userRank <= 10;
+
+  // Build leaderboard HTML (top 10)
+  let lbHTML = '';
+  if (isWin && leaderboard.length > 0) {
+    const top10 = leaderboard.slice(0, 10);
+    let rows = '';
+    for (const entry of top10) {
+      const isYou = currentUser && entry.user_id === currentUser.id;
+      const cls = isYou ? 'lb-you' : (entry.rank === 1 ? 'lb-first' : '');
+      rows += `<tr class="${cls}"><td>${entry.rank}</td><td>${entry.nickname}${isYou ? ' (you)' : ''}</td><td>${entry.best_time.toFixed(1)}s</td></tr>`;
+    }
+    // If user is not in top 10 but has a time, show them below
+    let extraRow = '';
+    if (currentUser && !inTopTen) {
+      const userEntry = leaderboard.find(e => e.user_id === currentUser.id);
+      if (userEntry) {
+        extraRow = `<tr><td colspan="3" style="text-align:center;color:#546e7a;padding:4px;">···</td></tr>`;
+        extraRow += `<tr class="lb-you"><td>${userEntry.rank}</td><td>${userEntry.nickname} (you)</td><td>${userEntry.best_time.toFixed(1)}s</td></tr>`;
+      }
+    }
+    lbHTML = `<div class="result-leaderboard"><h3>Leaderboard</h3><table><tr><th>#</th><th>Player</th><th>Time</th></tr>${rows}${extraRow}</table></div>`;
+  }
+
+  // Congratulations message
+  let congratsHTML = '';
+  if (isWin && isFirst) {
+    congratsHTML = `<div class="congrats-text" style="font-size:20px;font-weight:700;color:#ffd54f;margin:8px 0;animation:congrats-pulse 0.6s ease-in-out infinite alternate;">🏆 #1 — Congratulations! 🏆</div>`;
+  } else if (isWin && inTopTen) {
+    congratsHTML = `<div style="font-size:15px;font-weight:600;color:#81c784;margin:8px 0;">Top ${userRank}! Nice work!</div>`;
+  }
 
   box.innerHTML = `
     <h2 class="${isWin ? 'win' : 'fail'}">${isWin ? 'Success!' : 'Failed'}</h2>
-    <div class="result-time">${gameElapsed.toFixed(1)}s</div>
-    <div class="result-msg">${message}</div>
+    <div class="result-time">${finishedTime.toFixed(1)}s</div>
+    ${congratsHTML}
+    ${isWin ? '' : `<div class="result-msg">${message}</div>`}
+    ${lbHTML}
     <div class="result-btns">
       <button class="btn" id="result-retry-btn" style="background:#37474f;color:#b0bec5;">Retry</button>
       ${isAdmin && editorLevel ? '<button class="btn" id="result-editor-btn" style="background:#37474f;color:#b0bec5;">Back to Editor</button>' : ''}
@@ -5673,6 +5727,16 @@ function endGame(outcome, message) {
     </div>
   `;
   overlay.classList.add('open');
+
+  // Fireworks animation for #1
+  if (isWin && isFirst) {
+    const canvas = document.createElement('canvas');
+    canvas.className = 'firework-canvas';
+    canvas.width = box.offsetWidth;
+    canvas.height = box.offsetHeight;
+    box.insertBefore(canvas, box.firstChild);
+    _runFireworks(canvas);
+  }
 
   document.getElementById('result-retry-btn').addEventListener('click', () => {
     overlay.classList.remove('open');
@@ -5689,6 +5753,43 @@ function endGame(outcome, message) {
     overlay.classList.remove('open');
     goToLevelSelect();
   });
+}
+
+function _runFireworks(canvas) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const particles = [];
+  const colors = ['#ffd54f','#ff7043','#4caf50','#42a5f5','#ab47bc','#ef5350','#26c6da'];
+  let frame = 0;
+
+  function burst(x, y) {
+    const count = 25 + Math.random() * 15 | 0;
+    for (let i = 0; i < count; i++) {
+      const angle = Math.random() * Math.PI * 2;
+      const speed = 1.5 + Math.random() * 3;
+      particles.push({ x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed, life: 1, color: colors[Math.random() * colors.length | 0], size: 2 + Math.random() * 2 });
+    }
+  }
+
+  function animate() {
+    if (!canvas.parentNode) return; // stop if overlay closed
+    ctx.clearRect(0, 0, W, H);
+    frame++;
+    if (frame % 30 === 1) burst(W * 0.2 + Math.random() * W * 0.6, H * 0.15 + Math.random() * H * 0.3);
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx; p.y += p.vy; p.vy += 0.04; p.life -= 0.015;
+      if (p.life <= 0) { particles.splice(i, 1); continue; }
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = p.color;
+      ctx.beginPath(); ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(animate);
+  }
+  burst(W * 0.3, H * 0.25);
+  burst(W * 0.7, H * 0.2);
+  animate();
 }
 
 // --- Game state update (called from loop) ---
