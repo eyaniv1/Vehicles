@@ -460,8 +460,8 @@
   }
   .tutorial-bubble.arrow-left::after { left: -7px; top: 20px; }
   .tutorial-bubble.arrow-right::after { right: -7px; top: 20px; }
-  .tutorial-bubble.arrow-top::after { top: -7px; left: 30px; }
-  .tutorial-bubble.arrow-bottom::after { bottom: -7px; left: 30px; }
+  .tutorial-bubble.arrow-top::after { top: -7px; left: var(--arrow-x, 30px); }
+  .tutorial-bubble.arrow-bottom::after { bottom: -7px; left: var(--arrow-x, 30px); }
 
   .tutorial-bubble .step-label {
     font-size: 10px;
@@ -5582,35 +5582,121 @@ function buildBriefingPanel(level) {
 
 // --- Walkthrough ---
 
-const ELEMENT_DESCRIPTIONS = {
-  light: 'Light sources attract or repel vehicles depending on their wiring. You can drag lights to reposition them.',
-  danger: 'Red danger zones destroy your vehicle on contact. Avoid them!',
-  checkpoint: 'Checkpoints must be visited in order before reaching the goal.',
-  goal: 'Reach the goal to complete the scenario.',
-  bouncer: 'Bouncers deflect your vehicle on contact. Use them to redirect your path.',
-};
+function describeLight(l) {
+  const parts = [];
+  if (l._embedded) return null; // embedded lights described with parent
+  parts.push(`<b>Light source</b> (intensity ${l.intensity}%)`);
+  if (l.path && l.path.waypoints && l.path.waypoints.length >= 2) {
+    parts.push(`This one\'s on the move \u2014 it follows a path ${l.path.mode === 'bounce' ? 'back and forth' : 'and stops at the end'}.`);
+  } else {
+    parts.push('Drag it around to reshape the playing field.');
+  }
+  if (l.onVisit) {
+    if (l.onVisit.action === 'off') parts.push(`Gets shy when your vehicle visits \u2014 turns off on contact.${l.onVisit.recovery ? ' Recovers after ' + l.onVisit.recovery + 's.' : ''}`);
+    else if (l.onVisit.action === 'offDelay') parts.push(`Fades out ${l.onVisit.delay}s after your vehicle gets close.${l.onVisit.recovery ? ' Comes back after ' + l.onVisit.recovery + 's.' : ''}`);
+    else if (l.onVisit.action === 'changeLuminosity') parts.push(`Changes to ${l.onVisit.newIntensity}% intensity when visited. Surprise!`);
+  }
+  if (!l.on) parts.push("Currently off \u2014 but don't underestimate a sleeping light.");
+  return parts.join(' ');
+}
+
+function describeDanger(dz) {
+  const parts = [];
+  const shape = dz.shape === 'circle' ? 'circular' : 'rectangular';
+  parts.push(`<b>${shape[0].toUpperCase() + shape.slice(1)} danger zone</b>`);
+  parts.push('\u2014 touch it and your vehicle is toast. Literally.');
+  if (dz.path && dz.path.waypoints && dz.path.waypoints.length >= 2) {
+    parts.push(`Oh, and it moves. ${dz.path.mode === 'bounce' ? 'Back and forth, like a restless predator.' : 'Slides to its final position and parks there menacingly.'}`);
+  }
+  if (dz.light) {
+    parts.push(`Has a built-in light (intensity ${dz.light.intensity}%). Because apparently being deadly wasn't enough.`);
+    if (dz.light.onVisit && dz.light.onVisit.action) parts.push('Its light reacts when your vehicle gets close.');
+  }
+  return parts.join(' ');
+}
+
+function describeBouncer(b) {
+  const parts = [];
+  parts.push('<b>Bouncer</b> \u2014 a hexagonal deflector.');
+  parts.push('Your vehicle will ricochet off it on impact. Think of it as a very firm suggestion to go elsewhere.');
+  if (b.path && b.path.waypoints && b.path.waypoints.length >= 2) {
+    parts.push(`This bouncer patrols a path ${b.path.mode === 'bounce' ? 'back and forth' : 'one way'}. Timing matters.`);
+  }
+  if (b.light) {
+    parts.push(`Comes equipped with a light (intensity ${b.light.intensity}%).`);
+    if (b.light.onVisit && b.light.onVisit.action) parts.push("Its light has tricks up its sleeve when visited.");
+  }
+  return parts.join(' ');
+}
+
+function describeCheckpoint(cp, idx, total) {
+  const parts = [];
+  parts.push(`<b>Checkpoint ${idx + 1}${total > 1 ? ' of ' + total : ''}</b>`);
+  parts.push('\u2014 swing by here before heading to the finish line.');
+  if (total > 1) parts.push(`They must be visited in order, no skipping!`);
+  if (cp.approvalTime) parts.push(`Patience required: park inside for ${cp.approvalTime}s to get credit.`);
+  if (cp.path && cp.path.waypoints && cp.path.waypoints.length >= 2) {
+    parts.push(`Heads up \u2014 this checkpoint moves ${cp.path.mode === 'bounce' ? 'back and forth along a path' : 'to a new position'}. Chase it!`);
+  }
+  if (cp.light) {
+    parts.push(`Has its own light (intensity ${cp.light.intensity}%).`);
+    if (cp.light.onVisit && cp.light.onVisit.action) parts.push('The light changes when visited.');
+  }
+  return parts.join(' ');
+}
+
+function describeGoal(g) {
+  const parts = [];
+  parts.push(`<b>Finish line${g.label && g.label !== 'Goal' && g.label !== 'FINISH' ? ' (' + g.label + ')' : ''}</b>`);
+  parts.push('\u2014 get your vehicle here to win. The checkered flag awaits!');
+  if (g.path && g.path.waypoints && g.path.waypoints.length >= 2) {
+    parts.push(`Plot twist: it moves ${g.path.mode === 'bounce' ? 'back and forth' : 'to a new spot'}. You'll need to intercept it.`);
+  }
+  if (g.light) {
+    parts.push(`Glowing with a light (intensity ${g.light.intensity}%).`);
+    if (g.light.onVisit && g.light.onVisit.action) parts.push('The light reacts when your vehicle approaches.');
+  }
+  return parts.join(' ');
+}
+
+function describeElement(type, obj, level) {
+  if (type === 'light') return describeLight(obj);
+  if (type === 'danger') return describeDanger(obj);
+  if (type === 'bouncer') return describeBouncer(obj);
+  if (type === 'checkpoint') {
+    const idx = level.checkpoints.indexOf(obj);
+    return describeCheckpoint(obj, idx >= 0 ? idx : 0, level.checkpoints.length);
+  }
+  if (type === 'goal') return describeGoal(obj);
+  return '';
+}
 
 function startWalkthrough(level) {
   walkthroughSteps = [];
-  if (staticLights.length > 0) {
-    walkthroughSteps.push({ type: 'light', getPos: () => ({ x: staticLights[0].x, y: staticLights[0].y }), text: ELEMENT_DESCRIPTIONS.light });
+  // Add each individual element as its own step
+  const nonEmbeddedLights = staticLights.filter(l => !l._embedded);
+  for (const l of nonEmbeddedLights) {
+    walkthroughSteps.push({ type: 'light', obj: l, getPos: () => ({ x: l.x, y: l.y }), text: describeLight(l) });
   }
-  if (level.dangers.length > 0) {
-    const dz = level.dangers[0];
-    walkthroughSteps.push({ type: 'danger', getPos: () => ({ x: dz.shape === 'circle' ? dz.x : dz.x + dz.w / 2, y: dz.shape === 'circle' ? dz.y : dz.y + dz.h / 2 }), text: ELEMENT_DESCRIPTIONS.danger });
+  for (const dz of level.dangers) {
+    const cx = dz.shape === 'circle' ? dz.x : dz.x + dz.w / 2;
+    const cy = dz.shape === 'circle' ? dz.y : dz.y + dz.h / 2;
+    walkthroughSteps.push({ type: 'danger', obj: dz, getPos: () => ({ x: cx, y: cy }), text: describeDanger(dz) });
   }
-  if (level.bouncers && level.bouncers.length > 0) {
-    walkthroughSteps.push({ type: 'bouncer', getPos: () => ({ x: level.bouncers[0].x, y: level.bouncers[0].y }), text: ELEMENT_DESCRIPTIONS.bouncer });
+  if (level.bouncers) {
+    for (const b of level.bouncers) {
+      walkthroughSteps.push({ type: 'bouncer', obj: b, getPos: () => ({ x: b.x, y: b.y }), text: describeBouncer(b) });
+    }
   }
-  if (level.checkpoints.length > 0) {
-    const cp = level.checkpoints[0];
-    let cpText = ELEMENT_DESCRIPTIONS.checkpoint;
-    if (cp.approvalTime) cpText += ` You must stay inside for ${cp.approvalTime}s.`;
-    walkthroughSteps.push({ type: 'checkpoint', getPos: () => ({ x: cp.x, y: cp.y }), text: cpText });
+  for (let i = 0; i < level.checkpoints.length; i++) {
+    const cp = level.checkpoints[i];
+    walkthroughSteps.push({ type: 'checkpoint', obj: cp, getPos: () => ({ x: cp.x, y: cp.y }), text: describeCheckpoint(cp, i, level.checkpoints.length) });
   }
-  if (level.goals.length > 0) {
-    walkthroughSteps.push({ type: 'goal', getPos: () => ({ x: level.goals[0].x, y: level.goals[0].y }), text: ELEMENT_DESCRIPTIONS.goal });
+  for (const g of level.goals) {
+    walkthroughSteps.push({ type: 'goal', obj: g, getPos: () => ({ x: g.x, y: g.y }), text: describeGoal(g) });
   }
+  // Filter out nulls (embedded lights return null)
+  walkthroughSteps = walkthroughSteps.filter(s => s.text);
   if (walkthroughSteps.length > 0) {
     walkthroughActive = true;
     showWalkthroughStep(0);
@@ -5623,6 +5709,27 @@ function dismissWalkthrough() {
   walkthroughSteps = [];
   const container = document.getElementById('tutorial-bubble-container');
   if (container) container.innerHTML = '';
+}
+
+function _positionBubble(bubble, screenX, screenY) {
+  const bw = 320; // max-width of bubble
+  // Place bubble so the arrow points at (screenX, screenY)
+  let bubbleLeft = screenX - bw / 2;
+  bubbleLeft = Math.max(8, Math.min(bubbleLeft, window.innerWidth - bw - 8));
+  // Arrow offset within bubble
+  const arrowX = Math.max(16, Math.min(screenX - bubbleLeft, bw - 16));
+
+  let arrowDir = 'top';
+  if (screenY > window.innerHeight * 0.55) arrowDir = 'bottom';
+
+  bubble.className = 'tutorial-bubble arrow-' + arrowDir;
+  bubble.style.setProperty('--arrow-x', arrowX + 'px');
+  bubble.style.left = bubbleLeft + 'px';
+  bubble.style.top = (arrowDir === 'top' ? screenY + 24 : Math.max(8, screenY - bubble.offsetHeight - 24)) + 'px';
+  // Re-measure after setting top (for bottom case)
+  if (arrowDir === 'bottom') {
+    bubble.style.top = Math.max(8, screenY - bubble.offsetHeight - 24) + 'px';
+  }
 }
 
 function showWalkthroughStep(index) {
@@ -5638,21 +5745,12 @@ function showWalkthroughStep(index) {
   camY = wp.y - (canvas.height / camZoom) / 2;
   clampCamera();
 
-  // Compute screen position
   const rect = canvas.getBoundingClientRect();
   const sc = worldToScreen(wp.x, wp.y);
   const screenX = rect.left + sc.x;
   const screenY = rect.top + sc.y;
 
-  // Determine arrow direction
-  let arrowDir = 'top';
-  if (screenY > window.innerHeight * 0.6) arrowDir = 'bottom';
-
   const bubble = document.createElement('div');
-  bubble.className = 'tutorial-bubble arrow-' + arrowDir;
-  bubble.style.left = Math.max(8, Math.min(screenX - 140, window.innerWidth - 340)) + 'px';
-  bubble.style.top = (arrowDir === 'top' ? screenY + 28 : Math.max(8, screenY - 120)) + 'px';
-
   const isLast = index === walkthroughSteps.length - 1;
   bubble.innerHTML = `
     <div class="step-label">Step ${index + 1} of ${walkthroughSteps.length}</div>
@@ -5663,6 +5761,8 @@ function showWalkthroughStep(index) {
     </div>
   `;
   container.appendChild(bubble);
+  _positionBubble(bubble, screenX, screenY);
+
   bubble.querySelector('.tutorial-btn-skip').addEventListener('click', dismissWalkthrough);
   bubble.querySelector('.tutorial-btn-next').addEventListener('click', () => {
     if (isLast) dismissWalkthrough();
@@ -5675,11 +5775,9 @@ function showWalkthroughStep(index) {
 function gameObjectAt(wx, wy) {
   if (!currentLevel) return null;
   const level = currentLevel;
-  // Check lights
   for (const l of staticLights) {
-    if (toroidalDistSq(wx, wy, l.x, l.y) < 20 * 20) return { type: 'light', obj: l, x: l.x, y: l.y };
+    if (!l._embedded && toroidalDistSq(wx, wy, l.x, l.y) < 20 * 20) return { type: 'light', obj: l, x: l.x, y: l.y };
   }
-  // Check dangers
   for (const dz of level.dangers) {
     if (dz.shape === 'circle') {
       if (toroidalDistSq(wx, wy, dz.x, dz.y) < dz.radius * dz.radius) return { type: 'danger', obj: dz, x: dz.x, y: dz.y };
@@ -5687,17 +5785,14 @@ function gameObjectAt(wx, wy) {
       if (wx >= dz.x && wx <= dz.x + dz.w && wy >= dz.y && wy <= dz.y + dz.h) return { type: 'danger', obj: dz, x: dz.x + dz.w / 2, y: dz.y + dz.h / 2 };
     }
   }
-  // Check bouncers
   if (level.bouncers) {
     for (const b of level.bouncers) {
       if (toroidalDistSq(wx, wy, b.x, b.y) < b.radius * b.radius) return { type: 'bouncer', obj: b, x: b.x, y: b.y };
     }
   }
-  // Check checkpoints
   for (const cp of level.checkpoints) {
     if (toroidalDistSq(wx, wy, cp.x, cp.y) < cp.radius * cp.radius) return { type: 'checkpoint', obj: cp, x: cp.x, y: cp.y };
   }
-  // Check goals
   for (const g of level.goals) {
     if (toroidalDistSq(wx, wy, g.x, g.y) < g.radius * g.radius) return { type: 'goal', obj: g, x: g.x, y: g.y };
   }
@@ -5709,25 +5804,17 @@ function showElementInfoBubble(hit) {
   const container = document.getElementById('tutorial-bubble-container');
   container.innerHTML = '';
 
-  let text = ELEMENT_DESCRIPTIONS[hit.type] || '';
-  if (hit.type === 'checkpoint' && hit.obj.approvalTime) {
-    text += ` You must stay inside for ${hit.obj.approvalTime}s.`;
-  }
+  const text = describeElement(hit.type, hit.obj, currentLevel);
 
   const rect = canvas.getBoundingClientRect();
   const sc = worldToScreen(hit.x, hit.y);
   const screenX = rect.left + sc.x;
   const screenY = rect.top + sc.y;
 
-  let arrowDir = 'top';
-  if (screenY > window.innerHeight * 0.6) arrowDir = 'bottom';
-
   const bubble = document.createElement('div');
-  bubble.className = 'tutorial-bubble arrow-' + arrowDir;
-  bubble.style.left = Math.max(8, Math.min(screenX - 140, window.innerWidth - 340)) + 'px';
-  bubble.style.top = (arrowDir === 'top' ? screenY + 28 : Math.max(8, screenY - 120)) + 'px';
   bubble.innerHTML = `<button class="bubble-close">&times;</button><div class="step-text" style="margin-top:4px;">${text}</div>`;
   container.appendChild(bubble);
+  _positionBubble(bubble, screenX, screenY);
   bubble.querySelector('.bubble-close').addEventListener('click', () => { container.innerHTML = ''; });
 }
 
