@@ -2292,10 +2292,6 @@ function drawInlineSchematic(v, vc) {
     }
     // Polarity + crossed label
     polarity(cx, fgActive ? gateRow + gH + 4 : sY + 20, type.inhibitory);
-    if (type.crossed) {
-      c.fillStyle = '#ff980066'; c.font = '8px sans-serif'; c.textAlign = 'center';
-      c.fillText('X', cx, mY - 18);
-    }
   }
 
   // No side pair: just draw motors and return
@@ -4454,6 +4450,7 @@ function buildEditorPanel() {
         }
         else if (type === 'checkpoint') editorLevel.checkpoints.splice(i, 1);
         else if (type === 'danger') editorLevel.dangers.splice(i, 1);
+        else if (type === 'bouncer') (editorLevel.bouncers || []).splice(i, 1);
         else if (type === 'goal') editorLevel.goals.splice(i, 1);
         if (editorSelected && editorSelected.type === type && editorSelected.index === i) editorSelected = null;
         syncEmbeddedLights();
@@ -4497,6 +4494,7 @@ function buildEditorPanel() {
   testBtn.addEventListener('click', () => {
     editorSyncLightsToLevel();
     editorLevel._custom = true;
+    editorLevel._editorTest = true;
     showBriefing(-1, editorLevel);
   });
   acts.appendChild(testBtn);
@@ -4909,56 +4907,52 @@ function editorMouseDown(e) {
     }
   }
 
+  // Regardless of active tool, if click lands on an existing element, drag it
+  const hit = editorHitTest(pos.x, pos.y);
+  if (hit) {
+    editorSelected = { type: hit.type, index: hit.index };
+    editorDragging = hit;
+    editorDragStart = { x: pos.x, y: pos.y, ox: hit.obj.x, oy: hit.obj.y };
+    buildEditorPanel();
+    return;
+  }
+
   if (editorTool === 'select') {
-    const hit = editorHitTest(pos.x, pos.y);
-    if (hit) {
-      editorSelected = { type: hit.type, index: hit.index };
-      editorDragging = hit;
-      editorDragStart = { x: pos.x, y: pos.y, ox: hit.obj.x, oy: hit.obj.y };
-      buildEditorPanel();
-    } else {
-      editorSelected = null;
-      // Pan
-      isPanning = true;
-      const sc = canvasScreenCoords(e);
-      panStartX = sc.x; panStartY = sc.y;
-      camStartX = camX; camStartY = camY;
-      buildEditorPanel();
-    }
+    editorSelected = null;
+    // Pan
+    isPanning = true;
+    const sc = canvasScreenCoords(e);
+    panStartX = sc.x; panStartY = sc.y;
+    camStartX = camX; camStartY = camY;
+    buildEditorPanel();
   } else if (editorTool === 'light') {
     const light = { id: nextLightId++, x: pos.x, y: pos.y, on: true, intensity: 75, onVisit: null, path: null, _pathProgress: 0, _pathDir: 1 };
     staticLights.push(light);
     editorSyncLightsToLevel();
     const idx = staticLights.filter(l => !l._embedded).length - 1;
     editorSelected = { type: 'light', index: idx };
-    editorTool = 'select';
     buildEditorPanel();
   } else if (editorTool === 'checkpoint') {
     editorLevel.checkpoints.push({ x: pos.x, y: pos.y, radius: 55 });
     editorSelected = { type: 'checkpoint', index: editorLevel.checkpoints.length - 1 };
-    editorTool = 'select';
     buildEditorPanel();
   } else if (editorTool === 'danger') {
     editorLevel.dangers.push({ shape: 'rect', x: pos.x - 70, y: pos.y - 70, w: 140, h: 140 });
     editorSelected = { type: 'danger', index: editorLevel.dangers.length - 1 };
-    editorTool = 'select';
     buildEditorPanel();
   } else if (editorTool === 'bouncer') {
     if (!editorLevel.bouncers) editorLevel.bouncers = [];
     editorLevel.bouncers.push({ x: pos.x, y: pos.y, radius: 50 });
     editorSelected = { type: 'bouncer', index: editorLevel.bouncers.length - 1 };
-    editorTool = 'select';
     buildEditorPanel();
   } else if (editorTool === 'start') {
     editorLevel.startPos.x = pos.x;
     editorLevel.startPos.y = pos.y;
     editorSelected = { type: 'start', index: 0 };
-    editorTool = 'select';
     buildEditorPanel();
   } else if (editorTool === 'goal') {
     editorLevel.goals.push({ type: 'reach', x: pos.x, y: pos.y, radius: 60, label: 'Finish' });
     editorSelected = { type: 'goal', index: editorLevel.goals.length - 1 };
-    editorTool = 'select';
     buildEditorPanel();
   }
 }
@@ -6142,8 +6136,10 @@ async function endGame(outcome, message) {
   const isAdmin = currentUser && currentUser.role === 'admin';
   const finishedTime = gameElapsed;
 
-  // Save attempt to server first, then fetch leaderboard
-  if (currentUser && gameVehicle) {
+  // Save attempt to server first, then fetch leaderboard (skip for editor test runs)
+  const isEditorTest = !!level._editorTest;
+  let leaderboard = [];
+  if (!isEditorTest && currentUser && gameVehicle) {
     const config = extractVehicleConfig(gameVehicle);
     const time = isWin ? finishedTime : null;
     await apiSaveAttempt(level.id, time, config);
@@ -6157,8 +6153,7 @@ async function endGame(outcome, message) {
   }
 
   // Fetch leaderboard
-  let leaderboard = [];
-  if (isWin) {
+  if (!isEditorTest && isWin) {
     leaderboard = await apiFetchLeaderboard(level.id);
   }
 
