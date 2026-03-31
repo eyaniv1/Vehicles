@@ -681,6 +681,20 @@
     border: 1px solid #333;
     background: #0a0a1a;
   }
+  .sg-demo-play {
+    margin-top: 4px;
+    padding: 3px 16px;
+    font-size: 11px;
+    font-weight: 700;
+    border: 1px solid #4fc3f7;
+    background: transparent;
+    color: #4fc3f7;
+    border-radius: 5px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .sg-demo-play:hover { background: #4fc3f7; color: #0a0a1a; }
+  .sg-demo-play.playing { background: #4fc3f7; color: #0a0a1a; border-color: #4fc3f7; }
   .sg-demo-label {
     font-size: 11px; color: #81d4fa;
     margin-top: 5px; text-align: center;
@@ -3534,20 +3548,39 @@ function drawDemoFrame(demo) {
       c.stroke();
       c.setLineDash([]);
     }
-    // Triangle
+    // Car shape
     c.save();
     c.translate(v.x, v.y);
     c.rotate(v.theta);
+    // Body
     c.fillStyle = v.color.body;
     c.strokeStyle = v.color.stroke;
-    c.lineWidth = 2;
+    c.lineWidth = 1.5;
     c.beginPath();
-    c.moveTo(14, 0);
-    c.lineTo(-8, -9);
-    c.lineTo(-8, 9);
+    c.moveTo(14, 0);    // nose
+    c.lineTo(8, -7);
+    c.lineTo(-10, -7);
+    c.lineTo(-12, -5);
+    c.lineTo(-12, 5);
+    c.lineTo(-10, 7);
+    c.lineTo(8, 7);
     c.closePath();
-    c.fill();
-    c.stroke();
+    c.fill(); c.stroke();
+    // Windshield
+    c.fillStyle = 'rgba(79,195,247,0.3)';
+    c.beginPath();
+    c.moveTo(10, -5); c.lineTo(5, -5); c.lineTo(5, 5); c.lineTo(10, 5);
+    c.closePath(); c.fill();
+    // Wheels
+    c.fillStyle = '#333'; c.strokeStyle = '#666'; c.lineWidth = 1;
+    c.fillRect(-8, -9.5, 5, 3); c.strokeRect(-8, -9.5, 5, 3);
+    c.fillRect(-8, 6.5, 5, 3); c.strokeRect(-8, 6.5, 5, 3);
+    c.fillRect(4, -9.5, 5, 3); c.strokeRect(4, -9.5, 5, 3);
+    c.fillRect(4, 6.5, 5, 3); c.strokeRect(4, 6.5, 5, 3);
+    // Sensors (small dots at front)
+    c.fillStyle = '#4fc3f7';
+    c.beginPath(); c.arc(12, -5, 1.5, 0, Math.PI * 2); c.fill();
+    c.beginPath(); c.arc(12, 5, 1.5, 0, Math.PI * 2); c.fill();
     c.restore();
   }
 }
@@ -3574,8 +3607,10 @@ function animateStrategyDemos(timestamp) {
   const dt = Math.min((timestamp - strategyLastTime) / 1000, 0.05);
   strategyLastTime = timestamp;
   for (const demo of strategyDemos) {
-    tickStrategyDemo(demo, dt);
-    drawDemoFrame(demo);
+    if (demo.playing) {
+      tickStrategyDemo(demo, dt);
+      drawDemoFrame(demo);
+    }
   }
   strategyRafId = requestAnimationFrame(animateStrategyDemos);
 }
@@ -3598,6 +3633,11 @@ function createDemoCanvas(parentEl, label) {
   cvs.className = 'sg-demo-canvas';
   cvs.width = 260; cvs.height = 190;
   cell.appendChild(cvs);
+  // Play/Pause button
+  const playBtn = document.createElement('button');
+  playBtn.className = 'sg-demo-play';
+  playBtn.textContent = '\u25B6 Play';
+  cell.appendChild(playBtn);
   if (label) {
     const lbl = document.createElement('div');
     lbl.className = 'sg-demo-label';
@@ -3605,25 +3645,40 @@ function createDemoCanvas(parentEl, label) {
     cell.appendChild(lbl);
   }
   parentEl.appendChild(cell);
-  return cvs;
+  return { canvas: cvs, playBtn: playBtn };
 }
 
-function makeDemo(canvas, lights, vehicleDefs, maxTime) {
+function makeDemo(canvasObj, lights, vehicleDefs, maxTime) {
+  // canvasObj can be { canvas, playBtn } or just a canvas element
+  const cvs = canvasObj.canvas || canvasObj;
+  const playBtn = canvasObj.playBtn || null;
   const vList = vehicleDefs.map(d => {
     const v = makeDemoVehicle(d.typeIndex, d.x, d.y, d.theta || 0, d.overrides);
     return v;
   });
   const demo = {
-    canvas: canvas,
-    ctx: canvas.getContext('2d'),
-    worldW: canvas.width,
-    worldH: canvas.height,
+    canvas: cvs,
+    ctx: cvs.getContext('2d'),
+    worldW: cvs.width,
+    worldH: cvs.height,
     lights: lights.map(l => ({ id: _sgDemoIdCounter--, x: l.x, y: l.y, on: true, intensity: l.intensity || 75 })),
     vehicles: vList,
     initState: vList.map(v => ({ x: v.x, y: v.y, theta: v.theta })),
     elapsed: 0,
     maxTime: maxTime || 10,
+    playing: false,
   };
+  // Draw initial frame (paused)
+  drawDemoFrame(demo);
+  // Wire play button
+  if (playBtn) {
+    playBtn.addEventListener('click', () => {
+      demo.playing = !demo.playing;
+      playBtn.textContent = demo.playing ? '\u23F8 Pause' : '\u25B6 Play';
+      playBtn.classList.toggle('playing', demo.playing);
+      if (demo.playing) resetDemo(demo); // restart from beginning on play
+    });
+  }
   strategyDemos.push(demo);
   return demo;
 }
@@ -3648,12 +3703,12 @@ function buildStrategyPages() {
     const c1 = createDemoCanvas(row, 'V2a Fear — flees from light');
     const c2 = createDemoCanvas(row, 'V2b Aggression — charges toward light');
     el.appendChild(row);
-    // Fear: start above-left of light, angled toward it — should veer away
-    makeDemo(c1, [{ x: 170, y: 95 }],
-      [{ typeIndex: 1, x: 60, y: 55, theta: 0.4, overrides: { simSpeed: 2 } }], 8);
-    // Aggression: start below-left, angled away from light — should curve toward it
-    makeDemo(c2, [{ x: 170, y: 70 }],
-      [{ typeIndex: 2, x: 50, y: 140, theta: -0.3, overrides: { simSpeed: 2 } }], 8);
+    // Fear: place vehicle near light, facing it — it should visibly steer away
+    makeDemo(c1, [{ x: 190, y: 95 }],
+      [{ typeIndex: 1, x: 80, y: 95, theta: 0, overrides: { simSpeed: 1.5, speedContrast: 60 } }], 10);
+    // Aggression: start offset, angled away — should curve hard toward light
+    makeDemo(c2, [{ x: 190, y: 95 }],
+      [{ typeIndex: 2, x: 50, y: 150, theta: -0.5, overrides: { simSpeed: 1.5, speedContrast: 60 } }], 10);
   }});
 
   // Page 2: Core Behaviors - Love vs Explorer
@@ -3666,14 +3721,14 @@ function buildStrategyPages() {
     `;
     const row = document.createElement('div'); row.className = 'sg-demo-row';
     const c1 = createDemoCanvas(row, 'V3a Love — approaches and parks');
-    const c2 = createDemoCanvas(row, 'V3b Explorer — orbits the light');
+    const c2 = createDemoCanvas(row, 'V3b Explorer — approaches then veers away');
     el.appendChild(row);
-    // Love: start offset, angled toward light — should slow and park
-    makeDemo(c1, [{ x: 180, y: 95 }],
-      [{ typeIndex: 3, x: 40, y: 60, theta: 0.3, overrides: { simSpeed: 2 } }], 14);
-    // Explorer: start near light at an angle — should orbit
-    makeDemo(c2, [{ x: 130, y: 95 }],
-      [{ typeIndex: 4, x: 60, y: 50, theta: 0.8, overrides: { simSpeed: 2 } }], 14);
+    // Love: start far left, facing light — should approach slowly and stop near it
+    makeDemo(c1, [{ x: 200, y: 95 }],
+      [{ typeIndex: 3, x: 40, y: 95, theta: 0, overrides: { simSpeed: 1.5, speedContrast: 50 } }], 16);
+    // Explorer: start far left, facing light — should approach then turn and drive away
+    makeDemo(c2, [{ x: 200, y: 95 }],
+      [{ typeIndex: 4, x: 40, y: 95, theta: 0, overrides: { simSpeed: 1.5, speedContrast: 50 } }], 16);
   }});
 
   // Page 3: Speed Contrast
