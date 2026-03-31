@@ -524,6 +524,8 @@
   }
   .tutorial-btn-next { background: #4fc3f7; color: #0a0a1a; }
   .tutorial-btn-next:hover { background: #81d4fa; transform: translateY(-1px); }
+  .tutorial-btn-prev { background: transparent; color: rgba(255,255,255,0.5); border: 1px solid rgba(255,255,255,0.2) !important; }
+  .tutorial-btn-prev:hover { color: #4fc3f7; border-color: rgba(79,195,247,0.4) !important; }
   .tutorial-btn-skip { background: transparent; color: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.15) !important; }
   .tutorial-btn-skip:hover { color: #fff; border-color: rgba(255,255,255,0.4) !important; }
   .tutorial-btn-rec { background: #ff9800 !important; color: #0a0a1a !important; }
@@ -684,6 +686,18 @@
     margin-top: 5px; text-align: center;
     font-weight: 600;
   }
+  .sg-nav {
+    display: flex; gap: 8px; justify-content: center; align-items: center;
+    margin-top: 16px; padding-top: 12px; border-top: 1px solid #1a2a40;
+  }
+  .sg-nav button {
+    padding: 6px 16px; border-radius: 6px; border: 1px solid #333;
+    background: #0d1b2a; color: #81d4fa; font-size: 12px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .sg-nav button:hover { background: #1a2a40; }
+  .sg-nav button:disabled { opacity: 0.3; cursor: default; }
+  .sg-nav .sg-page-info { color: #546e7a; font-size: 11px; min-width: 60px; text-align: center; }
   .sg-tip {
     background: #0d1b2a;
     border-left: 3px solid #ff9800;
@@ -3614,179 +3628,204 @@ function makeDemo(canvas, lights, vehicleDefs, maxTime) {
   return demo;
 }
 
-function buildStrategyGuide() {
-  const sec = document.getElementById('strategy-sections');
-  sec.innerHTML = '';
+let sgPages = [];
+let sgPageIndex = 0;
+
+function buildStrategyPages() {
+  sgPages = [];
+  // Each page: { title, buildFn(container) }
+
+  // Page 1: Core Behaviors - Fear vs Aggression
+  sgPages.push({ title: 'Core Behaviors: Fear vs Aggression', build(el) {
+    el.innerHTML = `
+      <p>Vehicle personality comes from <b>wiring</b> (direct vs crossed) and <b>response</b> (excitatory vs inhibitory).</p>
+      <ul>
+        <li><b>V2a Fear</b> (direct + excitatory) — light speeds up the same-side motor, turning the vehicle <em>away</em>. It flees.</li>
+        <li><b>V2b Aggression</b> (crossed + excitatory) — light speeds up the <em>opposite</em> motor, steering <em>toward</em> it. It charges.</li>
+      </ul>
+    `;
+    const row = document.createElement('div'); row.className = 'sg-demo-row';
+    const c1 = createDemoCanvas(row, 'V2a Fear — flees from light');
+    const c2 = createDemoCanvas(row, 'V2b Aggression — charges toward light');
+    el.appendChild(row);
+    // Fear: start above-left of light, angled toward it — should veer away
+    makeDemo(c1, [{ x: 170, y: 95 }],
+      [{ typeIndex: 1, x: 60, y: 55, theta: 0.4, overrides: { simSpeed: 2 } }], 8);
+    // Aggression: start below-left, angled away from light — should curve toward it
+    makeDemo(c2, [{ x: 170, y: 70 }],
+      [{ typeIndex: 2, x: 50, y: 140, theta: -0.3, overrides: { simSpeed: 2 } }], 8);
+  }});
+
+  // Page 2: Core Behaviors - Love vs Explorer
+  sgPages.push({ title: 'Core Behaviors: Love vs Explorer', build(el) {
+    el.innerHTML = `
+      <ul>
+        <li><b>V3a Love</b> (direct + inhibitory) — light <em>slows</em> the same-side motor, so the vehicle turns toward light and <em>decelerates</em>. It parks.</li>
+        <li><b>V3b Explorer</b> (crossed + inhibitory) — light slows the <em>opposite</em> motor, so it approaches but veers away up close. It orbits.</li>
+      </ul>
+    `;
+    const row = document.createElement('div'); row.className = 'sg-demo-row';
+    const c1 = createDemoCanvas(row, 'V3a Love — approaches and parks');
+    const c2 = createDemoCanvas(row, 'V3b Explorer — orbits the light');
+    el.appendChild(row);
+    // Love: start offset, angled toward light — should slow and park
+    makeDemo(c1, [{ x: 180, y: 95 }],
+      [{ typeIndex: 3, x: 40, y: 60, theta: 0.3, overrides: { simSpeed: 2 } }], 14);
+    // Explorer: start near light at an angle — should orbit
+    makeDemo(c2, [{ x: 130, y: 95 }],
+      [{ typeIndex: 4, x: 60, y: 50, theta: 0.8, overrides: { simSpeed: 2 } }], 14);
+  }});
+
+  // Page 3: Speed Contrast
+  sgPages.push({ title: 'Speed Contrast', build(el) {
+    el.innerHTML = `
+      <p><b>Contrast</b> amplifies the difference between left and right motor speeds.</p>
+      <ul>
+        <li><b>Low contrast (10–30)</b> — gentle, wide curves. Good for open maps.</li>
+        <li><b>High contrast (70–100)</b> — sharp, snapping turns. Essential for threading between obstacles.</li>
+      </ul>
+    `;
+    const row = document.createElement('div'); row.className = 'sg-demo-row';
+    const c1 = createDemoCanvas(row, 'Contrast 20 — wide arcs');
+    const c2 = createDemoCanvas(row, 'Contrast 85 — sharp turns');
+    el.appendChild(row);
+    // Aggression approaching a light off-center to show turning difference
+    makeDemo(c1, [{ x: 200, y: 40 }],
+      [{ typeIndex: 2, x: 30, y: 150, theta: -0.6, overrides: { speedContrast: 20, simSpeed: 2 } }], 10);
+    makeDemo(c2, [{ x: 200, y: 40 }],
+      [{ typeIndex: 2, x: 30, y: 150, theta: -0.6, overrides: { speedContrast: 85, simSpeed: 2 } }], 10);
+  }});
+
+  // Page 4: Threshold & Sharpness
+  sgPages.push({ title: 'Threshold & Sharpness', build(el) {
+    el.innerHTML = `
+      <p><b>Threshold</b> sets the minimum light intensity the vehicle cares about. Below it, the gate blocks the signal.</p>
+      <p><b>Sharpness</b> controls how abruptly the gate kicks in. Low = gradual ramp; high = binary snap.</p>
+    `;
+    const row = document.createElement('div'); row.className = 'sg-demo-row';
+    const c1 = createDemoCanvas(row, 'Threshold 10 — reacts to both');
+    const c2 = createDemoCanvas(row, 'Threshold 55 — ignores dim light');
+    el.appendChild(row);
+    const lights = [{ x: 80, y: 40, intensity: 25 }, { x: 200, y: 140, intensity: 80 }];
+    makeDemo(c1, lights,
+      [{ typeIndex: 2, x: 30, y: 130, theta: -0.6, overrides: { simSpeed: 2,
+        gate: { front: { type: 1, threshold: 10, sharpness: 5 }, side: { type: 0, threshold: 30, sharpness: 5 } }
+      } }], 10);
+    makeDemo(c2, lights,
+      [{ typeIndex: 2, x: 30, y: 130, theta: -0.6, overrides: { simSpeed: 2,
+        gate: { front: { type: 1, threshold: 55, sharpness: 8 }, side: { type: 0, threshold: 30, sharpness: 5 } }
+      } }], 10);
+  }});
+
+  // Page 5: Side Sensors
+  sgPages.push({ title: 'Side Sensors', build(el) {
+    el.innerHTML = `
+      <p>Side sensors add <b>lateral awareness</b> with their own behavior type, blended with the front pair.</p>
+      <ul>
+        <li><b>Front Aggression + Side Fear</b> — charges toward frontal light but dodges lateral threats.</li>
+        <li><b>Front Love + Side Explorer</b> — parks at frontal light but orbits laterally.</li>
+      </ul>
+    `;
+    const row = document.createElement('div'); row.className = 'sg-demo-row';
+    const c1 = createDemoCanvas(row, 'Love + Side Fear — avoids lateral');
+    const c2 = createDemoCanvas(row, 'Love only — no avoidance');
+    el.appendChild(row);
+    const lights = [{ x: 210, y: 100 }, { x: 130, y: 25, intensity: 65 }];
+    makeDemo(c1, lights,
+      [{ typeIndex: 3, x: 40, y: 110, theta: 0.0, overrides: { simSpeed: 2,
+        sidePair: { enabled: true, behaviorIndex: 0, weight: 45 }
+      } }], 12);
+    makeDemo(c2, lights,
+      [{ typeIndex: 3, x: 40, y: 110, theta: 0.0, overrides: { simSpeed: 2 } }], 12);
+  }});
+
+  // Page 6: Scenario Patterns
+  sgPages.push({ title: 'Scenario Patterns', build(el) {
+    el.innerHTML = `
+      <div class="sg-tip"><b>Lights near the finish line</b><br>Use <b>Aggression</b> (charges through) or <b>Love</b> (parks at it). Fear will actively avoid the area.</div>
+      <div class="sg-tip"><b>Lights blocking the path</b><br>Use <b>Fear</b> — the lights act as repellers, pushing you <em>toward</em> the finish.</div>
+      <div class="sg-tip"><b>Checkpoints with parking</b><br><b>Love</b> is the natural choice — it parks near light. Ensure a light at or near each checkpoint.<br>Explorer <em>can</em> work if the checkpoint radius is large enough.</div>
+      <div class="sg-tip"><b>Danger zones</b><br>Lower speed (2–3x) gives steering time. Higher <b>contrast</b> for sharper dodges. <b>Side Fear</b> sensors help dodge lateral threats.</div>
+      <div class="sg-tip"><b>Bouncers</b><br>Excitatory vehicles hit harder — bigger deflections. Inhibitory vehicles slow down near light — softer bounces.</div>
+      <div class="sg-tip"><b>Moving elements</b><br>Watch the cycle before launching. Lower speed + low sharpness avoids jerky reactions.</div>
+    `;
+  }});
+
+  // Page 7: Quick Decision Tree + Reference
+  sgPages.push({ title: 'Quick Decision Tree', build(el) {
+    el.innerHTML = `
+      <div class="sg-tip" style="line-height:1.9;">
+        1. Light at or near the finish? → <b>Aggression</b> or <b>Love</b><br>
+        2. Lights blocking the path? → <b>Fear</b> (use as repellers)<br>
+        3. Checkpoints need parking? → <b>Love</b> (ensure light nearby)<br>
+        4. Lots of dangers? → Lower speed, higher contrast, higher threshold<br>
+        5. Threading a narrow gap? → High sharpness + high contrast<br>
+        6. Wide open map? → Low sharpness, low contrast, high speed<br>
+        7. Need lateral dodge? → Side sensors with <b>Fear</b> behavior<br>
+        8. Need to orbit/patrol? → <b>Explorer</b>
+      </div>
+      <h3 style="margin-top:16px;">Parameter Quick Reference</h3>
+      <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+        <tr style="border-bottom:1px solid #333;"><th style="text-align:left;color:#4fc3f7;padding:4px 8px;font-size:12px;">Parameter</th><th style="text-align:left;color:#4fc3f7;padding:4px 8px;font-size:12px;">Low</th><th style="text-align:left;color:#4fc3f7;padding:4px 8px;font-size:12px;">High</th></tr>
+        <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Threshold</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Reacts to faint light</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Only bright/close light</td></tr>
+        <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Sharpness</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Smooth gradual steering</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Snap on/off reactions</td></tr>
+        <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Contrast</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Wide gentle turns</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Sharp tight turns</td></tr>
+        <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Speed</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Precision (dangers)</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Speed runs</td></tr>
+        <tr><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Side Blend</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Subtle lateral hint</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Strong lateral control</td></tr>
+      </table>
+      <p style="font-size:11px;color:#78909c;margin-top:8px;font-style:italic;">These are guidelines, not guarantees — experimenting is half the fun.</p>
+    `;
+  }});
+}
+
+function showStrategyPage(index) {
+  stopStrategyDemos();
   strategyDemos = [];
   _sgDemoIdCounter = -1000;
+  sgPageIndex = Math.max(0, Math.min(index, sgPages.length - 1));
+  const page = sgPages[sgPageIndex];
 
-  // --- Section 1: Core Behaviors ---
-  const s1 = document.createElement('div');
-  s1.className = 'sg-section';
-  s1.innerHTML = `
-    <h3>Core Behaviors</h3>
-    <p>Every vehicle's personality comes from two properties: <b>wiring</b> (direct vs crossed) and <b>response</b> (excitatory vs inhibitory).</p>
-    <ul>
-      <li><b>V2a Fear</b> (direct + excitatory) — light on one side speeds up that motor, turning the vehicle <em>away</em>. It flees.</li>
-      <li><b>V2b Aggression</b> (crossed + excitatory) — light on one side speeds up the <em>opposite</em> motor, steering <em>toward</em> it. It charges.</li>
-      <li><b>V3a Love</b> (direct + inhibitory) — light <em>slows</em> the same-side motor, so the vehicle turns toward light and <em>decelerates</em>. It parks.</li>
-      <li><b>V3b Explorer</b> (crossed + inhibitory) — light slows the <em>opposite</em> motor, so it approaches but veers away up close. It orbits.</li>
-    </ul>
-  `;
-  // Demo A: Fear vs Aggression
-  const row1 = document.createElement('div'); row1.className = 'sg-demo-row';
-  const cvsA1 = createDemoCanvas(row1, 'V2a Fear — flees from light');
-  const cvsA2 = createDemoCanvas(row1, 'V2b Aggression — charges toward light');
-  s1.appendChild(row1);
-  makeDemo(cvsA1, [{ x: 130, y: 95 }], [{ typeIndex: 1, x: 40, y: 95, theta: 0 }], 8);
-  makeDemo(cvsA2, [{ x: 130, y: 95 }], [{ typeIndex: 2, x: 40, y: 95, theta: 0 }], 8);
+  const sec = document.getElementById('strategy-sections');
+  sec.innerHTML = '';
 
-  // Demo B: Love vs Explorer
-  const row2 = document.createElement('div'); row2.className = 'sg-demo-row';
-  const cvsB1 = createDemoCanvas(row2, 'V3a Love — parks near light');
-  const cvsB2 = createDemoCanvas(row2, 'V3b Explorer — orbits light');
-  s1.appendChild(row2);
-  makeDemo(cvsB1, [{ x: 160, y: 95 }], [{ typeIndex: 3, x: 50, y: 80, theta: 0.2 }], 12);
-  makeDemo(cvsB2, [{ x: 130, y: 95 }], [{ typeIndex: 4, x: 50, y: 70, theta: 0.3 }], 12);
-  sec.appendChild(s1);
+  // Title
+  const h3 = document.createElement('h3');
+  h3.textContent = page.title;
+  h3.style.marginTop = '0';
+  sec.appendChild(h3);
 
-  // --- Section 2: Speed Contrast ---
-  const s2 = document.createElement('div');
-  s2.className = 'sg-section';
-  s2.innerHTML = `
-    <h3>Speed Contrast</h3>
-    <p><b>Contrast</b> amplifies the difference between left and right motor speeds. The formula raises each motor speed to a power: at contrast 50 the exponent is 2 (squaring), so small differences become large.</p>
-    <ul>
-      <li><b>Low contrast (10–30)</b> — gentle, wide curves. Good for open maps where precision isn't critical.</li>
-      <li><b>High contrast (70–100)</b> — sharp, snapping turns. Essential for threading between obstacles or making tight maneuvers.</li>
-    </ul>
-  `;
-  const row3 = document.createElement('div'); row3.className = 'sg-demo-row';
-  const cvsC1 = createDemoCanvas(row3, 'Contrast 20 — wide arcs');
-  const cvsC2 = createDemoCanvas(row3, 'Contrast 90 — sharp turns');
-  s2.appendChild(row3);
-  makeDemo(cvsC1, [{ x: 200, y: 50 }],
-    [{ typeIndex: 2, x: 40, y: 140, theta: -0.5, overrides: { speedContrast: 20 } }], 10);
-  makeDemo(cvsC2, [{ x: 200, y: 50 }],
-    [{ typeIndex: 2, x: 40, y: 140, theta: -0.5, overrides: { speedContrast: 90 } }], 10);
-  sec.appendChild(s2);
+  // Content
+  const content = document.createElement('div');
+  page.build(content);
+  sec.appendChild(content);
 
-  // --- Section 3: Threshold & Sharpness ---
-  const s3 = document.createElement('div');
-  s3.className = 'sg-section';
-  s3.innerHTML = `
-    <h3>Threshold &amp; Sharpness</h3>
-    <p><b>Threshold</b> sets the minimum light intensity the vehicle cares about. Below it, the gate blocks the signal — the vehicle ignores the light.</p>
-    <p><b>Sharpness</b> controls how abruptly the gate kicks in. Low sharpness = gradual ramp; high sharpness = binary snap.</p>
-    <ul>
-      <li><b>Low threshold (5–15)</b> — reacts to everything, even faint distant light. Use in sparse maps.</li>
-      <li><b>High threshold (40–70)</b> — ignores dim/distant light. Use in cluttered maps to focus on the nearest, brightest source.</li>
-    </ul>
-  `;
-  const row4 = document.createElement('div'); row4.className = 'sg-demo-row';
-  const cvsD1 = createDemoCanvas(row4, 'Threshold 10 — reacts to both');
-  const cvsD2 = createDemoCanvas(row4, 'Threshold 55 — ignores dim light');
-  s3.appendChild(row4);
-  makeDemo(cvsD1, [{ x: 70, y: 50, intensity: 30 }, { x: 200, y: 140, intensity: 80 }],
-    [{ typeIndex: 2, x: 30, y: 140, theta: -0.8, overrides: {
-      gate: { front: { type: 1, threshold: 10, sharpness: 5 }, side: { type: 0, threshold: 30, sharpness: 5 } }
-    } }], 10);
-  makeDemo(cvsD2, [{ x: 70, y: 50, intensity: 30 }, { x: 200, y: 140, intensity: 80 }],
-    [{ typeIndex: 2, x: 30, y: 140, theta: -0.8, overrides: {
-      gate: { front: { type: 1, threshold: 55, sharpness: 8 }, side: { type: 0, threshold: 30, sharpness: 5 } }
-    } }], 10);
-  sec.appendChild(s3);
+  // Navigation
+  const nav = document.createElement('div');
+  nav.className = 'sg-nav';
+  const prevBtn = document.createElement('button');
+  prevBtn.textContent = '\u2190 Previous';
+  prevBtn.disabled = sgPageIndex === 0;
+  prevBtn.addEventListener('click', () => showStrategyPage(sgPageIndex - 1));
+  const pageInfo = document.createElement('span');
+  pageInfo.className = 'sg-page-info';
+  pageInfo.textContent = (sgPageIndex + 1) + ' / ' + sgPages.length;
+  const nextBtn = document.createElement('button');
+  nextBtn.textContent = 'Next \u2192';
+  nextBtn.disabled = sgPageIndex === sgPages.length - 1;
+  nextBtn.addEventListener('click', () => showStrategyPage(sgPageIndex + 1));
+  nav.appendChild(prevBtn);
+  nav.appendChild(pageInfo);
+  nav.appendChild(nextBtn);
+  sec.appendChild(nav);
 
-  // --- Section 4: Side Sensors ---
-  const s4 = document.createElement('div');
-  s4.className = 'sg-section';
-  s4.innerHTML = `
-    <h3>Side Sensors</h3>
-    <p>Side sensors add <b>lateral awareness</b>. They have their own behavior type (Fear, Aggression, Love, Explorer) and blend with the front pair via the weight slider.</p>
-    <ul>
-      <li><b>Front Aggression + Side Fear</b> — charges toward frontal light but dodges lateral light. Good for threading between lights.</li>
-      <li><b>Front Fear + Side Love</b> — flees frontal light but is drawn sideways toward lateral light. Useful for curved paths with side beacons.</li>
-      <li><b>Front Love + Side Explorer</b> — parks at frontal light but orbits laterally. Helps reach off-axis checkpoints.</li>
-    </ul>
-  `;
-  const row5 = document.createElement('div'); row5.className = 'sg-demo-row';
-  const cvsE1 = createDemoCanvas(row5, 'Love + Side Fear — avoids lateral light');
-  const cvsE2 = createDemoCanvas(row5, 'Love only — no lateral avoidance');
-  s4.appendChild(row5);
-  makeDemo(cvsE1, [{ x: 200, y: 95 }, { x: 130, y: 30, intensity: 60 }],
-    [{ typeIndex: 3, x: 40, y: 95, theta: 0.1, overrides: {
-      sidePair: { enabled: true, behaviorIndex: 0, weight: 45 }
-    } }], 12);
-  makeDemo(cvsE2, [{ x: 200, y: 95 }, { x: 130, y: 30, intensity: 60 }],
-    [{ typeIndex: 3, x: 40, y: 95, theta: 0.1 }], 12);
-  sec.appendChild(s4);
-
-  // --- Section 5: Scenario Patterns ---
-  const s5 = document.createElement('div');
-  s5.className = 'sg-section';
-  s5.innerHTML = `
-    <h3>Scenario Patterns</h3>
-    <div class="sg-tip">
-      <b>Lights near the finish line</b><br>
-      Use <b>Aggression</b> (charges through) or <b>Love</b> (parks at it). Fear will actively avoid the area.
-    </div>
-    <div class="sg-tip">
-      <b>Lights blocking the path to the finish</b><br>
-      Use <b>Fear</b> — the lights act as repellers, pushing you <em>toward</em> the finish. Place them strategically.
-    </div>
-    <div class="sg-tip">
-      <b>Checkpoints with parking (approval time)</b><br>
-      <b>Love</b> is the natural choice — it parks near light. Ensure there's a light at or near each checkpoint.<br>
-      Explorer <em>can</em> work if the checkpoint radius is large enough — it orbits nearby and may dwell long enough.
-    </div>
-    <div class="sg-tip">
-      <b>Danger zones in the path</b><br>
-      Lower speed (2–3x) gives steering time. Higher <b>contrast</b> sharpens turns to dodge. A higher <b>threshold</b> gate ignores distant distractions. <b>Side Fear</b> sensors help dodge lateral threats.
-    </div>
-    <div class="sg-tip">
-      <b>Bouncers</b><br>
-      Excitatory vehicles (Fear/Aggression) hit bouncers harder — bigger deflections. Inhibitory vehicles (Love/Explorer) slow down near light, meaning softer bounces. Use bouncers to redirect paths when direct routing fails.
-    </div>
-    <div class="sg-tip">
-      <b>Moving elements</b><br>
-      Watch the cycle before launching — timing matters. Lower speed gives more time to ride a moving light's pull. Low sharpness avoids jerky reactions when a light crosses the gate threshold.
-    </div>
-  `;
-  sec.appendChild(s5);
-
-  // --- Section 6: Quick Decision Tree ---
-  const s6 = document.createElement('div');
-  s6.className = 'sg-section';
-  s6.innerHTML = `
-    <h3>Quick Decision Tree</h3>
-    <div class="sg-tip" style="line-height:1.9;">
-      1. Is there a light at or near the finish? → <b>Aggression</b> or <b>Love</b><br>
-      2. Are lights blocking the path? → <b>Fear</b> (use them as repellers)<br>
-      3. Do checkpoints need parking? → <b>Love</b> (ensure light nearby)<br>
-      4. Lots of dangers? → Lower speed, higher contrast, higher threshold<br>
-      5. Need to thread a narrow gap? → High sharpness + high contrast<br>
-      6. Wide open map? → Low sharpness, low contrast, high speed<br>
-      7. Need lateral dodge ability? → Enable side sensors with <b>Fear</b> behavior<br>
-      8. Need to orbit/patrol an area? → <b>Explorer</b>
-    </div>
-    <h3>Parameter Quick Reference</h3>
-    <table style="width:100%;border-collapse:collapse;margin:8px 0;">
-      <tr style="border-bottom:1px solid #333;"><th style="text-align:left;color:#4fc3f7;padding:4px 8px;font-size:12px;">Parameter</th><th style="text-align:left;color:#4fc3f7;padding:4px 8px;font-size:12px;">Low</th><th style="text-align:left;color:#4fc3f7;padding:4px 8px;font-size:12px;">High</th></tr>
-      <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Threshold</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Reacts to faint light</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Only reacts to bright/close light</td></tr>
-      <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Sharpness</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Smooth gradual steering</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Snap on/off reactions</td></tr>
-      <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Contrast</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Wide gentle turns</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Sharp tight turns</td></tr>
-      <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Speed</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Precision (dangers, parking)</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Speed runs, clear paths</td></tr>
-      <tr><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Side Blend</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Subtle lateral hint</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Strong lateral control</td></tr>
-    </table>
-    <p style="font-size:11px;color:#78909c;margin-top:12px;font-style:italic;">These are guidelines, not guarantees — every scenario has its own quirks. Experimenting is half the fun.</p>
-  `;
-  sec.appendChild(s6);
+  // Start demos for this page
+  if (strategyDemos.length > 0) startStrategyDemos();
 }
 
 function openStrategyGuide() {
-  buildStrategyGuide();
+  buildStrategyPages();
   document.getElementById('strategy-overlay').classList.add('open');
-  startStrategyDemos();
+  showStrategyPage(0);
 }
 
 function closeStrategyGuide() {
@@ -4122,6 +4161,9 @@ const guidedTutorialSteps = [
     autoMs: 8000,
     setup() {
       tutorialResetVehicle(1, 150, Math.PI); // Fear, 150px left of light, facing right
+      // Offset vertically so sensors get unequal light — triggers visible steering away
+      const v = vehicles[0];
+      if (v) { v.y -= 30; v.theta = 0.2; }
       buildVehicleCards();
     },
     overlay(ctx, t, v) {
@@ -4416,9 +4458,15 @@ function startGuidedTutorial() {
   if (gameMode) {
     gameRunning = false;
     gamePhase = 'select';
+    // Temporarily exit game mode so vehicle cards are visible in the sidebar
+    document.body.classList.remove('game-mode');
+    gameMode = false;
   }
   stopped = false;
   WORLD_W = 800; WORLD_H = 600;
+  // Center the camera so tutorial elements appear in the middle of the viewable area
+  camX = 0; camY = 0;
+  camZoom = Math.min(canvas.width / WORLD_W, canvas.height / WORLD_H);
   tutorialActive = true;
   showGuidedStep(0);
 }
@@ -4445,7 +4493,11 @@ function cleanupTutorial(restore) {
     gamePhase = tutorialSavedState.gamePhase;
     gameRunning = tutorialSavedState.gameRunning;
     buildVehicleCards();
-    if (tutorialWasGameMode) buildLevelSelect();
+    if (tutorialWasGameMode) {
+      gameMode = true;
+      document.body.classList.add('game-mode');
+      buildLevelSelect();
+    }
   }
   tutorialSavedState = null;
 }
@@ -4503,42 +4555,50 @@ function showGuidedStep(index) {
     html += '<div class="tutorial-auto-bar"><div class="tutorial-auto-fill" id="tutorial-auto-fill"></div></div>';
   }
   html += '<div class="step-btns">';
+  if (index > 0) html += '<button class="tutorial-btn-prev">\u2190 Previous</button>';
   html += '<button class="tutorial-btn-skip">' + (isLast ? 'Finish' : 'Skip') + '</button>';
-  if (!isLast) html += '<button class="tutorial-btn-next">Next</button>';
+  if (!isLast) html += '<button class="tutorial-btn-next">Next \u2192</button>';
   html += '</div>';
 
   bubble.innerHTML = html;
 
-  // Position
-  if (targetEl) {
-    const rect = targetEl.getBoundingClientRect();
-    const arrowDir = step.arrow || 'left';
-    bubble.className = 'tutorial-bubble arrow-' + arrowDir;
-    if (arrowDir === 'left') {
-      bubble.style.left = (rect.right + 16) + 'px';
-      bubble.style.top = Math.max(8, Math.min(window.innerHeight - 250, rect.top - 10)) + 'px';
-    } else if (arrowDir === 'right') {
-      bubble.style.left = Math.max(8, rect.left - 350) + 'px';
-      bubble.style.top = Math.max(8, Math.min(window.innerHeight - 250, rect.top + rect.height / 2 - 40)) + 'px';
-    } else if (arrowDir === 'top') {
-      bubble.style.left = Math.max(8, rect.left) + 'px';
-      bubble.style.top = (rect.bottom + 16) + 'px';
+  // Position — use a function so we can reposition after layout settles
+  function positionBubble() {
+    const el = step.targetFn ? step.targetFn() : (step.target ? document.querySelector(step.target) : null);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      const arrowDir = step.arrow || 'left';
+      bubble.className = 'tutorial-bubble arrow-' + arrowDir;
+      if (arrowDir === 'left') {
+        bubble.style.left = (rect.right + 16) + 'px';
+        bubble.style.top = Math.max(8, Math.min(window.innerHeight - 250, rect.top - 10)) + 'px';
+      } else if (arrowDir === 'right') {
+        bubble.style.left = Math.max(8, rect.left - 350) + 'px';
+        bubble.style.top = Math.max(8, Math.min(window.innerHeight - 250, rect.top + rect.height / 2 - 40)) + 'px';
+      } else if (arrowDir === 'top') {
+        bubble.style.left = Math.max(8, rect.left) + 'px';
+        bubble.style.top = (rect.bottom + 16) + 'px';
+      } else {
+        bubble.style.left = Math.max(8, rect.left) + 'px';
+        bubble.style.top = Math.max(8, rect.top - 160) + 'px';
+      }
     } else {
-      bubble.style.left = Math.max(8, rect.left) + 'px';
-      bubble.style.top = Math.max(8, rect.top - 160) + 'px';
+      bubble.className = 'tutorial-bubble';
+      bubble.style.cssText = 'top:50%;left:50%;transform:translate(-50%,-50%);';
     }
-  } else {
-    bubble.className = 'tutorial-bubble';
-    bubble.style.cssText = 'top:50%;left:50%;transform:translate(-50%,-50%);';
   }
 
   bubbleContainer.appendChild(bubble);
+  // Position after layout settles (buildVehicleCards may have just rebuilt the DOM)
+  requestAnimationFrame(() => positionBubble());
 
   // Events
   const closeBtn = bubble.querySelector('.bubble-close');
+  const prevBtn = bubble.querySelector('.tutorial-btn-prev');
   const skipBtn = bubble.querySelector('.tutorial-btn-skip');
   const nextBtn = bubble.querySelector('.tutorial-btn-next');
   closeBtn.addEventListener('click', () => { cleanupTutorial(true); });
+  if (prevBtn) prevBtn.addEventListener('click', () => showGuidedStep(index - 1));
   skipBtn.addEventListener('click', () => { cleanupTutorial(true); });
   if (nextBtn) nextBtn.addEventListener('click', () => showGuidedStep(index + 1));
 
@@ -5120,20 +5180,13 @@ function buildLevelSelect() {
 
   const isAdmin = currentUser && currentUser.role === 'admin';
 
-  // Create new scenario button
-  const newBtn = document.createElement('button');
-  newBtn.className = 'btn btn-launch';
-  newBtn.style.cssText = 'width:100%;margin:8px 0;font-size:13px;padding:8px;';
-  newBtn.textContent = '+ Create New Scenario';
-  if (!isAdmin) {
-    newBtn.disabled = true;
-    newBtn.style.opacity = '0.4';
-    newBtn.style.cursor = 'not-allowed';
-    newBtn.title = 'Admin only';
-  } else {
-    newBtn.addEventListener('click', () => enterEditor(null));
-  }
-  panel.appendChild(newBtn);
+  // Getting Started tutorial button
+  const tutBtn = document.createElement('button');
+  tutBtn.className = 'btn';
+  tutBtn.style.cssText = 'width:100%;margin:8px 0 4px;font-size:12px;padding:6px;background:#0d47a1;color:#4fc3f7;border:1px solid #1565c0;';
+  tutBtn.textContent = '\uD83C\uDF93 Getting Started';
+  tutBtn.addEventListener('click', () => startGuidedTutorial());
+  panel.appendChild(tutBtn);
 
   // Strategy Guide button
   const stratBtn = document.createElement('button');
@@ -5143,13 +5196,15 @@ function buildLevelSelect() {
   stratBtn.addEventListener('click', () => openStrategyGuide());
   panel.appendChild(stratBtn);
 
-  // Getting Started tutorial button (visible to all users)
-  const tutBtn = document.createElement('button');
-  tutBtn.className = 'btn';
-  tutBtn.style.cssText = 'width:100%;margin-bottom:8px;font-size:12px;padding:6px;background:#0d47a1;color:#4fc3f7;border:1px solid #1565c0;';
-  tutBtn.textContent = '\uD83C\uDF93 Getting Started';
-  tutBtn.addEventListener('click', () => startGuidedTutorial());
-  panel.appendChild(tutBtn);
+  // Create new scenario button (admin only)
+  if (isAdmin) {
+    const newBtn = document.createElement('button');
+    newBtn.className = 'btn btn-launch';
+    newBtn.style.cssText = 'width:100%;margin-bottom:8px;font-size:13px;padding:8px;';
+    newBtn.textContent = '+ Create New Scenario';
+    newBtn.addEventListener('click', () => enterEditor(null));
+    panel.appendChild(newBtn);
+  }
 
   // Admin: Manage Users button
   if (isAdmin) {
@@ -6413,6 +6468,14 @@ function buildBriefingPanel(level) {
   wtBtn.textContent = '\uD83D\uDCD6 Walkthrough';
   wtBtn.addEventListener('click', () => startWalkthrough(level));
   panel.appendChild(wtBtn);
+
+  // Strategy Guide button
+  const sgBtn = document.createElement('button');
+  sgBtn.className = 'btn';
+  sgBtn.style.cssText = 'font-size:11px;padding:5px 10px;background:#1b5e20;color:#a5d6a7;margin-top:4px;';
+  sgBtn.textContent = '\uD83D\uDCD7 Strategy Guide';
+  sgBtn.addEventListener('click', () => openStrategyGuide());
+  panel.appendChild(sgBtn);
 
   // Leaderboard button
   const lbBtn = document.createElement('button');
