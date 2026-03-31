@@ -5336,8 +5336,7 @@ function buildBriefingPanel(level) {
   const brief = document.createElement('div');
   brief.className = 'game-briefing';
   brief.innerHTML = `
-    <h3>${level._custom ? level.name : 'Level ' + level.id + ': ' + level.name}</h3>
-    <span class="tier-badge">${level._custom ? 'Custom' : 'Tier ' + level.tier}</span>
+    <h3>${level.name}</h3>
     <p>${level.briefing}</p>
     ${level.checkpoints.length > 0 ? '<p>Visit <b>' + level.checkpoints.length + ' checkpoint' + (level.checkpoints.length > 1 ? 's' : '') + '</b> in order, then reach the goal.</p>' : ''}
     ${level.dangers.length > 0 ? '<p style="color:#ef5350;">Avoid the red danger zones!</p>' : ''}
@@ -5347,21 +5346,19 @@ function buildBriefingPanel(level) {
   panel.appendChild(brief);
 
   // Leaderboard button
-  if (!level._custom) {
-    const lbBtn = document.createElement('button');
-    lbBtn.className = 'btn';
-    lbBtn.style.cssText = 'font-size:11px;padding:5px 10px;background:#0f3460;color:#4fc3f7;border:1px solid #1565c0;margin-top:4px;';
+  const lbBtn = document.createElement('button');
+  lbBtn.className = 'btn';
+  lbBtn.style.cssText = 'font-size:11px;padding:5px 10px;background:#0f3460;color:#4fc3f7;border:1px solid #1565c0;margin-top:4px;';
+  lbBtn.textContent = '\uD83C\uDFC6 Leaderboard';
+  lbBtn.addEventListener('click', async () => {
+    lbBtn.disabled = true;
+    lbBtn.textContent = 'Loading...';
+    const entries = await apiFetchLeaderboard(level.id);
+    lbBtn.disabled = false;
     lbBtn.textContent = '\uD83C\uDFC6 Leaderboard';
-    lbBtn.addEventListener('click', async () => {
-      lbBtn.disabled = true;
-      lbBtn.textContent = 'Loading...';
-      const entries = await apiFetchLeaderboard(level.id);
-      lbBtn.disabled = false;
-      lbBtn.textContent = '\uD83C\uDFC6 Leaderboard';
-      showLeaderboard(level, entries);
-    });
-    panel.appendChild(lbBtn);
-  }
+    showLeaderboard(level, entries);
+  });
+  panel.appendChild(lbBtn);
 
   // Config choice buttons (best vs last)
   if (currentUser && userScenarioData[level.id]) {
@@ -5557,7 +5554,7 @@ function buildRunningPanel() {
   const panel = document.getElementById('game-panel');
   const level = currentLevel;
   panel.innerHTML = `
-    <h2 style="color:#ff9800;margin:0;">${level._custom ? level.name : 'Level ' + level.id + ': ' + level.name}</h2>
+    <h2 style="color:#ff9800;margin:0;">${level.name}</h2>
     <div class="game-timer" id="game-timer-display">0.0s</div>
     <div class="game-status" id="game-status-display">Running...</div>
     ${level.checkpoints.length > 0 ? '<div class="game-checkpoint-counter" id="game-cp-display">Checkpoints: 0 / ' + level.checkpoints.length + '</div>' : ''}
