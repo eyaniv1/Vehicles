@@ -5679,10 +5679,12 @@ async function endGame(outcome, message) {
     leaderboard = await apiFetchLeaderboard(level.id);
   }
 
-  // Find user's position
-  const userRank = currentUser ? leaderboard.findIndex(e => e.user_id === currentUser.id) + 1 : 0;
-  const isFirst = userRank === 1;
-  const inTopTen = userRank > 0 && userRank <= 10;
+  // Find user's position — only celebrate if THIS run is the one that earned the rank
+  const userEntry = currentUser ? leaderboard.find(e => e.user_id === currentUser.id) : null;
+  const userRank = userEntry ? userEntry.rank : 0;
+  const thisRunIsTheBest = userEntry && Math.abs(finishedTime - userEntry.best_time) < 0.05;
+  const isFirst = userRank === 1 && thisRunIsTheBest;
+  const inTopTen = userRank > 0 && userRank <= 10 && thisRunIsTheBest;
 
   // Build leaderboard HTML (top 10)
   let lbHTML = '';
