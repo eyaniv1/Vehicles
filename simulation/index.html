@@ -635,6 +635,66 @@
   .ref-manual th { text-align: left; color: #4fc3f7; font-size: 12px; padding: 4px 8px; border-bottom: 1px solid #333; }
   .ref-manual td { padding: 4px 8px; font-size: 12px; color: #b0bec5; border-bottom: 1px solid #1a1a2e; }
 
+  /* --- Strategy Guide overlay --- */
+  .strategy-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 600;
+    display: none;
+    align-items: center; justify-content: center;
+  }
+  .strategy-overlay.open { display: flex; }
+  .strategy-guide {
+    background: #16213e;
+    color: #e0e0e0;
+    border-radius: 12px;
+    padding: 24px 28px;
+    max-width: 780px;
+    width: 95vw;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+    font-size: 13px;
+    line-height: 1.6;
+    position: relative;
+  }
+  .strategy-guide h2 { color: #4fc3f7; font-size: 20px; margin: 0 0 16px; }
+  .strategy-guide h3 { color: #81d4fa; font-size: 15px; margin: 20px 0 8px; }
+  .strategy-guide p { margin: 0 0 10px; color: #b0bec5; }
+  .strategy-guide ul { margin: 4px 0 10px 18px; color: #b0bec5; }
+  .strategy-guide li { margin: 3px 0; }
+  .strategy-guide .sg-close {
+    position: absolute; top: 12px; right: 16px;
+    background: none; border: none; color: #666;
+    font-size: 22px; cursor: pointer; line-height: 1;
+  }
+  .strategy-guide .sg-close:hover { color: #fff; }
+  .sg-section { border-bottom: 1px solid #1a2a40; padding-bottom: 16px; margin-bottom: 16px; }
+  .sg-section:last-child { border-bottom: none; }
+  .sg-demo-row { display: flex; gap: 16px; flex-wrap: wrap; justify-content: center; margin: 14px 0; }
+  .sg-demo-cell { display: flex; flex-direction: column; align-items: center; }
+  .sg-demo-canvas {
+    width: 260px; height: 190px;
+    border-radius: 8px;
+    border: 1px solid #333;
+    background: #0a0a1a;
+  }
+  .sg-demo-label {
+    font-size: 11px; color: #81d4fa;
+    margin-top: 5px; text-align: center;
+    font-weight: 600;
+  }
+  .sg-tip {
+    background: #0d1b2a;
+    border-left: 3px solid #ff9800;
+    padding: 10px 14px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-size: 12px;
+    color: #b0bec5;
+  }
+  .sg-tip b { color: #ff9800; }
+
   .btn-guide {
     background: #0d47a1;
     color: #fff;
@@ -993,6 +1053,7 @@
     <button class="btn btn-guide" id="guide-btn">Getting Started</button>
     <button class="btn btn-ref" id="ref-btn">Reference</button>
   </div>
+  <button class="btn sandbox-only" id="strategy-btn" style="width:100%;margin:4px 0 0;background:#1b5e20;color:#a5d6a7;font-size:12px;">Strategy Guide</button>
 
   <!-- Game Mode Panel (hidden in sandbox) -->
   <div id="game-panel"></div>
@@ -1166,6 +1227,15 @@
     <p><b>Logic gates</b> sit between sensors and motors, filtering the signal:</p>
     <canvas class="ref-diagram" id="ref-diagram-gates" width="580" height="160"></canvas>
     <p>Gates let you create complex behaviors: an AND gate makes a vehicle ignore peripheral light; an XOR gate makes it follow light boundaries instead of heading to the center.</p>
+  </div>
+</div>
+
+<!-- Strategy Guide overlay -->
+<div class="strategy-overlay" id="strategy-overlay">
+  <div class="strategy-guide">
+    <button class="sg-close" id="strategy-close">&times;</button>
+    <h2>Strategy Guide</h2>
+    <div id="strategy-sections"></div>
   </div>
 </div>
 
@@ -3341,6 +3411,395 @@ document.getElementById('ref-overlay').addEventListener('click', (e) => {
   if (e.target === e.currentTarget) e.currentTarget.classList.remove('open');
 });
 
+// --- Strategy Guide ---
+let strategyDemos = [];
+let strategyRafId = null;
+let strategyLastTime = 0;
+let _sgDemoIdCounter = -1000;
+
+function makeDemoVehicle(typeIndex, x, y, theta, overrides) {
+  const colors = [
+    { body: '#2a4a7f', stroke: '#4a7abf', r: 100, g: 180, b: 255 },
+    { body: '#7f2a4a', stroke: '#bf4a7a', r: 255, g: 100, b: 180 },
+    { body: '#2a7f4a', stroke: '#4abf7a', r: 100, g: 255, b: 180 },
+    { body: '#7f6a2a', stroke: '#bfa04a', r: 255, g: 220, b: 100 },
+    { body: '#5a2a7f', stroke: '#8a4abf', r: 180, g: 100, b: 255 },
+  ];
+  const v = {
+    id: _sgDemoIdCounter--,
+    typeIndex: typeIndex,
+    x: x, y: y, theta: theta,
+    trail: [],
+    leftSpeed: 0, rightSpeed: 0, wheelRotation: 0,
+    color: colors[typeIndex] || colors[0],
+    light: { on: false, intensity: 50 },
+    sidePair: { enabled: false, behaviorIndex: 0, weight: 50 },
+    gate: { front: { type: 0, threshold: 30, sharpness: 5 }, side: { type: 0, threshold: 30, sharpness: 5 } },
+    running: true,
+    simSpeed: 3,
+    speedContrast: 50,
+    _frontL: 0, _frontR: 0,
+    _gatedFrontL: 0, _gatedFrontR: 0,
+    _sideL: 0, _sideR: 0,
+    _gatedSideL: 0, _gatedSideR: 0,
+    _frontMotorL: 0, _frontMotorR: 0,
+    _sideMotorL: 0, _sideMotorR: 0,
+  };
+  if (overrides) Object.assign(v, overrides);
+  return v;
+}
+
+function tickStrategyDemo(demo, dt) {
+  const savedLights = staticLights;
+  const savedVehicles = vehicles;
+  const savedW = WORLD_W;
+  const savedH = WORLD_H;
+  staticLights = demo.lights;
+  vehicles = demo.vehicles;
+  WORLD_W = demo.worldW;
+  WORLD_H = demo.worldH;
+  try {
+    for (const v of demo.vehicles) {
+      if (v.running) {
+        stepVehicle(v, dt);
+        v.trail.push({ x: v.x, y: v.y });
+        if (v.trail.length > 120) v.trail.shift();
+      }
+    }
+  } finally {
+    staticLights = savedLights;
+    vehicles = savedVehicles;
+    WORLD_W = savedW;
+    WORLD_H = savedH;
+  }
+  demo.elapsed += dt;
+  if (demo.elapsed > demo.maxTime) resetDemo(demo);
+}
+
+function drawDemoFrame(demo) {
+  const c = demo.ctx;
+  const W = demo.worldW, H = demo.worldH;
+  c.clearRect(0, 0, W, H);
+  c.fillStyle = '#0a0a1a';
+  c.fillRect(0, 0, W, H);
+
+  // Lights
+  for (const light of demo.lights) {
+    if (!light.on) continue;
+    const radius = 140 * (light.intensity / 75);
+    const grad = c.createRadialGradient(light.x, light.y, 0, light.x, light.y, radius);
+    grad.addColorStop(0, 'rgba(255, 235, 100, 0.18)');
+    grad.addColorStop(1, 'rgba(255, 235, 100, 0)');
+    c.fillStyle = grad;
+    c.fillRect(0, 0, W, H);
+    c.fillStyle = '#ffd54f';
+    c.beginPath();
+    c.arc(light.x, light.y, 5, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = 'rgba(255,213,79,0.3)';
+    c.font = '9px sans-serif';
+    c.textAlign = 'center';
+    c.fillText('\u2600', light.x, light.y - 9);
+  }
+
+  // Vehicles
+  for (const v of demo.vehicles) {
+    // Trail
+    if (v.trail.length > 1) {
+      c.strokeStyle = v.color.stroke + '50';
+      c.lineWidth = 1.5;
+      c.setLineDash([3, 3]);
+      c.beginPath();
+      c.moveTo(v.trail[0].x, v.trail[0].y);
+      for (let i = 1; i < v.trail.length; i++) {
+        const dx = Math.abs(v.trail[i].x - v.trail[i - 1].x);
+        const dy = Math.abs(v.trail[i].y - v.trail[i - 1].y);
+        if (dx > 60 || dy > 60) c.moveTo(v.trail[i].x, v.trail[i].y);
+        else c.lineTo(v.trail[i].x, v.trail[i].y);
+      }
+      c.stroke();
+      c.setLineDash([]);
+    }
+    // Triangle
+    c.save();
+    c.translate(v.x, v.y);
+    c.rotate(v.theta);
+    c.fillStyle = v.color.body;
+    c.strokeStyle = v.color.stroke;
+    c.lineWidth = 2;
+    c.beginPath();
+    c.moveTo(14, 0);
+    c.lineTo(-8, -9);
+    c.lineTo(-8, 9);
+    c.closePath();
+    c.fill();
+    c.stroke();
+    c.restore();
+  }
+}
+
+function resetDemo(demo) {
+  demo.elapsed = 0;
+  for (let i = 0; i < demo.vehicles.length; i++) {
+    const v = demo.vehicles[i];
+    const init = demo.initState[i];
+    v.x = init.x; v.y = init.y; v.theta = init.theta;
+    v.trail = [];
+    v.leftSpeed = 0; v.rightSpeed = 0;
+    v._frontL = 0; v._frontR = 0;
+    v._gatedFrontL = 0; v._gatedFrontR = 0;
+    v._sideL = 0; v._sideR = 0;
+    v._gatedSideL = 0; v._gatedSideR = 0;
+    v._frontMotorL = 0; v._frontMotorR = 0;
+    v._sideMotorL = 0; v._sideMotorR = 0;
+  }
+}
+
+function animateStrategyDemos(timestamp) {
+  if (!strategyLastTime) strategyLastTime = timestamp;
+  const dt = Math.min((timestamp - strategyLastTime) / 1000, 0.05);
+  strategyLastTime = timestamp;
+  for (const demo of strategyDemos) {
+    tickStrategyDemo(demo, dt);
+    drawDemoFrame(demo);
+  }
+  strategyRafId = requestAnimationFrame(animateStrategyDemos);
+}
+
+function startStrategyDemos() {
+  strategyLastTime = 0;
+  strategyRafId = requestAnimationFrame(animateStrategyDemos);
+}
+
+function stopStrategyDemos() {
+  if (strategyRafId) { cancelAnimationFrame(strategyRafId); strategyRafId = null; }
+  strategyLastTime = 0;
+  strategyDemos = [];
+}
+
+function createDemoCanvas(parentEl, label) {
+  const cell = document.createElement('div');
+  cell.className = 'sg-demo-cell';
+  const cvs = document.createElement('canvas');
+  cvs.className = 'sg-demo-canvas';
+  cvs.width = 260; cvs.height = 190;
+  cell.appendChild(cvs);
+  if (label) {
+    const lbl = document.createElement('div');
+    lbl.className = 'sg-demo-label';
+    lbl.textContent = label;
+    cell.appendChild(lbl);
+  }
+  parentEl.appendChild(cell);
+  return cvs;
+}
+
+function makeDemo(canvas, lights, vehicleDefs, maxTime) {
+  const vList = vehicleDefs.map(d => {
+    const v = makeDemoVehicle(d.typeIndex, d.x, d.y, d.theta || 0, d.overrides);
+    return v;
+  });
+  const demo = {
+    canvas: canvas,
+    ctx: canvas.getContext('2d'),
+    worldW: canvas.width,
+    worldH: canvas.height,
+    lights: lights.map(l => ({ id: _sgDemoIdCounter--, x: l.x, y: l.y, on: true, intensity: l.intensity || 75 })),
+    vehicles: vList,
+    initState: vList.map(v => ({ x: v.x, y: v.y, theta: v.theta })),
+    elapsed: 0,
+    maxTime: maxTime || 10,
+  };
+  strategyDemos.push(demo);
+  return demo;
+}
+
+function buildStrategyGuide() {
+  const sec = document.getElementById('strategy-sections');
+  sec.innerHTML = '';
+  strategyDemos = [];
+  _sgDemoIdCounter = -1000;
+
+  // --- Section 1: Core Behaviors ---
+  const s1 = document.createElement('div');
+  s1.className = 'sg-section';
+  s1.innerHTML = `
+    <h3>Core Behaviors</h3>
+    <p>Every vehicle's personality comes from two properties: <b>wiring</b> (direct vs crossed) and <b>response</b> (excitatory vs inhibitory).</p>
+    <ul>
+      <li><b>V2a Fear</b> (direct + excitatory) — light on one side speeds up that motor, turning the vehicle <em>away</em>. It flees.</li>
+      <li><b>V2b Aggression</b> (crossed + excitatory) — light on one side speeds up the <em>opposite</em> motor, steering <em>toward</em> it. It charges.</li>
+      <li><b>V3a Love</b> (direct + inhibitory) — light <em>slows</em> the same-side motor, so the vehicle turns toward light and <em>decelerates</em>. It parks.</li>
+      <li><b>V3b Explorer</b> (crossed + inhibitory) — light slows the <em>opposite</em> motor, so it approaches but veers away up close. It orbits.</li>
+    </ul>
+  `;
+  // Demo A: Fear vs Aggression
+  const row1 = document.createElement('div'); row1.className = 'sg-demo-row';
+  const cvsA1 = createDemoCanvas(row1, 'V2a Fear — flees from light');
+  const cvsA2 = createDemoCanvas(row1, 'V2b Aggression — charges toward light');
+  s1.appendChild(row1);
+  makeDemo(cvsA1, [{ x: 130, y: 95 }], [{ typeIndex: 1, x: 40, y: 95, theta: 0 }], 8);
+  makeDemo(cvsA2, [{ x: 130, y: 95 }], [{ typeIndex: 2, x: 40, y: 95, theta: 0 }], 8);
+
+  // Demo B: Love vs Explorer
+  const row2 = document.createElement('div'); row2.className = 'sg-demo-row';
+  const cvsB1 = createDemoCanvas(row2, 'V3a Love — parks near light');
+  const cvsB2 = createDemoCanvas(row2, 'V3b Explorer — orbits light');
+  s1.appendChild(row2);
+  makeDemo(cvsB1, [{ x: 160, y: 95 }], [{ typeIndex: 3, x: 50, y: 80, theta: 0.2 }], 12);
+  makeDemo(cvsB2, [{ x: 130, y: 95 }], [{ typeIndex: 4, x: 50, y: 70, theta: 0.3 }], 12);
+  sec.appendChild(s1);
+
+  // --- Section 2: Speed Contrast ---
+  const s2 = document.createElement('div');
+  s2.className = 'sg-section';
+  s2.innerHTML = `
+    <h3>Speed Contrast</h3>
+    <p><b>Contrast</b> amplifies the difference between left and right motor speeds. The formula raises each motor speed to a power: at contrast 50 the exponent is 2 (squaring), so small differences become large.</p>
+    <ul>
+      <li><b>Low contrast (10–30)</b> — gentle, wide curves. Good for open maps where precision isn't critical.</li>
+      <li><b>High contrast (70–100)</b> — sharp, snapping turns. Essential for threading between obstacles or making tight maneuvers.</li>
+    </ul>
+  `;
+  const row3 = document.createElement('div'); row3.className = 'sg-demo-row';
+  const cvsC1 = createDemoCanvas(row3, 'Contrast 20 — wide arcs');
+  const cvsC2 = createDemoCanvas(row3, 'Contrast 90 — sharp turns');
+  s2.appendChild(row3);
+  makeDemo(cvsC1, [{ x: 200, y: 50 }],
+    [{ typeIndex: 2, x: 40, y: 140, theta: -0.5, overrides: { speedContrast: 20 } }], 10);
+  makeDemo(cvsC2, [{ x: 200, y: 50 }],
+    [{ typeIndex: 2, x: 40, y: 140, theta: -0.5, overrides: { speedContrast: 90 } }], 10);
+  sec.appendChild(s2);
+
+  // --- Section 3: Threshold & Sharpness ---
+  const s3 = document.createElement('div');
+  s3.className = 'sg-section';
+  s3.innerHTML = `
+    <h3>Threshold &amp; Sharpness</h3>
+    <p><b>Threshold</b> sets the minimum light intensity the vehicle cares about. Below it, the gate blocks the signal — the vehicle ignores the light.</p>
+    <p><b>Sharpness</b> controls how abruptly the gate kicks in. Low sharpness = gradual ramp; high sharpness = binary snap.</p>
+    <ul>
+      <li><b>Low threshold (5–15)</b> — reacts to everything, even faint distant light. Use in sparse maps.</li>
+      <li><b>High threshold (40–70)</b> — ignores dim/distant light. Use in cluttered maps to focus on the nearest, brightest source.</li>
+    </ul>
+  `;
+  const row4 = document.createElement('div'); row4.className = 'sg-demo-row';
+  const cvsD1 = createDemoCanvas(row4, 'Threshold 10 — reacts to both');
+  const cvsD2 = createDemoCanvas(row4, 'Threshold 55 — ignores dim light');
+  s3.appendChild(row4);
+  makeDemo(cvsD1, [{ x: 70, y: 50, intensity: 30 }, { x: 200, y: 140, intensity: 80 }],
+    [{ typeIndex: 2, x: 30, y: 140, theta: -0.8, overrides: {
+      gate: { front: { type: 1, threshold: 10, sharpness: 5 }, side: { type: 0, threshold: 30, sharpness: 5 } }
+    } }], 10);
+  makeDemo(cvsD2, [{ x: 70, y: 50, intensity: 30 }, { x: 200, y: 140, intensity: 80 }],
+    [{ typeIndex: 2, x: 30, y: 140, theta: -0.8, overrides: {
+      gate: { front: { type: 1, threshold: 55, sharpness: 8 }, side: { type: 0, threshold: 30, sharpness: 5 } }
+    } }], 10);
+  sec.appendChild(s3);
+
+  // --- Section 4: Side Sensors ---
+  const s4 = document.createElement('div');
+  s4.className = 'sg-section';
+  s4.innerHTML = `
+    <h3>Side Sensors</h3>
+    <p>Side sensors add <b>lateral awareness</b>. They have their own behavior type (Fear, Aggression, Love, Explorer) and blend with the front pair via the weight slider.</p>
+    <ul>
+      <li><b>Front Aggression + Side Fear</b> — charges toward frontal light but dodges lateral light. Good for threading between lights.</li>
+      <li><b>Front Fear + Side Love</b> — flees frontal light but is drawn sideways toward lateral light. Useful for curved paths with side beacons.</li>
+      <li><b>Front Love + Side Explorer</b> — parks at frontal light but orbits laterally. Helps reach off-axis checkpoints.</li>
+    </ul>
+  `;
+  const row5 = document.createElement('div'); row5.className = 'sg-demo-row';
+  const cvsE1 = createDemoCanvas(row5, 'Love + Side Fear — avoids lateral light');
+  const cvsE2 = createDemoCanvas(row5, 'Love only — no lateral avoidance');
+  s4.appendChild(row5);
+  makeDemo(cvsE1, [{ x: 200, y: 95 }, { x: 130, y: 30, intensity: 60 }],
+    [{ typeIndex: 3, x: 40, y: 95, theta: 0.1, overrides: {
+      sidePair: { enabled: true, behaviorIndex: 0, weight: 45 }
+    } }], 12);
+  makeDemo(cvsE2, [{ x: 200, y: 95 }, { x: 130, y: 30, intensity: 60 }],
+    [{ typeIndex: 3, x: 40, y: 95, theta: 0.1 }], 12);
+  sec.appendChild(s4);
+
+  // --- Section 5: Scenario Patterns ---
+  const s5 = document.createElement('div');
+  s5.className = 'sg-section';
+  s5.innerHTML = `
+    <h3>Scenario Patterns</h3>
+    <div class="sg-tip">
+      <b>Lights near the finish line</b><br>
+      Use <b>Aggression</b> (charges through) or <b>Love</b> (parks at it). Fear will actively avoid the area.
+    </div>
+    <div class="sg-tip">
+      <b>Lights blocking the path to the finish</b><br>
+      Use <b>Fear</b> — the lights act as repellers, pushing you <em>toward</em> the finish. Place them strategically.
+    </div>
+    <div class="sg-tip">
+      <b>Checkpoints with parking (approval time)</b><br>
+      <b>Love</b> is the natural choice — it parks near light. Ensure there's a light at or near each checkpoint.<br>
+      Explorer <em>can</em> work if the checkpoint radius is large enough — it orbits nearby and may dwell long enough.
+    </div>
+    <div class="sg-tip">
+      <b>Danger zones in the path</b><br>
+      Lower speed (2–3x) gives steering time. Higher <b>contrast</b> sharpens turns to dodge. A higher <b>threshold</b> gate ignores distant distractions. <b>Side Fear</b> sensors help dodge lateral threats.
+    </div>
+    <div class="sg-tip">
+      <b>Bouncers</b><br>
+      Excitatory vehicles (Fear/Aggression) hit bouncers harder — bigger deflections. Inhibitory vehicles (Love/Explorer) slow down near light, meaning softer bounces. Use bouncers to redirect paths when direct routing fails.
+    </div>
+    <div class="sg-tip">
+      <b>Moving elements</b><br>
+      Watch the cycle before launching — timing matters. Lower speed gives more time to ride a moving light's pull. Low sharpness avoids jerky reactions when a light crosses the gate threshold.
+    </div>
+  `;
+  sec.appendChild(s5);
+
+  // --- Section 6: Quick Decision Tree ---
+  const s6 = document.createElement('div');
+  s6.className = 'sg-section';
+  s6.innerHTML = `
+    <h3>Quick Decision Tree</h3>
+    <div class="sg-tip" style="line-height:1.9;">
+      1. Is there a light at or near the finish? → <b>Aggression</b> or <b>Love</b><br>
+      2. Are lights blocking the path? → <b>Fear</b> (use them as repellers)<br>
+      3. Do checkpoints need parking? → <b>Love</b> (ensure light nearby)<br>
+      4. Lots of dangers? → Lower speed, higher contrast, higher threshold<br>
+      5. Need to thread a narrow gap? → High sharpness + high contrast<br>
+      6. Wide open map? → Low sharpness, low contrast, high speed<br>
+      7. Need lateral dodge ability? → Enable side sensors with <b>Fear</b> behavior<br>
+      8. Need to orbit/patrol an area? → <b>Explorer</b>
+    </div>
+    <h3>Parameter Quick Reference</h3>
+    <table style="width:100%;border-collapse:collapse;margin:8px 0;">
+      <tr style="border-bottom:1px solid #333;"><th style="text-align:left;color:#4fc3f7;padding:4px 8px;font-size:12px;">Parameter</th><th style="text-align:left;color:#4fc3f7;padding:4px 8px;font-size:12px;">Low</th><th style="text-align:left;color:#4fc3f7;padding:4px 8px;font-size:12px;">High</th></tr>
+      <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Threshold</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Reacts to faint light</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Only reacts to bright/close light</td></tr>
+      <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Sharpness</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Smooth gradual steering</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Snap on/off reactions</td></tr>
+      <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Contrast</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Wide gentle turns</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Sharp tight turns</td></tr>
+      <tr style="border-bottom:1px solid #1a1a2e;"><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Speed</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Precision (dangers, parking)</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Speed runs, clear paths</td></tr>
+      <tr><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Side Blend</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Subtle lateral hint</td><td style="padding:4px 8px;font-size:12px;color:#b0bec5;">Strong lateral control</td></tr>
+    </table>
+    <p style="font-size:11px;color:#78909c;margin-top:12px;font-style:italic;">These are guidelines, not guarantees — every scenario has its own quirks. Experimenting is half the fun.</p>
+  `;
+  sec.appendChild(s6);
+}
+
+function openStrategyGuide() {
+  buildStrategyGuide();
+  document.getElementById('strategy-overlay').classList.add('open');
+  startStrategyDemos();
+}
+
+function closeStrategyGuide() {
+  document.getElementById('strategy-overlay').classList.remove('open');
+  stopStrategyDemos();
+}
+
+document.getElementById('strategy-btn').addEventListener('click', () => openStrategyGuide());
+document.getElementById('strategy-close').addEventListener('click', () => closeStrategyGuide());
+document.getElementById('strategy-overlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeStrategyGuide();
+});
+
 // --- Reference manual diagrams ---
 function drawRefDiagrams() {
   const colors = { sensor: '#4fc3f7', motor: '#ff9800', wire: '#b0bec5', body: '#37474f', label: '#e0e0e0', gate: '#ab47bc' };
@@ -3552,9 +4011,38 @@ let tutorialAutoStart = 0;
 let tutorialAutoDuration = 0;
 let tutorialOverlayFn = null;
 let tutorialSavedState = null;
+let tutorialWasGameMode = false;
 const bubbleContainer = document.getElementById('tutorial-bubble-container');
 
 const TUTORIAL_PHASES = ['Basics', 'Vehicle Types', 'Tuning', 'Gates & Logic', 'Side Sensors & Light'];
+
+// Helper: center camera on a point with given zoom
+function tutorialCenterCamera(cx, cy, zoom) {
+  camZoom = zoom || 1.5;
+  camX = cx - (canvas.width / camZoom) / 2;
+  camY = cy - (canvas.height / camZoom) / 2;
+}
+
+// Helper: reset the tutorial vehicle to a position facing a light
+function tutorialResetVehicle(typeIdx, distFromLight, angleToLight) {
+  const v = vehicles[0];
+  if (!v) return;
+  const light = staticLights[0];
+  if (!light) return;
+  const a = angleToLight || Math.PI; // default: facing right toward light
+  v.typeIndex = typeIdx;
+  v.x = light.x + Math.cos(a) * (distFromLight || 180);
+  v.y = light.y + Math.sin(a) * (distFromLight || 180);
+  v.theta = Math.atan2(light.y - v.y, light.x - v.x); // face toward light
+  v.trail = [];
+  v.running = true;
+  v.simSpeed = 1;
+  v.speedContrast = 50;
+  v.gate.front.type = 0;
+  v.sidePair.enabled = false;
+  v.light.on = false;
+  tutorialCenterCamera((v.x + light.x) / 2, (v.y + light.y) / 2, 1.3);
+}
 
 const guidedTutorialSteps = [
   // === PHASE 0: BASICS ===
@@ -3564,242 +4052,260 @@ const guidedTutorialSteps = [
     target: '#canvas', arrow: 'right',
     autoMs: 7000,
     setup() {
-      // Clear everything, place one light
       vehicles = []; staticLights = [];
-      camZoom = 1; camX = 0; camY = 0;
-      createStaticLight(WORLD_W / 2 + 120, WORLD_H / 2);
+      const lx = WORLD_W / 2, ly = WORLD_H / 2;
+      createStaticLight(lx, ly);
+      const v = createVehicle(2); // V2b Aggression
+      v.x = lx - 180; v.y = ly;
+      v.theta = 0; v.simSpeed = 1; v.running = false; v.trail = [];
+      tutorialCenterCamera(lx - 60, ly, 1.5);
       buildVehicleCards();
     },
     overlay(ctx, t, v) {
       if (!v) return;
-      // Draw sensor and motor labels on the vehicle
-      const cos = Math.cos(v.theta), sin = Math.sin(v.theta);
       const sz = 1 / camZoom;
-      ctx.font = 'bold ' + (10 * sz) + 'px sans-serif';
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-      // Sensors
+      ctx.font = 'bold ' + (9 * sz) + 'px sans-serif';
+      ctx.textAlign = 'center';
+      // Sensor labels
       ctx.fillStyle = 'rgba(79,195,247,0.9)';
-      ctx.fillText('L sensor', v.x + cos * 20 - sin * 14, v.y + sin * 20 + cos * 14 - 16 * sz);
-      ctx.fillText('R sensor', v.x + cos * 20 + sin * 14, v.y + sin * 20 - cos * 14 - 16 * sz);
-      // Motors
+      ctx.fillText('L sensor', v.x + 12, v.y - 18 * sz);
+      ctx.fillText('R sensor', v.x + 12, v.y + 24 * sz);
+      // Motor labels
       ctx.fillStyle = 'rgba(255,183,77,0.9)';
-      ctx.fillText('L motor', v.x - cos * 14 - sin * 14, v.y - sin * 14 + cos * 14 + 16 * sz);
-      ctx.fillText('R motor', v.x - cos * 14 + sin * 14, v.y - sin * 14 - cos * 14 + 16 * sz);
-    }
-  },
-  {
-    phase: 0,
-    text: 'A vehicle has been created and a light placed. Press <b>Next</b> to start it and watch it react to the light.',
-    targetFn: () => document.querySelector('.vehicle-card .btn-stop'),
-    arrow: 'left',
-    setup() {
-      if (vehicles.length === 0) {
-        const v = createVehicle(2); // V2b Aggression
-        v.x = WORLD_W / 2 - 80; v.y = WORLD_H / 2;
-        v.theta = 0; v.simSpeed = 2;
+      ctx.fillText('L motor', v.x - 18 * sz, v.y - 18 * sz);
+      ctx.fillText('R motor', v.x - 18 * sz, v.y + 24 * sz);
+      // Light label
+      const light = staticLights[0];
+      if (light) {
+        ctx.fillStyle = 'rgba(255,213,79,0.9)';
+        ctx.font = 'bold ' + (10 * sz) + 'px sans-serif';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText('Light Source', light.x, light.y - 22 * sz);
       }
-      vehicles[0].running = false;
-      buildVehicleCards();
     }
   },
   {
     phase: 0,
-    text: 'The vehicle <b>chases the light</b>! This is <b>V2b Aggression</b> — crossed wiring means the left sensor drives the right motor and vice versa, steering it toward the source.',
+    text: 'This is <b>V2b Aggression</b> — crossed wiring. Left sensor drives <b>right</b> motor and vice versa. Watch it <b>chase the light</b>!',
     target: '#canvas', arrow: 'right',
-    autoMs: 7000,
+    autoMs: 8000,
     setup() {
-      if (vehicles.length > 0) { vehicles[0].running = true; vehicles[0].simSpeed = 2; }
+      const v = vehicles[0];
+      if (v) { v.running = true; v.simSpeed = 1; }
       buildVehicleCards();
     },
     overlay(ctx, t, v) {
       if (!v) return;
-      // Animated arrow from light to vehicle
       const light = staticLights[0];
       if (!light) return;
-      const dashOff = -t * 0.06;
+      // Animated dashed line from light to vehicle
       ctx.save();
-      ctx.strokeStyle = 'rgba(255,213,79,0.5)';
+      ctx.strokeStyle = 'rgba(255,213,79,0.4)';
       ctx.lineWidth = 2 / camZoom;
       ctx.setLineDash([8, 6]);
-      ctx.lineDashOffset = dashOff;
+      ctx.lineDashOffset = -t * 0.05;
       ctx.beginPath(); ctx.moveTo(light.x, light.y); ctx.lineTo(v.x, v.y); ctx.stroke();
       ctx.setLineDash([]);
+      // Label behavior
+      ctx.fillStyle = 'rgba(79,195,247,0.8)';
+      ctx.font = 'bold ' + (11 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('Chasing!', v.x, v.y - 22 / camZoom);
       ctx.restore();
     }
   },
   // === PHASE 1: VEHICLE TYPES ===
   {
     phase: 1,
-    text: 'Now let\'s see <b>V2a Fear</b> — <b>direct</b> wiring. Left sensor drives left motor. The vehicle <b>runs away</b> from light!',
-    targetFn: () => document.querySelector('.vehicle-card select'),
-    arrow: 'left', pulse: true,
-    autoMs: 6000,
-    setup() {
-      if (vehicles.length > 0) {
-        vehicles[0].typeIndex = 1; // V2a Fear
-        vehicles[0].running = true; vehicles[0].simSpeed = 2;
-        vehicles[0].x = WORLD_W / 2 - 60; vehicles[0].y = WORLD_H / 2;
-        vehicles[0].theta = 0; vehicles[0].trail = [];
-      }
-      buildVehicleCards();
-    }
-  },
-  {
-    phase: 1,
-    text: '<b>V3a Love</b> has <b>inhibitory</b> connections — brighter light means <b>slower</b> motor. It approaches gently and <b>stops near</b> the source.',
-    targetFn: () => document.querySelector('.vehicle-card select'),
-    arrow: 'left', pulse: true,
-    autoMs: 7000,
-    setup() {
-      if (vehicles.length > 0) {
-        vehicles[0].typeIndex = 3; // V3a Love
-        vehicles[0].running = true; vehicles[0].simSpeed = 2;
-        vehicles[0].x = WORLD_W / 2 - 100; vehicles[0].y = WORLD_H / 2;
-        vehicles[0].theta = 0; vehicles[0].trail = [];
-      }
-      buildVehicleCards();
-    }
-  },
-  {
-    phase: 1,
-    text: '<b>V3b Explorer</b> — crossed + inhibitory. It <b>approaches</b> light but <b>veers away</b> up close, always wandering and exploring.',
-    targetFn: () => document.querySelector('.vehicle-card select'),
-    arrow: 'left', pulse: true,
-    autoMs: 7000,
-    setup() {
-      if (vehicles.length > 0) {
-        vehicles[0].typeIndex = 4; // V3b Explorer
-        vehicles[0].running = true; vehicles[0].simSpeed = 2;
-        vehicles[0].x = WORLD_W / 2 - 100; vehicles[0].y = WORLD_H / 2;
-        vehicles[0].theta = 0; vehicles[0].trail = [];
-      }
-      buildVehicleCards();
-    }
-  },
-  {
-    phase: 1,
-    text: '<b>Summary:</b><br><table style="font-size:11px;margin-top:4px;border-collapse:collapse;width:100%"><tr><td></td><td style="color:#4fc3f7;padding:2px 6px"><b>Direct</b></td><td style="color:#4fc3f7;padding:2px 6px"><b>Crossed</b></td></tr><tr><td style="color:#ff9800"><b>Excitatory</b></td><td style="padding:2px 6px">V2a Fear</td><td style="padding:2px 6px">V2b Aggression</td></tr><tr><td style="color:#ff9800"><b>Inhibitory</b></td><td style="padding:2px 6px">V3a Love</td><td style="padding:2px 6px">V3b Explorer</td></tr></table>',
+    text: '<b>V2a Fear</b> — <b>direct</b> wiring. Left sensor drives left motor directly. Brighter side speeds up more, so it <b>steers away</b> from light!',
     target: '#canvas', arrow: 'right',
     autoMs: 8000,
     setup() {
-      if (vehicles.length > 0) {
-        vehicles[0].typeIndex = 2; // back to V2b
-        vehicles[0].running = true; vehicles[0].simSpeed = 2;
-        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
-        vehicles[0].theta = 0; vehicles[0].trail = [];
-      }
+      tutorialResetVehicle(1, 150, Math.PI); // Fear, 150px left of light, facing right
+      buildVehicleCards();
+    },
+    overlay(ctx, t, v) {
+      if (!v) return;
+      ctx.fillStyle = 'rgba(239,83,80,0.8)';
+      ctx.font = 'bold ' + (11 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('Fleeing!', v.x, v.y - 22 / camZoom);
+    }
+  },
+  {
+    phase: 1,
+    text: '<b>V3a Love</b> — direct + <b>inhibitory</b>. Brighter light means <b>slower</b> motor. It <b>gently approaches</b> and <b>settles near</b> the source.',
+    target: '#canvas', arrow: 'right',
+    autoMs: 9000,
+    setup() {
+      tutorialResetVehicle(3, 200, Math.PI); // Love, 200px away
+      vehicles[0].simSpeed = 1;
+      buildVehicleCards();
+    },
+    overlay(ctx, t, v) {
+      if (!v) return;
+      ctx.fillStyle = 'rgba(76,175,80,0.8)';
+      ctx.font = 'bold ' + (11 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      const light = staticLights[0];
+      const d = light ? Math.sqrt((v.x-light.x)**2 + (v.y-light.y)**2) : 999;
+      ctx.fillText(d < 60 ? 'Settled!' : 'Approaching...', v.x, v.y - 22 / camZoom);
+    }
+  },
+  {
+    phase: 1,
+    text: '<b>V3b Explorer</b> — crossed + inhibitory. Approaches the light, but <b>veers away</b> up close. It wanders and <b>never settles</b>.',
+    target: '#canvas', arrow: 'right',
+    autoMs: 9000,
+    setup() {
+      tutorialResetVehicle(4, 180, Math.PI); // Explorer
+      vehicles[0].simSpeed = 1;
+      buildVehicleCards();
+    },
+    overlay(ctx, t, v) {
+      if (!v) return;
+      ctx.fillStyle = 'rgba(206,147,255,0.8)';
+      ctx.font = 'bold ' + (11 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('Exploring...', v.x, v.y - 22 / camZoom);
+    }
+  },
+  {
+    phase: 1,
+    text: '<b>Type Summary:</b><br><table style="font-size:11px;margin-top:6px;border-collapse:collapse;width:100%"><tr><td></td><td style="color:#4fc3f7;padding:3px 6px"><b>Direct</b></td><td style="color:#4fc3f7;padding:3px 6px"><b>Crossed</b></td></tr><tr><td style="color:#ff9800"><b>Excitatory</b></td><td style="padding:3px 6px;color:#ef5350">V2a Fear</td><td style="padding:3px 6px;color:#4fc3f7">V2b Aggression</td></tr><tr><td style="color:#ff9800"><b>Inhibitory</b></td><td style="padding:3px 6px;color:#66bb6a">V3a Love</td><td style="padding:3px 6px;color:#ce93d8">V3b Explorer</td></tr></table>',
+    target: '#canvas', arrow: 'right',
+    autoMs: 8000,
+    setup() {
+      // Show V2b chasing again for a nice visual
+      tutorialResetVehicle(2, 180, Math.PI);
+      vehicles[0].simSpeed = 1;
       buildVehicleCards();
     }
   },
   // === PHASE 2: TUNING ===
   {
     phase: 2,
-    text: '<b>Speed</b> controls the simulation rate. Watch the difference between <b>1x</b> (slow, careful) and <b>3x</b> (fast, aggressive).',
+    text: '<b>Speed</b> controls simulation rate. Watch: starting at <b>1x</b>, then switching to <b>3x</b> after a moment.',
     targetFn: () => {
       const card = document.querySelector('.vehicle-card');
       return card ? card.querySelectorAll('.card-slider')[0] : null;
     },
     arrow: 'left', pulse: true,
-    autoMs: 6000,
+    autoMs: 7000,
     setup() {
-      if (vehicles.length > 0) {
-        vehicles[0].simSpeed = 1; vehicles[0].running = true;
-        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
-        vehicles[0].theta = 0; vehicles[0].trail = [];
-      }
+      tutorialResetVehicle(2, 200, Math.PI);
+      vehicles[0].simSpeed = 1;
       buildVehicleCards();
-      // Ramp speed up after 2.5s
-      setTimeout(() => { if (vehicles.length > 0) { vehicles[0].simSpeed = 3; buildVehicleCards(); } }, 2500);
+      setTimeout(() => {
+        if (tutorialActive && vehicles.length > 0) {
+          vehicles[0].simSpeed = 3; buildVehicleCards();
+        }
+      }, 3000);
+    },
+    overlay(ctx, t, v) {
+      if (!v) return;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = 'bold ' + (12 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('Speed: ' + v.simSpeed + 'x', v.x, v.y - 22 / camZoom);
     }
   },
   {
     phase: 2,
-    text: '<b>Contrast</b> amplifies the difference between left and right motor speeds.<br><b>Low</b> = gentle curves. <b>High</b> = sharp turns.',
+    text: '<b>Contrast</b> amplifies L/R motor difference.<br>Starting at <b>15%</b> (gentle curves), then <b>90%</b> (sharp turns).',
     targetFn: () => {
       const card = document.querySelector('.vehicle-card');
       return card ? card.querySelectorAll('.card-slider')[1] : null;
     },
     arrow: 'left', pulse: true,
-    autoMs: 7000,
+    autoMs: 8000,
     setup() {
-      if (vehicles.length > 0) {
-        vehicles[0].speedContrast = 15; vehicles[0].simSpeed = 2;
-        vehicles[0].running = true;
-        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
-        vehicles[0].theta = 0; vehicles[0].trail = [];
-      }
+      tutorialResetVehicle(2, 180, Math.PI);
+      vehicles[0].speedContrast = 15; vehicles[0].simSpeed = 1;
       buildVehicleCards();
-      setTimeout(() => { if (vehicles.length > 0) { vehicles[0].speedContrast = 90; buildVehicleCards(); } }, 3000);
+      setTimeout(() => {
+        if (tutorialActive && vehicles.length > 0) {
+          vehicles[0].speedContrast = 90; vehicles[0].trail = [];
+          buildVehicleCards();
+        }
+      }, 3500);
+    },
+    overlay(ctx, t, v) {
+      if (!v) return;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = 'bold ' + (11 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('Contrast: ' + v.speedContrast + '%', v.x, v.y - 22 / camZoom);
     }
   },
   // === PHASE 3: GATES ===
   {
     phase: 3,
-    text: '<b>Gates</b> filter sensor signals before they reach the motors. <b>Direct</b> passes everything through. Let\'s try <b>Threshold</b> — it ignores weak light.',
+    text: '<b>Gates</b> filter sensor signals. <b>Threshold</b> ignores dim light — only strong signals get through. Notice the dim light is <b>ignored</b>.',
     targetFn: () => document.querySelector('.vehicle-card .card-gate select'),
     arrow: 'left', pulse: true,
-    autoMs: 7000,
+    autoMs: 8000,
     setup() {
-      if (vehicles.length > 0) {
-        vehicles[0].typeIndex = 2; vehicles[0].speedContrast = 50;
-        vehicles[0].gate.front.type = 1; // Threshold
-        vehicles[0].gate.front.threshold = 50;
-        vehicles[0].simSpeed = 2; vehicles[0].running = true;
-        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
-        vehicles[0].theta = 0; vehicles[0].trail = [];
-      }
-      // Add a dim light far away
+      tutorialResetVehicle(2, 180, Math.PI);
+      vehicles[0].gate.front.type = 1; // Threshold
+      vehicles[0].gate.front.threshold = 50;
+      vehicles[0].simSpeed = 1;
+      // Add a dim light off to the side
       if (staticLights.length < 2) {
-        const l = createStaticLight(WORLD_W / 2 - 200, WORLD_H / 2 - 100);
-        l.intensity = 20;
+        const l = createStaticLight(staticLights[0].x - 250, staticLights[0].y - 80);
+        l.intensity = 15;
       }
       buildVehicleCards();
     },
     overlay(ctx, t, v) {
-      // Label the dim light
+      const sz = 1 / camZoom;
       if (staticLights.length >= 2) {
-        const dim = staticLights[1];
-        const sz = 1 / camZoom;
         ctx.fillStyle = 'rgba(239,83,80,0.8)';
-        ctx.font = 'bold ' + (9 * sz) + 'px sans-serif';
+        ctx.font = 'bold ' + (10 * sz) + 'px sans-serif';
         ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.fillText('dim (ignored)', dim.x, dim.y - 14 * sz);
+        ctx.fillText('Dim — ignored', staticLights[1].x, staticLights[1].y - 18 * sz);
       }
       if (staticLights.length >= 1) {
-        const bright = staticLights[0];
-        const sz = 1 / camZoom;
         ctx.fillStyle = 'rgba(76,175,80,0.8)';
-        ctx.font = 'bold ' + (9 * sz) + 'px sans-serif';
+        ctx.font = 'bold ' + (10 * sz) + 'px sans-serif';
         ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-        ctx.fillText('bright (reacts)', bright.x, bright.y - 14 * sz);
+        ctx.fillText('Bright — reacts', staticLights[0].x, staticLights[0].y - 18 * sz);
       }
     }
   },
   {
     phase: 3,
-    text: '<b>AND</b> gate requires <b>both</b> sensors to see light. The vehicle only reacts when facing the light head-on. <b>XOR</b> responds to <b>differences</b> between sensors.',
+    text: '<b>AND</b> needs both sensors lit. <b>XOR</b> responds to differences. Switching from AND to XOR mid-demo...',
     targetFn: () => document.querySelector('.vehicle-card .card-gate select'),
     arrow: 'left', pulse: true,
-    autoMs: 7000,
+    autoMs: 8000,
     setup() {
       // Remove dim light
       if (staticLights.length > 1) staticLights.splice(1);
-      if (vehicles.length > 0) {
-        vehicles[0].gate.front.type = 2; // AND
-        vehicles[0].simSpeed = 2; vehicles[0].running = true;
-        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
-        vehicles[0].theta = 0; vehicles[0].trail = [];
-      }
+      tutorialResetVehicle(2, 180, Math.PI);
+      vehicles[0].gate.front.type = 2; // AND
+      vehicles[0].simSpeed = 1;
       buildVehicleCards();
       setTimeout(() => {
-        if (vehicles.length > 0) { vehicles[0].gate.front.type = 4; buildVehicleCards(); } // XOR
-      }, 3500);
+        if (tutorialActive && vehicles.length > 0) {
+          vehicles[0].gate.front.type = 4; vehicles[0].trail = []; // XOR
+          buildVehicleCards();
+        }
+      }, 4000);
+    },
+    overlay(ctx, t, v) {
+      if (!v) return;
+      const gateName = GATE_TYPES[v.gate.front.type] ? GATE_TYPES[v.gate.front.type].name : '';
+      ctx.fillStyle = 'rgba(255,183,77,0.8)';
+      ctx.font = 'bold ' + (12 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('Gate: ' + gateName, v.x, v.y - 22 / camZoom);
     }
   },
   // === PHASE 4: SIDE SENSORS & LIGHT ===
   {
     phase: 4,
-    text: '<b>Side sensors</b> add a secondary behavior layer. Enable them with the <b>Side</b> checkbox. They sense light from the sides and blend with the front behavior.',
+    text: '<b>Side sensors</b> add a secondary behavior. Here the front is <b>Aggression</b> (chase) but sides are set to <b>Fear</b> — it chases but shies from flanking light.',
     targetFn: () => {
       const card = document.querySelector('.vehicle-card');
       if (!card) return null;
@@ -3807,81 +4313,112 @@ const guidedTutorialSteps = [
       return rows.length >= 2 ? rows[1] : null;
     },
     arrow: 'left', pulse: true,
-    autoMs: 7000,
+    autoMs: 8000,
     setup() {
-      if (vehicles.length > 0) {
-        vehicles[0].gate.front.type = 0; // Direct
-        vehicles[0].typeIndex = 2; vehicles[0].speedContrast = 50;
-        vehicles[0].sidePair.enabled = true;
-        vehicles[0].sidePair.behaviorIndex = 0; // Fear
-        vehicles[0].sidePair.weight = 60;
-        vehicles[0].simSpeed = 2; vehicles[0].running = true;
-        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
-        vehicles[0].theta = 0; vehicles[0].trail = [];
-      }
+      tutorialResetVehicle(2, 180, Math.PI);
+      vehicles[0].gate.front.type = 0;
+      vehicles[0].sidePair.enabled = true;
+      vehicles[0].sidePair.behaviorIndex = 0; // Fear
+      vehicles[0].sidePair.weight = 60;
+      vehicles[0].simSpeed = 1;
       buildVehicleCards();
+    },
+    overlay(ctx, t, v) {
+      if (!v) return;
+      ctx.fillStyle = 'rgba(79,195,247,0.7)';
+      ctx.font = 'bold ' + (10 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('Front: Aggression + Side: Fear', v.x, v.y - 22 / camZoom);
     }
   },
   {
     phase: 4,
-    text: '<b>Blend</b> controls how much the side sensors override the front behavior. At 0% only front matters; at 100% only side matters.',
+    text: '<b>Blend</b> controls how much side overrides front. Watch: <b>20%</b> (mostly front) then <b>80%</b> (mostly side).',
     targetFn: () => {
       const card = document.querySelector('.vehicle-card');
       return card ? card.querySelectorAll('.card-slider')[2] : null;
     },
     arrow: 'left', pulse: true,
-    autoMs: 6000,
+    autoMs: 7000,
     setup() {
       if (vehicles.length > 0) {
         vehicles[0].sidePair.weight = 20;
+        vehicles[0].trail = [];
       }
       buildVehicleCards();
-      setTimeout(() => { if (vehicles.length > 0) { vehicles[0].sidePair.weight = 80; buildVehicleCards(); } }, 2500);
-    }
-  },
-  {
-    phase: 4,
-    text: 'The vehicle can emit its own <b>light</b>. Toggle it here. Other vehicles will <b>sense it</b> — this creates social interactions between multiple vehicles!',
-    targetFn: () => {
-      const card = document.querySelector('.vehicle-card');
-      if (!card) return null;
-      return card.querySelector('.card-light');
+      setTimeout(() => {
+        if (tutorialActive && vehicles.length > 0) {
+          vehicles[0].sidePair.weight = 80; vehicles[0].trail = [];
+          buildVehicleCards();
+        }
+      }, 3000);
     },
-    arrow: 'left', pulse: true,
-    autoMs: 6000,
-    setup() {
-      if (vehicles.length > 0) {
-        vehicles[0].light.on = true;
-        vehicles[0].light.intensity = 70;
-      }
-      buildVehicleCards();
+    overlay(ctx, t, v) {
+      if (!v) return;
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.font = 'bold ' + (11 / camZoom) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+      ctx.fillText('Blend: ' + v.sidePair.weight + '%', v.x, v.y - 22 / camZoom);
     }
   },
   {
     phase: 4,
-    text: 'That\'s it! You now know how to configure a Braitenberg vehicle. <b>Experiment</b> with different types, gates, side sensors, and multiple vehicles to discover emergent behaviors. Have fun!',
+    text: 'Vehicles can emit their own <b>light</b>. Other vehicles <b>sense it</b> — creating social interactions! Here two vehicles interact with each other\'s light.',
     target: '#canvas', arrow: 'right',
+    autoMs: 8000,
     setup() {
-      // Add a second vehicle for fun
+      const light = staticLights[0];
+      if (!light) return;
+      // Reset first vehicle
+      vehicles[0].sidePair.enabled = false;
+      vehicles[0].typeIndex = 2;
+      vehicles[0].light.on = true; vehicles[0].light.intensity = 60;
+      vehicles[0].x = light.x - 120; vehicles[0].y = light.y - 40;
+      vehicles[0].theta = 0; vehicles[0].trail = []; vehicles[0].simSpeed = 1;
+      // Add second vehicle
       if (vehicles.length < 2) {
         const v2 = createVehicle(3); // V3a Love
-        v2.x = WORLD_W / 2 + 100; v2.y = WORLD_H / 2 + 60;
-        v2.theta = Math.PI; v2.simSpeed = 2; v2.running = true;
-        v2.light.on = true;
+        v2.x = light.x + 120; v2.y = light.y + 40;
+        v2.theta = Math.PI; v2.simSpeed = 1; v2.running = true;
+        v2.light.on = true; v2.light.intensity = 60;
       }
+      tutorialCenterCamera(light.x, light.y, 1.2);
       buildVehicleCards();
+    },
+    overlay(ctx, t) {
+      for (const v of vehicles) {
+        if (!v.light.on) continue;
+        ctx.fillStyle = 'rgba(255,235,59,0.6)';
+        ctx.font = 'bold ' + (9 / camZoom) + 'px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+        ctx.fillText('emitting light', v.x, v.y + 18 / camZoom);
+      }
     }
+  },
+  {
+    phase: 4,
+    text: 'You now know how to configure a Braitenberg vehicle! <b>Experiment</b> with different types, gates, side sensors, and multiple vehicles to discover emergent behaviors.',
+    target: '#canvas', arrow: 'right',
+    setup() {}
   },
 ];
 
 function startGuidedTutorial() {
   // Save current state
+  tutorialWasGameMode = gameMode;
   tutorialSavedState = {
     vehicles: JSON.parse(JSON.stringify(vehicles)),
     staticLights: JSON.parse(JSON.stringify(staticLights)),
     camX, camY, camZoom, stopped, selectedVehicleId,
+    gamePhase, gameRunning, WORLD_W, WORLD_H,
   };
+  // Switch to sandbox-like environment for the tutorial
+  if (gameMode) {
+    gameRunning = false;
+    gamePhase = 'select';
+  }
   stopped = false;
+  WORLD_W = 800; WORLD_H = 600;
   tutorialActive = true;
   showGuidedStep(0);
 }
@@ -3895,7 +4432,7 @@ function cleanupTutorial(restore) {
   document.querySelectorAll('.tutorial-highlight, .tutorial-highlight-pulse').forEach(el => {
     el.classList.remove('tutorial-highlight', 'tutorial-highlight-pulse');
   });
-  if (restore && tutorialSavedState) {
+  if (tutorialSavedState) {
     vehicles = tutorialSavedState.vehicles;
     staticLights = tutorialSavedState.staticLights;
     camX = tutorialSavedState.camX;
@@ -3903,7 +4440,12 @@ function cleanupTutorial(restore) {
     camZoom = tutorialSavedState.camZoom;
     stopped = tutorialSavedState.stopped;
     selectedVehicleId = tutorialSavedState.selectedVehicleId;
+    WORLD_W = tutorialSavedState.WORLD_W;
+    WORLD_H = tutorialSavedState.WORLD_H;
+    gamePhase = tutorialSavedState.gamePhase;
+    gameRunning = tutorialSavedState.gameRunning;
     buildVehicleCards();
+    if (tutorialWasGameMode) buildLevelSelect();
   }
   tutorialSavedState = null;
 }
@@ -3918,7 +4460,7 @@ function showGuidedStep(index) {
   tutorialOverlayFn = null;
 
   if (index < 0 || index >= guidedTutorialSteps.length) {
-    cleanupTutorial(index < 0); // restore only on skip, not on finish
+    cleanupTutorial(true);
     return;
   }
 
@@ -3997,12 +4539,8 @@ function showGuidedStep(index) {
   const skipBtn = bubble.querySelector('.tutorial-btn-skip');
   const nextBtn = bubble.querySelector('.tutorial-btn-next');
   closeBtn.addEventListener('click', () => { cleanupTutorial(true); });
-  if (isLast) {
-    skipBtn.addEventListener('click', () => { cleanupTutorial(false); });
-  } else {
-    skipBtn.addEventListener('click', () => { cleanupTutorial(true); });
-    if (nextBtn) nextBtn.addEventListener('click', () => showGuidedStep(index + 1));
-  }
+  skipBtn.addEventListener('click', () => { cleanupTutorial(true); });
+  if (nextBtn) nextBtn.addEventListener('click', () => showGuidedStep(index + 1));
 
   // Auto-advance
   if (step.autoMs) {
@@ -4029,7 +4567,6 @@ function drawTutorialOverlay() {
 }
 
 document.getElementById('guide-btn').addEventListener('click', () => {
-  if (gameMode) return; // don't start tutorial in game mode
   startGuidedTutorial();
 });
 
@@ -4597,6 +5134,22 @@ function buildLevelSelect() {
     newBtn.addEventListener('click', () => enterEditor(null));
   }
   panel.appendChild(newBtn);
+
+  // Strategy Guide button
+  const stratBtn = document.createElement('button');
+  stratBtn.className = 'btn';
+  stratBtn.style.cssText = 'width:100%;margin-bottom:8px;font-size:12px;padding:6px;background:#1b5e20;color:#a5d6a7;';
+  stratBtn.textContent = 'Strategy Guide';
+  stratBtn.addEventListener('click', () => openStrategyGuide());
+  panel.appendChild(stratBtn);
+
+  // Getting Started tutorial button (visible to all users)
+  const tutBtn = document.createElement('button');
+  tutBtn.className = 'btn';
+  tutBtn.style.cssText = 'width:100%;margin-bottom:8px;font-size:12px;padding:6px;background:#0d47a1;color:#4fc3f7;border:1px solid #1565c0;';
+  tutBtn.textContent = '\uD83C\uDF93 Getting Started';
+  tutBtn.addEventListener('click', () => startGuidedTutorial());
+  panel.appendChild(tutBtn);
 
   // Admin: Manage Users button
   if (isAdmin) {
