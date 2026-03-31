@@ -5715,6 +5715,7 @@ async function endGame(outcome, message) {
   }
 
   box.innerHTML = `
+    <div style="font-size:12px;color:#78909c;margin-bottom:4px;">${level.name || 'Scenario'}</div>
     <h2 class="${isWin ? 'win' : 'fail'}">${isWin ? 'Success!' : 'Failed'}</h2>
     <div class="result-time">${finishedTime.toFixed(1)}s</div>
     ${congratsHTML}
