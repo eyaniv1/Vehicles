@@ -455,18 +455,48 @@
   .tutorial-bubble::after {
     content: '';
     position: absolute;
-    width: 12px;
-    height: 12px;
-    background: #1a1a2e;
-    transform: rotate(45deg);
-    border: 1px solid rgba(79, 195, 247, 0.3);
-    clip-path: none;
+    width: 0; height: 0;
+    border: 8px solid transparent;
   }
-  .tutorial-bubble.arrow-left::after { left: -7px; top: 20px; border-right: none; border-top: none; }
-  .tutorial-bubble.arrow-right::after { right: -7px; top: 20px; border-left: none; border-bottom: none; }
-  .tutorial-bubble.arrow-top::after { top: -7px; left: var(--arrow-x, 30px); border-bottom: none; border-right: none; }
-  .tutorial-bubble.arrow-bottom::after { bottom: -7px; left: var(--arrow-x, 30px); border-top: none; border-left: none; }
-  .tutorial-bubble.no-arrow::after { display: none; }
+  .tutorial-bubble.arrow-top::after {
+    top: -16px; left: var(--arrow-x, 30px); transform: translateX(-8px);
+    border-bottom-color: #1a1a2e;
+  }
+  .tutorial-bubble.arrow-bottom::after {
+    bottom: -16px; left: var(--arrow-x, 30px); transform: translateX(-8px);
+    border-top-color: #1a1a2e;
+  }
+  .tutorial-bubble.arrow-left::after {
+    left: -16px; top: 20px;
+    border-right-color: #1a1a2e;
+  }
+  .tutorial-bubble.arrow-right::after {
+    right: -16px; top: 20px;
+    border-left-color: #1a1a2e;
+  }
+  /* Outer border arrow using ::before */
+  .tutorial-bubble::before {
+    content: '';
+    position: absolute;
+    width: 0; height: 0;
+    border: 9px solid transparent;
+  }
+  .tutorial-bubble.arrow-top::before {
+    top: -18px; left: var(--arrow-x, 30px); transform: translateX(-9px);
+    border-bottom-color: rgba(79, 195, 247, 0.3);
+  }
+  .tutorial-bubble.arrow-bottom::before {
+    bottom: -18px; left: var(--arrow-x, 30px); transform: translateX(-9px);
+    border-top-color: rgba(79, 195, 247, 0.3);
+  }
+  .tutorial-bubble.arrow-left::before {
+    left: -18px; top: 20px;
+    border-right-color: rgba(79, 195, 247, 0.3);
+  }
+  .tutorial-bubble.arrow-right::before {
+    right: -18px; top: 20px;
+    border-left-color: rgba(79, 195, 247, 0.3);
+  }
 
   .tutorial-bubble .step-label {
     font-size: 10px;
