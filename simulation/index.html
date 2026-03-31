@@ -440,56 +440,62 @@
   .tutorial-bubble {
     position: fixed;
     z-index: 500;
-    background: #1565c0;
-    color: #fff;
-    padding: 14px 18px;
-    border-radius: 10px;
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    color: #e0e0e0;
+    padding: 16px 20px;
+    border-radius: 12px;
+    border: 1px solid rgba(79, 195, 247, 0.3);
     font-size: 13px;
-    line-height: 1.5;
+    line-height: 1.6;
     max-width: 320px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.6);
+    box-shadow: 0 8px 32px rgba(0,0,0,0.7), 0 0 20px rgba(79,195,247,0.1);
     pointer-events: auto;
+    backdrop-filter: blur(4px);
   }
   .tutorial-bubble::after {
     content: '';
     position: absolute;
     width: 14px;
     height: 14px;
-    background: #1565c0;
+    background: #1a1a2e;
+    border: 1px solid rgba(79, 195, 247, 0.3);
     transform: rotate(45deg);
   }
-  .tutorial-bubble.arrow-left::after { left: -7px; top: 20px; }
-  .tutorial-bubble.arrow-right::after { right: -7px; top: 20px; }
-  .tutorial-bubble.arrow-top::after { top: -7px; left: var(--arrow-x, 30px); }
-  .tutorial-bubble.arrow-bottom::after { bottom: -7px; left: var(--arrow-x, 30px); }
+  .tutorial-bubble.arrow-left::after { left: -8px; top: 20px; border-right: none; border-top: none; }
+  .tutorial-bubble.arrow-right::after { right: -8px; top: 20px; border-left: none; border-bottom: none; }
+  .tutorial-bubble.arrow-top::after { top: -8px; left: var(--arrow-x, 30px); border-bottom: none; border-right: none; }
+  .tutorial-bubble.arrow-bottom::after { bottom: -8px; left: var(--arrow-x, 30px); border-top: none; border-left: none; }
 
   .tutorial-bubble .step-label {
     font-size: 10px;
     text-transform: uppercase;
-    letter-spacing: 1px;
-    opacity: 0.7;
-    margin-bottom: 4px;
+    letter-spacing: 1.5px;
+    color: #4fc3f7;
+    margin-bottom: 6px;
+    font-weight: 600;
   }
-  .tutorial-bubble .step-text { margin-bottom: 10px; }
+  .tutorial-bubble .step-text { margin-bottom: 12px; color: #cfd8dc; }
+  .tutorial-bubble .step-text b { color: #fff; }
   .tutorial-bubble .step-btns {
     display: flex;
     gap: 8px;
     justify-content: flex-end;
   }
   .tutorial-bubble .step-btns button {
-    padding: 5px 14px;
+    padding: 6px 16px;
     border: none;
-    border-radius: 5px;
+    border-radius: 6px;
     font-size: 12px;
     font-weight: bold;
     cursor: pointer;
+    transition: all 0.15s;
   }
-  .tutorial-btn-next { background: #fff; color: #1565c0; }
-  .tutorial-btn-next:hover { background: #e3f2fd; }
-  .tutorial-btn-skip { background: transparent; color: rgba(255,255,255,0.7); }
-  .tutorial-btn-skip:hover { color: #fff; }
-  .bubble-close { position:absolute; top:4px; right:8px; background:none; border:none; color:rgba(255,255,255,0.7); font-size:18px; cursor:pointer; padding:2px 6px; }
-  .bubble-close:hover { color:#fff; }
+  .tutorial-btn-next { background: #4fc3f7; color: #0a0a1a; }
+  .tutorial-btn-next:hover { background: #81d4fa; transform: translateY(-1px); }
+  .tutorial-btn-skip { background: transparent; color: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.15) !important; }
+  .tutorial-btn-skip:hover { color: #fff; border-color: rgba(255,255,255,0.4) !important; }
+  .bubble-close { position:absolute; top:6px; right:10px; background:none; border:none; color:rgba(255,255,255,0.4); font-size:18px; cursor:pointer; padding:2px 6px; transition: color 0.15s; }
+  .bubble-close:hover { color:#4fc3f7; }
 
   .tutorial-highlight {
     position: relative;
@@ -2957,17 +2963,19 @@ canvas.addEventListener('mousemove', (e) => {
 
 canvas.addEventListener('mouseup', (e) => {
   if (gameMode && gamePhase === 'editing') { editorMouseUp(); }
-  if (isPanning) {
-    isPanning = false;
-    return;
+  const wasPanning = isPanning;
+  const didPanMove = isPanning && (camX !== camStartX || camY !== camStartY);
+  if (isPanning) isPanning = false;
+  if (e.button !== 0) { dragging = null; dragStarted = false; return; }
+  // Click-to-info on canvas elements during briefing (works even if pan started but didn't move)
+  if (gameMode && gamePhase === 'briefing' && !schematicViewActive && !dragStarted) {
+    if (!dragging && (wasPanning && !didPanMove || !wasPanning)) {
+      const pos = canvasCoords(e);
+      const hit = gameObjectAt(pos.x, pos.y);
+      if (hit) { showElementInfoBubble(hit); dragging = null; dragStarted = false; return; }
+    }
   }
-  if (e.button !== 0) return;
-  // Click-to-info on canvas elements during briefing
-  if (gameMode && gamePhase === 'briefing' && !dragging && !dragStarted && !schematicViewActive) {
-    const pos = canvasCoords(e);
-    const hit = gameObjectAt(pos.x, pos.y);
-    if (hit) { showElementInfoBubble(hit); }
-  }
+  if (didPanMove) { dragging = null; dragStarted = false; return; }
   if (dragging && !dragStarted && !gameMode) {
     dragging.on = !dragging.on;
   }
@@ -3651,29 +3659,29 @@ const GAME_LEVELS = [
   {
     id: 1, name: 'First Light', tier: 1,
     description: 'A single beacon glows in the distance. Configure a vehicle that approaches light.',
-    briefing: 'The goal marker pulses green near the light. Pick a vehicle type that is attracted to light and hit Launch.',
+    briefing: 'The finish line pulses green near the light. Pick a vehicle type that is attracted to light and hit Launch.',
     hint: 'Try V2b Aggression — it steers toward light sources.',
     worldSize: { w: 1200, h: 800 },
     lights: [{ x: 900, y: 400, intensity: 75, on: true }],
     startPos: { x: 200, y: 400, theta: 0 },
     allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
     lockedDefaults: {},
-    goals: [{ type: 'reach', x: 900, y: 400, radius: 60, label: 'Goal' }],
+    goals: [{ type: 'reach', x: 900, y: 400, radius: 60, label: 'Finish' }],
     dangers: [], checkpoints: [],
     timeLimit: 30,
     stars: { three: 8, two: 15, one: 30 },
   },
   {
     id: 2, name: 'The Wrong Way', tier: 1,
-    description: 'The light is a trap — your goal is on the opposite side. Find a vehicle that flees.',
-    briefing: 'A bright light sits above your vehicle, but the goal is below. You need a vehicle type that runs away from light.',
+    description: 'The light is a trap — the finish line is on the opposite side. Find a vehicle that flees.',
+    briefing: 'A bright light sits above your vehicle, but the finish is below. You need a vehicle type that runs away from light.',
     hint: 'V2a Fear has direct wiring with excitatory response — it turns away from light and accelerates.',
     worldSize: { w: 1200, h: 800 },
     lights: [{ x: 600, y: 100, intensity: 90, on: true }],
     startPos: { x: 600, y: 350, theta: Math.PI / 2 },
     allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
     lockedDefaults: {},
-    goals: [{ type: 'reach', x: 600, y: 700, radius: 60, label: 'Goal' }],
+    goals: [{ type: 'reach', x: 600, y: 700, radius: 60, label: 'Finish' }],
     dangers: [], checkpoints: [],
     timeLimit: 30,
     stars: { three: 8, two: 15, one: 30 },
@@ -3681,7 +3689,7 @@ const GAME_LEVELS = [
   {
     id: 3, name: 'Bright Not Dim', tier: 1,
     description: 'Two lights — one dim decoy, one bright target. Use a gate to ignore weak signals.',
-    briefing: 'A dim light sits between you and the bright goal. A Threshold gate can filter out weak light so your vehicle ignores the decoy.',
+    briefing: 'A dim light sits between you and the bright finish. A Threshold gate can filter out weak light so your vehicle ignores the decoy.',
     hint: 'Use V2b Aggression with a Threshold front gate. Set threshold around 25-35.',
     worldSize: { w: 1200, h: 800 },
     lights: [
@@ -3691,7 +3699,7 @@ const GAME_LEVELS = [
     startPos: { x: 100, y: 400, theta: 0 },
     allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
     lockedDefaults: {},
-    goals: [{ type: 'reach', x: 950, y: 400, radius: 60, label: 'Goal' }],
+    goals: [{ type: 'reach', x: 950, y: 400, radius: 60, label: 'Finish' }],
     dangers: [], checkpoints: [],
     timeLimit: 40,
     stars: { three: 12, two: 25, one: 40 },
@@ -3699,7 +3707,7 @@ const GAME_LEVELS = [
   {
     id: 4, name: 'Slalom', tier: 2,
     description: 'Visit three checkpoints near lights, then reach the finish.',
-    briefing: 'Three lights form a zigzag path. Your vehicle must pass near each checkpoint (cyan circles) before reaching the green goal.',
+    briefing: 'Three lights form a zigzag path. Your vehicle must pass near each checkpoint (cyan circles) before reaching the finish line.',
     hint: 'V2b Aggression with some speed should naturally chase each light in sequence. Adjust contrast for sharper turns.',
     worldSize: { w: 1600, h: 800 },
     lights: [
@@ -3730,7 +3738,7 @@ const GAME_LEVELS = [
     startPos: { x: 150, y: 400, theta: 0 },
     allowedConfig: { typeSelect: true, frontGate: true, sideEnabled: true, speed: true, contrast: true, light: true },
     lockedDefaults: {},
-    goals: [{ type: 'reach', x: 1200, y: 400, radius: 60, label: 'Goal' }],
+    goals: [{ type: 'reach', x: 1200, y: 400, radius: 60, label: 'Finish' }],
     checkpoints: [],
     dangers: [
       { shape: 'rect', x: 370, y: 0, w: 140, h: 260 },
@@ -3744,7 +3752,7 @@ const GAME_LEVELS = [
   {
     id: 6, name: 'Light Hop', tier: 2,
     description: 'Three lights in a triangle. Visit all checkpoints — your vehicle must hop between them.',
-    briefing: 'Lights form a wide triangle. The vehicle must visit each checkpoint then reach the center goal. Explorer-type vehicles may curve between them naturally.',
+    briefing: 'Lights form a wide triangle. The vehicle must visit each checkpoint then reach the finish line. Explorer-type vehicles may curve between them naturally.',
     hint: 'Try V3b Explorer — it approaches light but veers away up close, naturally hopping to the next source.',
     worldSize: { w: 1600, h: 1000 },
     lights: [
@@ -4194,12 +4202,12 @@ function blankLevel() {
     name: 'New Level',
     tier: 1,
     description: '',
-    briefing: 'Configure your vehicle and reach the goal.',
+    briefing: 'Configure your vehicle and reach the finish line.',
     hint: '',
     worldSize: { w: 1200, h: 800 },
     lights: [],
     startPos: { x: 200, y: 400, theta: 0 },
-    goals: [{ type: 'reach', x: 1000, y: 400, radius: 60, label: 'Goal' }],
+    goals: [{ type: 'reach', x: 1000, y: 400, radius: 60, label: 'Finish' }],
     checkpoints: [],
     dangers: [],
     bouncers: [],
@@ -4348,7 +4356,7 @@ function buildEditorPanel() {
     { id: 'danger', label: '\u26A0 Danger' },
     { id: 'bouncer', label: '\u2B22 Bounce' },
     { id: 'start', label: '\u25B7 Start' },
-    { id: 'goal', label: '\u2691 Goal' },
+    { id: 'goal', label: '\u2691 Finish' },
   ];
   tools.forEach(t => {
     const btn = document.createElement('button');
@@ -4417,7 +4425,7 @@ function buildEditorPanel() {
   panel.appendChild(buildObjSection('Checkpoints', editorLevel.checkpoints, 'checkpoint', (cp, i) => `CP (${Math.round(cp.x)}, ${Math.round(cp.y)}) r=${cp.radius}${cp.light ? ' \u2600' : ''}`));
   panel.appendChild(buildObjSection('Danger Zones', editorLevel.dangers, 'danger', (dz, i) => `DZ ${i+1}: ${dz.shape} (${Math.round(dz.x)}, ${Math.round(dz.y)})${dz.light ? ' \u2600' : ''}`));
   panel.appendChild(buildObjSection('Bouncers', editorLevel.bouncers || [], 'bouncer', (b, i) => `Bouncer ${i+1}: (${Math.round(b.x)}, ${Math.round(b.y)}) r=${b.radius}${b.light ? ' \u2600' : ''}`));
-  panel.appendChild(buildObjSection('Goals', editorLevel.goals, 'goal', (g, i) => `Goal ${i+1}: (${Math.round(g.x)}, ${Math.round(g.y)})${g.light ? ' \u2600' : ''}`));
+  panel.appendChild(buildObjSection('Finish Points', editorLevel.goals, 'goal', (g, i) => `Finish ${i+1}: (${Math.round(g.x)}, ${Math.round(g.y)})${g.light ? ' \u2600' : ''}`));
 
   // Start point info
   const startInfo = document.createElement('div');
@@ -4709,7 +4717,7 @@ function buildPropertiesPanel(panel) {
     const labelLab = document.createElement('label'); labelLab.textContent = 'Label';
     props.appendChild(labelLab);
     const labelIn = document.createElement('input');
-    labelIn.type = 'text'; labelIn.value = g.label || 'Goal';
+    labelIn.type = 'text'; labelIn.value = g.label || 'Finish';
     labelIn.addEventListener('input', () => { g.label = labelIn.value; });
     props.appendChild(labelIn);
 
@@ -4898,7 +4906,7 @@ function editorMouseDown(e) {
     editorTool = 'select';
     buildEditorPanel();
   } else if (editorTool === 'goal') {
-    editorLevel.goals.push({ type: 'reach', x: pos.x, y: pos.y, radius: 60, label: 'Goal' });
+    editorLevel.goals.push({ type: 'reach', x: pos.x, y: pos.y, radius: 60, label: 'Finish' });
     editorSelected = { type: 'goal', index: editorLevel.goals.length - 1 };
     editorTool = 'select';
     buildEditorPanel();
@@ -5045,8 +5053,8 @@ function showEditorContextMenu(e) {
       if (!editorLevel.bouncers) editorLevel.bouncers = [];
       editorLevel.bouncers.push({ x: pos.x, y: pos.y, radius: 50 }); buildEditorPanel();
     });
-    addItem('\u2691 Add Goal Here', () => {
-      editorLevel.goals.push({ type: 'reach', x: pos.x, y: pos.y, radius: 60, label: 'Goal' }); buildEditorPanel();
+    addItem('\u2691 Add Finish Point Here', () => {
+      editorLevel.goals.push({ type: 'reach', x: pos.x, y: pos.y, radius: 60, label: 'Finish' }); buildEditorPanel();
     });
     addSep();
     addItem('Set Start Point Here', () => {
@@ -5582,79 +5590,73 @@ function buildBriefingPanel(level) {
 
 // --- Walkthrough ---
 
+function _hasPath(obj) { return obj.path && obj.path.waypoints && obj.path.waypoints.length >= 2; }
+function _pathDesc(obj) { return obj.path.mode === 'bounce' ? 'back and forth like it can\'t make up its mind' : 'one-way, no return ticket'; }
+
 function describeLight(l) {
-  const parts = [];
-  if (l._embedded) return null; // embedded lights described with parent
-  parts.push(`<b>Light source</b> (intensity ${l.intensity}%)`);
-  if (l.path && l.path.waypoints && l.path.waypoints.length >= 2) {
-    parts.push(`This one\'s on the move \u2014 it follows a path ${l.path.mode === 'bounce' ? 'back and forth' : 'and stops at the end'}.`);
+  if (l._embedded) return null;
+  const parts = [`<b>Light source</b> (${l.intensity}% intensity)`];
+  if (_hasPath(l)) {
+    parts.push(`\u2014 a restless one. Cruises along a path ${_pathDesc(l)}.`);
   } else {
-    parts.push('Drag it around to reshape the playing field.');
+    parts.push('\u2014 grab it and drag it wherever you want. It won\'t complain.');
   }
   if (l.onVisit) {
-    if (l.onVisit.action === 'off') parts.push(`Gets shy when your vehicle visits \u2014 turns off on contact.${l.onVisit.recovery ? ' Recovers after ' + l.onVisit.recovery + 's.' : ''}`);
-    else if (l.onVisit.action === 'offDelay') parts.push(`Fades out ${l.onVisit.delay}s after your vehicle gets close.${l.onVisit.recovery ? ' Comes back after ' + l.onVisit.recovery + 's.' : ''}`);
-    else if (l.onVisit.action === 'changeLuminosity') parts.push(`Changes to ${l.onVisit.newIntensity}% intensity when visited. Surprise!`);
+    if (l.onVisit.action === 'off') parts.push(`Dramatic type: goes dark the moment your vehicle shows up.${l.onVisit.recovery ? ' Drama fades after ' + l.onVisit.recovery + 's.' : ' Permanently.'}`);
+    else if (l.onVisit.action === 'offDelay') parts.push(`Passive-aggressive: waits ${l.onVisit.delay}s after you arrive, then ghosts you.${l.onVisit.recovery ? ' Comes crawling back after ' + l.onVisit.recovery + 's.' : ''}`);
+    else if (l.onVisit.action === 'changeLuminosity') parts.push(`Moody \u2014 shifts to ${l.onVisit.newIntensity}% when your vehicle visits. No warning.`);
   }
-  if (!l.on) parts.push("Currently off \u2014 but don't underestimate a sleeping light.");
+  if (!l.on) parts.push('Currently napping. Don\'t let that fool you.');
   return parts.join(' ');
 }
 
 function describeDanger(dz) {
-  const parts = [];
-  const shape = dz.shape === 'circle' ? 'circular' : 'rectangular';
-  parts.push(`<b>${shape[0].toUpperCase() + shape.slice(1)} danger zone</b>`);
-  parts.push('\u2014 touch it and your vehicle is toast. Literally.');
-  if (dz.path && dz.path.waypoints && dz.path.waypoints.length >= 2) {
-    parts.push(`Oh, and it moves. ${dz.path.mode === 'bounce' ? 'Back and forth, like a restless predator.' : 'Slides to its final position and parks there menacingly.'}`);
+  const shape = dz.shape === 'circle' ? 'Circular' : 'Rectangular';
+  const parts = [`<b>${shape} danger zone</b> \u2014 your vehicle touches this, it\'s game over. No second chances, no appeals.`];
+  if (_hasPath(dz)) {
+    parts.push(`And yes, it moves ${_pathDesc(dz)}. Because stationary death was too easy.`);
   }
   if (dz.light) {
-    parts.push(`Has a built-in light (intensity ${dz.light.intensity}%). Because apparently being deadly wasn't enough.`);
-    if (dz.light.onVisit && dz.light.onVisit.action) parts.push('Its light reacts when your vehicle gets close.');
+    parts.push(`Equipped with a light (${dz.light.intensity}%). Apparently destruction needed ambiance.`);
+    if (dz.light.onVisit && dz.light.onVisit.action) parts.push('The light has a mood swing when your vehicle approaches.');
   }
   return parts.join(' ');
 }
 
 function describeBouncer(b) {
-  const parts = [];
-  parts.push('<b>Bouncer</b> \u2014 a hexagonal deflector.');
-  parts.push('Your vehicle will ricochet off it on impact. Think of it as a very firm suggestion to go elsewhere.');
-  if (b.path && b.path.waypoints && b.path.waypoints.length >= 2) {
-    parts.push(`This bouncer patrols a path ${b.path.mode === 'bounce' ? 'back and forth' : 'one way'}. Timing matters.`);
+  const parts = ['<b>Bouncer</b> \u2014 the hexagonal nightclub doorman of the arena. Your vehicle will ping off it like a rubber ball. Could be useful, could be catastrophic.'];
+  if (_hasPath(b)) {
+    parts.push(`Patrols a route ${_pathDesc(b)}. Time your approach or get yeeted.`);
   }
   if (b.light) {
-    parts.push(`Comes equipped with a light (intensity ${b.light.intensity}%).`);
-    if (b.light.onVisit && b.light.onVisit.action) parts.push("Its light has tricks up its sleeve when visited.");
+    parts.push(`Packing a light (${b.light.intensity}%). Even bouncers need accessories.`);
+    if (b.light.onVisit && b.light.onVisit.action) parts.push('Its light pulls a stunt when visited.');
   }
   return parts.join(' ');
 }
 
 function describeCheckpoint(cp, idx, total) {
-  const parts = [];
-  parts.push(`<b>Checkpoint ${idx + 1}${total > 1 ? ' of ' + total : ''}</b>`);
-  parts.push('\u2014 swing by here before heading to the finish line.');
-  if (total > 1) parts.push(`They must be visited in order, no skipping!`);
-  if (cp.approvalTime) parts.push(`Patience required: park inside for ${cp.approvalTime}s to get credit.`);
-  if (cp.path && cp.path.waypoints && cp.path.waypoints.length >= 2) {
-    parts.push(`Heads up \u2014 this checkpoint moves ${cp.path.mode === 'bounce' ? 'back and forth along a path' : 'to a new position'}. Chase it!`);
+  const parts = [`<b>Checkpoint${total > 1 ? ' ' + (idx + 1) + ' of ' + total : ''}</b> \u2014 your vehicle needs to visit ${total > 1 ? 'all checkpoints' : 'this'} before the finish line counts. Any order works \u2014 we\'re flexible like that.`];
+  if (cp.approvalTime) parts.push(`Catch: you have to loiter inside for ${cp.approvalTime}s. No drive-throughs.`);
+  if (_hasPath(cp)) {
+    parts.push(`Oh, and it\'s moving ${_pathDesc(cp)}. Good luck catching it.`);
   }
   if (cp.light) {
-    parts.push(`Has its own light (intensity ${cp.light.intensity}%).`);
-    if (cp.light.onVisit && cp.light.onVisit.action) parts.push('The light changes when visited.');
+    parts.push(`Has a light (${cp.light.intensity}%).`);
+    if (cp.light.onVisit && cp.light.onVisit.action) parts.push('The light does something sneaky when visited.');
   }
   return parts.join(' ');
 }
 
 function describeGoal(g) {
-  const parts = [];
-  parts.push(`<b>Finish line${g.label && g.label !== 'Goal' && g.label !== 'FINISH' ? ' (' + g.label + ')' : ''}</b>`);
-  parts.push('\u2014 get your vehicle here to win. The checkered flag awaits!');
-  if (g.path && g.path.waypoints && g.path.waypoints.length >= 2) {
-    parts.push(`Plot twist: it moves ${g.path.mode === 'bounce' ? 'back and forth' : 'to a new spot'}. You'll need to intercept it.`);
+  const customLabel = g.label && g.label !== 'Finish' && g.label !== 'Goal' && g.label !== 'FINISH';
+  const parts = [`<b>Finish line${customLabel ? ' (' + g.label + ')' : ''}</b> \u2014 the promised land. Get your vehicle here (after any checkpoints) and victory is yours.`];
+  if (_hasPath(g)) {
+    parts.push(`Plot twist: it moves ${_pathDesc(g)}. Nothing worth having comes easy.`);
   }
   if (g.light) {
-    parts.push(`Glowing with a light (intensity ${g.light.intensity}%).`);
-    if (g.light.onVisit && g.light.onVisit.action) parts.push('The light reacts when your vehicle approaches.');
+    parts.push(`Glowing at ${g.light.intensity}% intensity, like a beacon of hope.`);
+    if (g.light.onVisit && g.light.onVisit.action) parts.push('The light reacts on approach \u2014 because why not.');
   }
   return parts.join(' ');
 }
@@ -5673,24 +5675,24 @@ function describeElement(type, obj, level) {
 
 function startWalkthrough(level) {
   walkthroughSteps = [];
-  // Add each individual element as its own step
+  // Order: checkpoints, lights, bouncers, dangers, finish line
+  for (let i = 0; i < level.checkpoints.length; i++) {
+    const cp = level.checkpoints[i];
+    walkthroughSteps.push({ type: 'checkpoint', obj: cp, getPos: () => ({ x: cp.x, y: cp.y }), text: describeCheckpoint(cp, i, level.checkpoints.length) });
+  }
   const nonEmbeddedLights = staticLights.filter(l => !l._embedded);
   for (const l of nonEmbeddedLights) {
     walkthroughSteps.push({ type: 'light', obj: l, getPos: () => ({ x: l.x, y: l.y }), text: describeLight(l) });
-  }
-  for (const dz of level.dangers) {
-    const cx = dz.shape === 'circle' ? dz.x : dz.x + dz.w / 2;
-    const cy = dz.shape === 'circle' ? dz.y : dz.y + dz.h / 2;
-    walkthroughSteps.push({ type: 'danger', obj: dz, getPos: () => ({ x: cx, y: cy }), text: describeDanger(dz) });
   }
   if (level.bouncers) {
     for (const b of level.bouncers) {
       walkthroughSteps.push({ type: 'bouncer', obj: b, getPos: () => ({ x: b.x, y: b.y }), text: describeBouncer(b) });
     }
   }
-  for (let i = 0; i < level.checkpoints.length; i++) {
-    const cp = level.checkpoints[i];
-    walkthroughSteps.push({ type: 'checkpoint', obj: cp, getPos: () => ({ x: cp.x, y: cp.y }), text: describeCheckpoint(cp, i, level.checkpoints.length) });
+  for (const dz of level.dangers) {
+    const cx = dz.shape === 'circle' ? dz.x : dz.x + dz.w / 2;
+    const cy = dz.shape === 'circle' ? dz.y : dz.y + dz.h / 2;
+    walkthroughSteps.push({ type: 'danger', obj: dz, getPos: () => ({ x: cx, y: cy }), text: describeDanger(dz) });
   }
   for (const g of level.goals) {
     walkthroughSteps.push({ type: 'goal', obj: g, getPos: () => ({ x: g.x, y: g.y }), text: describeGoal(g) });
@@ -6276,7 +6278,7 @@ function updateGameState(dt) {
   for (const goal of level.goals) {
     if (goal.type === 'reach' && allCheckpointsDone) {
       if (toroidalDistSq(v.x, v.y, goal.x, goal.y) < goal.radius * goal.radius) {
-        endGame('win', 'Reached the goal in ' + gameElapsed.toFixed(1) + 's!');
+        endGame('win', 'Crossed the finish line in ' + gameElapsed.toFixed(1) + 's!');
         return;
       }
     }
@@ -6608,7 +6610,7 @@ function drawGameObjects() {
     ctx.fillStyle = '#4caf50';
     ctx.font = 'bold ' + (12 / camZoom) + 'px sans-serif';
     ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
-    ctx.fillText(goal.label || 'FINISH', goal.x, goal.y - goal.radius - 6 * s);
+    ctx.fillText(goal.label || 'Finish', goal.x, goal.y - goal.radius - 6 * s);
   }
 
   // === START POSITION — gate that opens ===
