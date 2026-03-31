@@ -203,6 +203,124 @@ app.get('/api/scenarios/:id/leaderboard', (req, res) => {
     })));
 });
 
+// ── API Routes: Admin User Management ──────────────────────
+
+app.get('/api/admin/users', authMiddleware, adminMiddleware, (req, res) => {
+    const users = db.prepare('SELECT id, email, nickname, role, created_at FROM users ORDER BY created_at DESC').all();
+    res.json(users);
+});
+
+app.get('/api/admin/users/:id', authMiddleware, adminMiddleware, (req, res) => {
+    const user = stmts.getUserById.get(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const scenarios = stmts.getUserScenarios.all(req.params.id);
+    const scenarioData = scenarios.map(s => ({
+        scenario_id: s.scenario_id,
+        best_time: s.best_time,
+        best_vehicle_config: s.best_vehicle_config ? JSON.parse(s.best_vehicle_config) : null,
+        last_vehicle_config: s.last_vehicle_config ? JSON.parse(s.last_vehicle_config) : null,
+        updated_at: s.updated_at,
+    }));
+
+    res.json({
+        id: user.id,
+        email: user.email,
+        nickname: user.nickname,
+        role: user.role,
+        created_at: user.created_at,
+        scenarios: scenarioData,
+    });
+});
+
+app.delete('/api/admin/users', authMiddleware, adminMiddleware, (req, res) => {
+    const { user_ids } = req.body;
+    if (!Array.isArray(user_ids) || user_ids.length === 0) {
+        return res.status(400).json({ error: 'user_ids array required' });
+    }
+    // Prevent deleting yourself
+    if (user_ids.includes(req.user.id)) {
+        return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
+    const deleteMany = db.transaction((ids) => {
+        const delScenarios = db.prepare('DELETE FROM user_scenarios WHERE user_id = ?');
+        const delUser = db.prepare('DELETE FROM users WHERE id = ?');
+        for (const id of ids) {
+            delScenarios.run(id);
+            delUser.run(id);
+        }
+    });
+    deleteMany(user_ids);
+    res.json({ ok: true, deleted: user_ids.length });
+});
+
+// Export a user's full record
+app.get('/api/admin/users/:id/export', authMiddleware, adminMiddleware, (req, res) => {
+    const user = stmts.getUserById.get(req.params.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+
+    const scenarios = stmts.getUserScenarios.all(req.params.id);
+    const exportData = {
+        _export_version: 1,
+        _exported_at: new Date().toISOString(),
+        user: {
+            email: user.email,
+            nickname: user.nickname,
+            role: user.role,
+            created_at: user.created_at,
+        },
+        scenarios: scenarios.map(s => ({
+            scenario_id: s.scenario_id,
+            best_time: s.best_time,
+            best_vehicle_config: s.best_vehicle_config ? JSON.parse(s.best_vehicle_config) : null,
+            last_vehicle_config: s.last_vehicle_config ? JSON.parse(s.last_vehicle_config) : null,
+        })),
+    };
+    res.json(exportData);
+});
+
+// Import a user record
+app.post('/api/admin/users/import', authMiddleware, adminMiddleware, (req, res) => {
+    const data = req.body;
+    if (!data || !data.user || !data.user.email) {
+        return res.status(400).json({ error: 'Invalid import data' });
+    }
+
+    const normalizedEmail = data.user.email.trim().toLowerCase();
+    let user = stmts.getUserByEmail.get(normalizedEmail);
+
+    if (!user) {
+        // Create user
+        const id = uuidv4();
+        const role = ADMIN_EMAILS.includes(normalizedEmail) ? 'admin' : (data.user.role || 'user');
+        stmts.insertUser.run(id, normalizedEmail, data.user.nickname || normalizedEmail, role);
+        user = stmts.getUserById.get(id);
+    }
+
+    // Import scenarios
+    if (Array.isArray(data.scenarios)) {
+        for (const s of data.scenarios) {
+            const existing = stmts.getUserScenario.get(user.id, s.scenario_id);
+            const bestConfig = s.best_vehicle_config ? JSON.stringify(s.best_vehicle_config) : null;
+            const lastConfig = s.last_vehicle_config ? JSON.stringify(s.last_vehicle_config) : null;
+
+            if (!existing) {
+                stmts.insertUserScenario.run(
+                    uuidv4(), user.id, s.scenario_id,
+                    s.best_time || null, bestConfig, lastConfig
+                );
+            } else {
+                // Update if imported time is better
+                if (s.best_time && (!existing.best_time || s.best_time < existing.best_time)) {
+                    stmts.updateBestTime.run(s.best_time, bestConfig, lastConfig, user.id, s.scenario_id);
+                }
+            }
+        }
+    }
+
+    res.json({ ok: true, user_id: user.id });
+});
+
 // ── Health check ───────────────────────────────────────────
 
 app.get('/api/health', (req, res) => {

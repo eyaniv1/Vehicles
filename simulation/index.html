@@ -757,6 +757,38 @@
     font-size: 10px; color: #4fc3f7; margin-top: 2px;
   }
 
+  /* --- Admin Panel --- */
+  .admin-user-list { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; }
+  .admin-user-row {
+    display: flex; align-items: center; gap: 6px; padding: 6px 8px;
+    background: #1a1a2e; border-radius: 6px; font-size: 12px; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .admin-user-row:hover { background: #0f3460; }
+  .admin-user-row input[type="checkbox"] { flex-shrink: 0; }
+  .admin-user-row .user-info { flex: 1; min-width: 0; }
+  .admin-user-row .user-email { color: #b0bec5; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .admin-user-row .user-nick { color: #e0e0e0; font-weight: 600; }
+  .admin-user-row .user-role { font-size: 10px; padding: 1px 5px; border-radius: 3px; }
+  .admin-user-row .user-role.admin { background: #ef5350; color: #fff; }
+  .admin-user-row .user-role.user { background: #37474f; color: #90a4ae; }
+  .admin-action-bar {
+    display: flex; gap: 4px; margin-top: 6px; flex-wrap: wrap;
+  }
+  .admin-detail-section { margin-top: 10px; }
+  .admin-detail-section h4 { color: #ff9800; font-size: 12px; margin: 8px 0 4px; }
+  .admin-scenario-row {
+    padding: 4px 8px; background: #1a1a2e; border-radius: 4px; margin-bottom: 3px; font-size: 11px;
+  }
+  .admin-scenario-row .scenario-name { color: #e0e0e0; }
+  .admin-scenario-row .scenario-time { color: #4caf50; }
+  .admin-scenario-row .scenario-unsolved { color: #ef5350; }
+  .admin-config-preview {
+    font-size: 10px; color: #78909c; background: #0d1b2a; padding: 4px 6px;
+    border-radius: 3px; margin-top: 2px; font-family: monospace; white-space: pre-wrap;
+    max-height: 80px; overflow-y: auto;
+  }
+
   /* --- Level Editor --- */
   .editor-toolbar {
     display: flex; flex-wrap: wrap; gap: 4px; padding: 6px 0;
@@ -3798,6 +3830,236 @@ function goToLevelSelect() {
   buildLevelSelect();
 }
 
+// --- Admin Panel ---
+async function showAdminUserList() {
+  const panel = document.getElementById('game-panel');
+  panel.innerHTML = '<h2 style="color:#ff9800;margin:0;">Manage Users</h2>';
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'btn';
+  backBtn.textContent = '\u2190 Back to Scenarios';
+  backBtn.style.cssText = 'font-size:12px;padding:6px;background:#37474f;color:#b0bec5;margin-top:6px;';
+  backBtn.addEventListener('click', () => buildLevelSelect());
+  panel.appendChild(backBtn);
+
+  const loading = document.createElement('p');
+  loading.style.cssText = 'color:#b0bec5;font-size:12px;';
+  loading.textContent = 'Loading users...';
+  panel.appendChild(loading);
+
+  let users;
+  try {
+    const resp = await fetch(API_BASE + '/api/admin/users', { headers: apiHeaders() });
+    users = await resp.json();
+  } catch (e) {
+    loading.textContent = 'Failed to load users.';
+    return;
+  }
+  loading.remove();
+
+  // Action bar
+  const actionBar = document.createElement('div');
+  actionBar.className = 'admin-action-bar';
+
+  const deleteBtn = document.createElement('button');
+  deleteBtn.className = 'btn';
+  deleteBtn.style.cssText = 'font-size:11px;padding:4px 10px;background:#c62828;color:#fff;';
+  deleteBtn.textContent = 'Delete Selected';
+  deleteBtn.addEventListener('click', async () => {
+    const checked = panel.querySelectorAll('.admin-user-check:checked');
+    const ids = Array.from(checked).map(cb => cb.dataset.userId).filter(id => id !== currentUser.id);
+    if (ids.length === 0) return alert('No users selected (cannot delete yourself).');
+    if (!confirm('Delete ' + ids.length + ' user(s)? This cannot be undone.')) return;
+    try {
+      await fetch(API_BASE + '/api/admin/users', {
+        method: 'DELETE', headers: apiHeaders(),
+        body: JSON.stringify({ user_ids: ids }),
+      });
+      showAdminUserList();
+    } catch (e) { alert('Failed to delete users.'); }
+  });
+  actionBar.appendChild(deleteBtn);
+
+  const importBtn = document.createElement('button');
+  importBtn.className = 'btn';
+  importBtn.style.cssText = 'font-size:11px;padding:4px 10px;background:#1565c0;color:#fff;';
+  importBtn.textContent = 'Import User';
+  importBtn.addEventListener('click', () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const data = JSON.parse(text);
+        const resp = await fetch(API_BASE + '/api/admin/users/import', {
+          method: 'POST', headers: apiHeaders(),
+          body: JSON.stringify(data),
+        });
+        if (resp.ok) { alert('User imported successfully.'); showAdminUserList(); }
+        else { const err = await resp.json(); alert('Import failed: ' + err.error); }
+      } catch (e) { alert('Invalid file or import failed.'); }
+    });
+    input.click();
+  });
+  actionBar.appendChild(importBtn);
+
+  panel.appendChild(actionBar);
+
+  // User count
+  const countEl = document.createElement('div');
+  countEl.style.cssText = 'font-size:11px;color:#78909c;margin-top:6px;';
+  countEl.textContent = users.length + ' registered user' + (users.length !== 1 ? 's' : '');
+  panel.appendChild(countEl);
+
+  // User list
+  const list = document.createElement('div');
+  list.className = 'admin-user-list';
+
+  users.forEach(u => {
+    const row = document.createElement('div');
+    row.className = 'admin-user-row';
+
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.className = 'admin-user-check';
+    cb.dataset.userId = u.id;
+    if (u.id === currentUser.id) { cb.disabled = true; cb.title = 'Cannot select yourself'; }
+    cb.addEventListener('click', (e) => e.stopPropagation());
+
+    const info = document.createElement('div');
+    info.className = 'user-info';
+    info.innerHTML = '<div class="user-nick">' + u.nickname + '</div><div class="user-email">' + u.email + '</div>';
+
+    const role = document.createElement('span');
+    role.className = 'user-role ' + u.role;
+    role.textContent = u.role;
+
+    row.appendChild(cb);
+    row.appendChild(info);
+    row.appendChild(role);
+    row.addEventListener('click', () => showAdminUserDetail(u.id));
+    list.appendChild(row);
+  });
+  panel.appendChild(list);
+}
+
+async function showAdminUserDetail(userId) {
+  const panel = document.getElementById('game-panel');
+  panel.innerHTML = '<h2 style="color:#ff9800;margin:0;">User Detail</h2>';
+
+  const backBtn = document.createElement('button');
+  backBtn.className = 'btn';
+  backBtn.textContent = '\u2190 Back to Users';
+  backBtn.style.cssText = 'font-size:12px;padding:6px;background:#37474f;color:#b0bec5;margin-top:6px;';
+  backBtn.addEventListener('click', () => showAdminUserList());
+  panel.appendChild(backBtn);
+
+  const loading = document.createElement('p');
+  loading.style.cssText = 'color:#b0bec5;font-size:12px;';
+  loading.textContent = 'Loading...';
+  panel.appendChild(loading);
+
+  let userData;
+  try {
+    const resp = await fetch(API_BASE + '/api/admin/users/' + userId, { headers: apiHeaders() });
+    userData = await resp.json();
+  } catch (e) {
+    loading.textContent = 'Failed to load user.';
+    return;
+  }
+  loading.remove();
+
+  // User info
+  const infoDiv = document.createElement('div');
+  infoDiv.className = 'admin-detail-section';
+  infoDiv.innerHTML = `
+    <div style="font-size:14px;color:#e0e0e0;font-weight:600;">${userData.nickname}</div>
+    <div style="font-size:12px;color:#b0bec5;">${userData.email}</div>
+    <div style="font-size:11px;color:#78909c;">Role: ${userData.role} &middot; Joined: ${userData.created_at}</div>
+  `;
+  panel.appendChild(infoDiv);
+
+  // Export button
+  const exportBtn = document.createElement('button');
+  exportBtn.className = 'btn';
+  exportBtn.style.cssText = 'font-size:11px;padding:4px 10px;background:#1565c0;color:#fff;margin-top:8px;';
+  exportBtn.textContent = 'Export User Record';
+  exportBtn.addEventListener('click', async () => {
+    try {
+      const resp = await fetch(API_BASE + '/api/admin/users/' + userId + '/export', { headers: apiHeaders() });
+      const data = await resp.json();
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'user-' + userData.nickname.replace(/[^a-zA-Z0-9]/g, '_') + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) { alert('Export failed.'); }
+  });
+  panel.appendChild(exportBtn);
+
+  // Scenarios
+  const scenDiv = document.createElement('div');
+  scenDiv.className = 'admin-detail-section';
+  scenDiv.innerHTML = '<h4>Scenarios (' + userData.scenarios.length + ')</h4>';
+
+  if (userData.scenarios.length === 0) {
+    scenDiv.innerHTML += '<p style="font-size:11px;color:#78909c;">No scenario attempts yet.</p>';
+  } else {
+    const allScenarios = loadAllScenarios();
+    userData.scenarios.forEach(s => {
+      const scenarioInfo = allScenarios.find(sc => String(sc.id) === String(s.scenario_id));
+      const name = scenarioInfo ? scenarioInfo.name : 'Scenario ' + s.scenario_id;
+      const row = document.createElement('div');
+      row.className = 'admin-scenario-row';
+
+      let html = '<div class="scenario-name">' + name + '</div>';
+      if (s.best_time) {
+        html += '<div class="scenario-time">Best: ' + s.best_time.toFixed(1) + 's</div>';
+      } else {
+        html += '<div class="scenario-unsolved">Not solved</div>';
+      }
+
+      if (s.best_vehicle_config) {
+        html += '<div style="font-size:10px;color:#4fc3f7;margin-top:2px;">Best config:</div>';
+        html += '<div class="admin-config-preview">' + formatConfigPreview(s.best_vehicle_config) + '</div>';
+      }
+      if (s.last_vehicle_config) {
+        html += '<div style="font-size:10px;color:#81d4fa;margin-top:2px;">Last config:</div>';
+        html += '<div class="admin-config-preview">' + formatConfigPreview(s.last_vehicle_config) + '</div>';
+      }
+
+      row.innerHTML = html;
+      scenDiv.appendChild(row);
+    });
+  }
+  panel.appendChild(scenDiv);
+}
+
+function formatConfigPreview(config) {
+  if (!config) return '—';
+  const parts = [];
+  if (config.typeIndex != null) {
+    const typeName = (typeof VEHICLE_TYPES !== 'undefined' && VEHICLE_TYPES[config.typeIndex])
+      ? VEHICLE_TYPES[config.typeIndex].name : 'Type ' + config.typeIndex;
+    parts.push('Vehicle: ' + typeName);
+  }
+  if (config.simSpeed != null) parts.push('Speed: ' + config.simSpeed + 'x');
+  if (config.speedContrast != null) parts.push('Contrast: ' + config.speedContrast);
+  if (config.gate && config.gate.front) {
+    const gateNames = ['Pass-through', 'Threshold', 'Sigmoid', 'AND', 'OR', 'XOR'];
+    const gName = gateNames[config.gate.front.type] || 'Gate ' + config.gate.front.type;
+    parts.push('Gate: ' + gName + ' (T:' + config.gate.front.threshold + ' S:' + config.gate.front.sharpness + ')');
+  }
+  if (config.sidePair && config.sidePair.enabled) parts.push('Side: on (' + config.sidePair.weight + '%)');
+  if (config.light && config.light.on) parts.push('Light: on');
+  return parts.join('\n');
+}
+
 function buildLevelSelect() {
   const panel = document.getElementById('game-panel');
   panel.innerHTML = '<h2 style="color:#ff9800;margin:0;">Scenarios</h2><p style="font-size:12px;color:#b0bec5;margin:0;">Design a vehicle. Solve the puzzle.</p>';
@@ -3818,6 +4080,16 @@ function buildLevelSelect() {
     newBtn.addEventListener('click', () => enterEditor(null));
   }
   panel.appendChild(newBtn);
+
+  // Admin: Manage Users button
+  if (isAdmin) {
+    const manageBtn = document.createElement('button');
+    manageBtn.className = 'btn';
+    manageBtn.style.cssText = 'width:100%;margin-bottom:8px;font-size:12px;padding:6px;background:#0f3460;color:#4fc3f7;border:1px solid #1565c0;';
+    manageBtn.textContent = '\uD83D\uDC65 Manage Users';
+    manageBtn.addEventListener('click', () => showAdminUserList());
+    panel.appendChild(manageBtn);
+  }
 
   // Unified scenario list
   const allScenarios = loadAllScenarios();
