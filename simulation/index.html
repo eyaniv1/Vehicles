@@ -3534,6 +3534,39 @@ function saveCustomLevels(levels) {
   localStorage.setItem('braitenberg-custom-levels', JSON.stringify(levels));
 }
 
+// Unified scenario list: seed from GAME_LEVELS + custom levels
+function loadAllScenarios() {
+  let all = [];
+  try {
+    const raw = localStorage.getItem('braitenberg-all-scenarios');
+    if (raw) all = JSON.parse(raw);
+  } catch {}
+  if (all.length === 0) {
+    // Seed with built-in levels + any existing custom levels
+    all = GAME_LEVELS.map(l => ({ ...JSON.parse(JSON.stringify(l)) }));
+    const customs = loadCustomLevels();
+    for (const c of customs) {
+      if (!all.find(s => s.id === c.id)) all.push(c);
+    }
+    saveAllScenarios(all);
+  }
+  return all;
+}
+function saveAllScenarios(scenarios) {
+  localStorage.setItem('braitenberg-all-scenarios', JSON.stringify(scenarios));
+}
+function addScenarioToList(scenario) {
+  const all = loadAllScenarios();
+  const idx = all.findIndex(s => s.id === scenario.id);
+  if (idx >= 0) all[idx] = scenario;
+  else all.push(scenario);
+  saveAllScenarios(all);
+}
+function removeScenarioFromList(scenarioId) {
+  const all = loadAllScenarios().filter(s => s.id !== scenarioId);
+  saveAllScenarios(all);
+}
+
 // Progress stored in localStorage
 function loadGameProgress() {
   try {
@@ -3767,15 +3800,16 @@ function goToLevelSelect() {
 
 function buildLevelSelect() {
   const panel = document.getElementById('game-panel');
-  const progress = loadGameProgress();
   panel.innerHTML = '<h2 style="color:#ff9800;margin:0;">Scenarios</h2><p style="font-size:12px;color:#b0bec5;margin:0;">Design a vehicle. Solve the puzzle.</p>';
+
+  const isAdmin = currentUser && currentUser.role === 'admin';
 
   // Create new scenario button
   const newBtn = document.createElement('button');
   newBtn.className = 'btn btn-launch';
   newBtn.style.cssText = 'width:100%;margin:8px 0;font-size:13px;padding:8px;';
   newBtn.textContent = '+ Create New Scenario';
-  if (!currentUser || currentUser.role !== 'admin') {
+  if (!isAdmin) {
     newBtn.disabled = true;
     newBtn.style.opacity = '0.4';
     newBtn.style.cursor = 'not-allowed';
@@ -3785,78 +3819,51 @@ function buildLevelSelect() {
   }
   panel.appendChild(newBtn);
 
-  // Built-in scenarios
+  // Unified scenario list
+  const allScenarios = loadAllScenarios();
   const grid = document.createElement('div');
   grid.className = 'game-level-grid';
 
-  GAME_LEVELS.forEach((level, i) => {
+  allScenarios.forEach((level, i) => {
     const card = document.createElement('div');
     card.className = 'level-card';
-    const earnedStars = progress.stars[level.id] || 0;
-    const starsHTML = [1, 2, 3].map(s => s <= earnedStars ? '\u2605' : '<span class="empty">\u2605</span>').join('');
     const scenarioData = userScenarioData[level.id];
     const bestTimeStr = scenarioData && scenarioData.best_time ? scenarioData.best_time.toFixed(1) + 's' : '--';
+    const adminBtns = isAdmin ? `
+      <div style="display:flex;gap:3px;margin-left:auto;">
+        <button class="btn" style="font-size:9px;padding:2px 5px;background:#37474f;color:#b0bec5;" data-action="edit">Edit</button>
+        <button class="btn" style="font-size:9px;padding:2px 5px;background:none;color:#c62828;" data-action="del">&times;</button>
+      </div>
+    ` : '';
     card.innerHTML = `
-      <div class="level-num">${level.id}</div>
+      <div class="level-num">${i + 1}</div>
       <div class="level-info">
         <div class="level-name">${level.name}</div>
-        <div class="level-tier">Tier ${level.tier}</div>
         <div class="level-best-time">Best: ${bestTimeStr}</div>
       </div>
-      <div class="level-stars">${starsHTML}</div>
+      ${adminBtns}
     `;
-    card.addEventListener('click', () => showBriefing(i));
+    card.addEventListener('click', () => {
+      const scenario = JSON.parse(JSON.stringify(level));
+      scenario._custom = true;
+      showBriefing(-1, scenario);
+    });
+    if (isAdmin) {
+      card.querySelector('[data-action="edit"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        enterEditor(JSON.parse(JSON.stringify(level)));
+      });
+      card.querySelector('[data-action="del"]').addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm('Delete scenario "' + level.name + '"?')) {
+          removeScenarioFromList(level.id);
+          buildLevelSelect();
+        }
+      });
+    }
     grid.appendChild(card);
   });
   panel.appendChild(grid);
-
-  // Custom scenarios (admin only for edit/delete)
-  const isAdmin = currentUser && currentUser.role === 'admin';
-  const customs = loadCustomLevels();
-  if (customs.length > 0) {
-    const ch = document.createElement('div');
-    ch.style.cssText = 'margin-top:12px;';
-    ch.innerHTML = '<div style="font-size:11px;color:#4fc3f7;font-weight:700;padding:4px 0;">Custom Scenarios</div>';
-    const cg = document.createElement('div');
-    cg.className = 'game-level-grid';
-    customs.forEach((cl, i) => {
-      const card = document.createElement('div');
-      card.className = 'level-card';
-      const scenarioData = userScenarioData[cl.id];
-      const bestTimeStr = scenarioData && scenarioData.best_time ? scenarioData.best_time.toFixed(1) + 's' : '--';
-      const adminBtns = isAdmin ? `
-          <button class="btn" style="font-size:10px;padding:3px 6px;background:#37474f;color:#b0bec5;" data-action="edit">Edit</button>
-          <button class="btn" style="font-size:10px;padding:3px 6px;background:none;color:#c62828;" data-action="del">&times;</button>
-      ` : '';
-      card.innerHTML = `
-        <div class="level-num" style="background:#1565c0;color:#fff;font-size:11px;">C${i+1}</div>
-        <div class="level-info">
-          <div class="level-name">${cl.name || 'Custom Scenario'}</div>
-          <div class="level-tier" style="color:#90caf9;">Custom</div>
-          <div class="level-best-time">Best: ${bestTimeStr}</div>
-        </div>
-        <div style="display:flex;gap:4px;">
-          <button class="btn" style="font-size:10px;padding:3px 6px;background:#37474f;color:#b0bec5;" data-action="play">Play</button>
-          ${adminBtns}
-        </div>
-      `;
-      card.addEventListener('click', () => { cl._custom = true; showBriefing(-1, JSON.parse(JSON.stringify(cl))); });
-      if (isAdmin) {
-        card.querySelector('[data-action="edit"]').addEventListener('click', (e) => { e.stopPropagation(); enterEditor(JSON.parse(JSON.stringify(cl))); });
-        card.querySelector('[data-action="del"]').addEventListener('click', (e) => {
-          e.stopPropagation();
-          const all = loadCustomLevels();
-          all.splice(i, 1);
-          saveCustomLevels(all);
-          buildLevelSelect();
-        });
-      }
-      card.querySelector('[data-action="play"]').addEventListener('click', (e) => { e.stopPropagation(); cl._custom = true; showBriefing(-1, JSON.parse(JSON.stringify(cl))); });
-      cg.appendChild(card);
-    });
-    ch.appendChild(cg);
-    panel.appendChild(ch);
-  }
 }
 
 // =============================================
@@ -4140,12 +4147,8 @@ function buildEditorPanel() {
     const nameEl = document.getElementById('editor-level-name');
     if (nameEl) editorLevel.name = nameEl.value;
     editorSyncLightsToLevel();
-    const customs = loadCustomLevels();
-    const idx = customs.findIndex(c => c.id === editorLevel.id);
-    if (idx >= 0) customs[idx] = JSON.parse(JSON.stringify(editorLevel));
-    else customs.push(JSON.parse(JSON.stringify(editorLevel)));
-    saveCustomLevels(customs);
-    alert('Level "' + editorLevel.name + '" saved!');
+    addScenarioToList(JSON.parse(JSON.stringify(editorLevel)));
+    alert('Scenario "' + editorLevel.name + '" saved!');
   });
   acts.appendChild(saveBtn);
 
@@ -4161,9 +4164,7 @@ function buildEditorPanel() {
     copy.id = 'custom_' + Date.now();
     copy.name = copy.name + ' (copy)';
     copy._custom = true;
-    const customs = loadCustomLevels();
-    customs.push(copy);
-    saveCustomLevels(customs);
+    addScenarioToList(copy);
     // Switch editor to the new copy
     editorLevel = copy;
     const nameInput = document.getElementById('editor-level-name');
@@ -5308,8 +5309,7 @@ function buildRunningPanel() {
     gameRunning = false;
     gamePaused = false;
     gameVehicle.running = false;
-    if (currentLevelSource._custom) showBriefing(-1, currentLevelSource);
-    else showBriefing(currentLevelIndex);
+    showBriefing(-1, currentLevelSource);
   });
   document.getElementById('game-restart-btn').addEventListener('click', () => {
     gamePaused = false;
@@ -5386,19 +5386,6 @@ function endGame(outcome, message, stars) {
   const starsEarned = isWin ? (stars || 0) : 0;
   const starsHTML = [1, 2, 3].map(s => s <= starsEarned ? '\u2605' : '<span class="empty">\u2605</span>').join('');
 
-  const isCustom = level._custom;
-
-  // Update progress (only for built-in levels)
-  if (isWin && !isCustom) {
-    const progress = loadGameProgress();
-    const prev = progress.stars[level.id] || 0;
-    if (starsEarned > prev) progress.stars[level.id] = starsEarned;
-    if (currentLevelIndex + 2 > progress.unlockedLevel) {
-      progress.unlockedLevel = Math.min(currentLevelIndex + 2, GAME_LEVELS.length);
-    }
-    saveGameProgress(progress);
-  }
-
   // Save attempt to server
   if (currentUser && gameVehicle) {
     const config = extractVehicleConfig(gameVehicle);
@@ -5414,7 +5401,12 @@ function endGame(outcome, message, stars) {
     });
   }
 
-  const showNext = isWin && !isCustom && currentLevelIndex >= 0 && currentLevelIndex < GAME_LEVELS.length - 1;
+  // Find current scenario index in unified list for "Next" button
+  const allScenarios = loadAllScenarios();
+  const currentScenarioIdx = allScenarios.findIndex(s => s.id === level.id);
+  const showNext = isWin && currentScenarioIdx >= 0 && currentScenarioIdx < allScenarios.length - 1;
+  const isAdmin = currentUser && currentUser.role === 'admin';
+
   box.innerHTML = `
     <h2 class="${isWin ? 'win' : 'fail'}">${isWin ? 'Success!' : 'Failed'}</h2>
     <div class="result-stars">${starsHTML}</div>
@@ -5423,7 +5415,7 @@ function endGame(outcome, message, stars) {
     <div class="result-btns">
       <button class="btn" id="result-retry-btn" style="background:#37474f;color:#b0bec5;">Retry</button>
       ${showNext ? '<button class="btn btn-launch" id="result-next-btn">Next Scenario</button>' : ''}
-      ${isCustom ? '<button class="btn" id="result-editor-btn" style="background:#37474f;color:#b0bec5;">Back to Editor</button>' : ''}
+      ${isAdmin && editorLevel ? '<button class="btn" id="result-editor-btn" style="background:#37474f;color:#b0bec5;">Back to Editor</button>' : ''}
       <button class="btn" id="result-levels-btn" style="background:#37474f;color:#b0bec5;">Scenarios</button>
     </div>
   `;
@@ -5431,13 +5423,16 @@ function endGame(outcome, message, stars) {
 
   document.getElementById('result-retry-btn').addEventListener('click', () => {
     overlay.classList.remove('open');
-    showBriefing(currentLevelIndex, isCustom ? currentLevelSource : undefined);
+    showBriefing(-1, currentLevelSource);
   });
   const nextBtn = document.getElementById('result-next-btn');
   if (nextBtn) {
     nextBtn.addEventListener('click', () => {
       overlay.classList.remove('open');
-      showBriefing(currentLevelIndex + 1);
+      const nextScenario = allScenarios[currentScenarioIdx + 1];
+      const copy = JSON.parse(JSON.stringify(nextScenario));
+      copy._custom = true;
+      showBriefing(-1, copy);
     });
   }
   const editorBtn = document.getElementById('result-editor-btn');
