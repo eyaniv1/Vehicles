@@ -5576,10 +5576,9 @@ function buildBriefingPanel(level) {
     const sideBehaviorDiv = document.createElement('div');
     sideBehaviorDiv.innerHTML = '<label>Side Behavior</label>';
     const sideSel = document.createElement('select');
-    VEHICLE_TYPES.forEach((t, i) => {
-      if (t.sensors < 2) return;
+    SIDE_BEHAVIORS.forEach((beh, i) => {
       const opt = document.createElement('option');
-      opt.value = i; opt.textContent = t.name;
+      opt.value = i; opt.textContent = beh.name;
       if (i === gameVehicle.sidePair.behaviorIndex) opt.selected = true;
       sideSel.appendChild(opt);
     });
