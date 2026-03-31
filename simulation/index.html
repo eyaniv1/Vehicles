@@ -2121,6 +2121,20 @@ function draw() {
   }
 }
 
+function _drawLightIndicator(c, x, y) {
+  const grad = c.createRadialGradient(x, y, 0, x, y, 14);
+  grad.addColorStop(0, 'rgba(255,235,59,0.4)');
+  grad.addColorStop(1, 'rgba(255,235,59,0)');
+  c.fillStyle = grad;
+  c.beginPath(); c.arc(x, y, 14, 0, Math.PI * 2); c.fill();
+  c.fillStyle = '#ffeb3b'; c.strokeStyle = '#fdd835'; c.lineWidth = 1.5;
+  c.beginPath(); c.arc(x, y, 7, 0, Math.PI * 2); c.fill(); c.stroke();
+  c.fillStyle = '#fff'; c.font = 'bold 7px sans-serif'; c.textAlign = 'center';
+  c.fillText('\u2600', x, y + 3);
+  c.fillStyle = '#ffeb3b'; c.font = '8px sans-serif';
+  c.fillText('Vehicle Light', x, y + 18);
+}
+
 // --- Inline schematic drawing (compact, fits inside vehicle card) ---
 function drawInlineSchematic(v, vc) {
   const c = vc.getContext('2d');
@@ -2141,7 +2155,7 @@ function drawInlineSchematic(v, vc) {
 
   // Helpers
   function wire(x1, y1, x2, y2, val, col, dash) {
-    c.lineWidth = 1 + val * 3;
+    c.lineWidth = 0.8 + val * 1.5;
     const a = 0.3 + val * 0.7;
     c.strokeStyle = col.replace(')', `,${a})`).replace('rgb', 'rgba');
     if (dash) c.setLineDash([5, 4]); else c.setLineDash([]);
@@ -2192,7 +2206,7 @@ function drawInlineSchematic(v, vc) {
     c.fillStyle = '#fff'; c.font = 'bold 11px sans-serif'; c.textAlign = 'center';
     c.fillText((val * 100).toFixed(0), x, y + 4);
     c.fillStyle = col; c.font = 'bold 9px sans-serif';
-    c.fillText(label, x, y - h/2 - 5);
+    c.fillText(label, x, y + h/2 + 10);
   }
 
   function polarity(x, y, inh) {
@@ -2202,22 +2216,22 @@ function drawInlineSchematic(v, vc) {
   }
 
   // ===== Compute content extent and apply scale =====
-  // Pre-compute content bottom for scaling
+  // Pre-compute content bottom for scaling (extra space for motor labels below)
   const _sY = 30, _gateRow = 66;
   const _mY = fgActive ? _gateRow + gH + 36 : _sY + 64;
   let contentBottom;
   if (!v.sidePair.enabled) {
-    contentBottom = _mY + 16;
+    contentBottom = _mY + 28;
   } else {
-    // side sensors at _mY+8, side gate at _mY+38, sideWireEnd at _mY+38+gH or _mY+16
     const _ssY = _mY + 8;
     const _sideWireEndY = sgActive ? _ssY + 30 + gH : _ssY + 8;
     const _blendY = _sideWireEndY + 28;
     const _oY = _blendY + 28;
-    contentBottom = _oY + 16;
+    contentBottom = _oY + 28;
   }
-  // Content spans ~cx±60 plus labels/glow → ~170px wide
-  const contentW = 170;
+  // Add space for vehicle light indicator at bottom
+  if (v.light && v.light.on) contentBottom += 20;
+  const contentW = 190;
   const scale = Math.min(W / contentW, H / contentBottom);
   c.save();
   c.translate(W / 2 - cx * scale, (H - contentBottom * scale) / 2);
@@ -2288,6 +2302,7 @@ function drawInlineSchematic(v, vc) {
   if (!hasSide) {
     motor(mLX, mY, v.leftSpeed, 'L Motor', '#ff8a65');
     motor(mRX, mY, v.rightSpeed, 'R Motor', '#81c784');
+    if (v.light && v.light.on) _drawLightIndicator(c, cx, mY + 30);
     c.restore();
     return;
   }
@@ -2306,9 +2321,9 @@ function drawInlineSchematic(v, vc) {
     fWireEndR = { x: sRX, y: sY + 8 };
   }
 
-  // Side sensors row — placed below front section
+  // Side sensors row — placed below front section (wider spread to avoid overlap)
   const ssY = mY + 8;
-  const ssLX = cx - 50, ssRX = cx + 50;
+  const ssLX = cx - 70, ssRX = cx + 70;
   const sgRow = ssY + 30;
   const sideWireEndY = sgActive ? sgRow + gH : ssY + 8;
 
@@ -2335,8 +2350,8 @@ function drawInlineSchematic(v, vc) {
   function blendNode(bx, by) {
     c.fillStyle = '#1a2a4e'; c.strokeStyle = '#4fc3f7'; c.lineWidth = 1.5;
     c.beginPath(); c.arc(bx, by, 8, 0, Math.PI * 2); c.fill(); c.stroke();
-    c.fillStyle = '#aaa'; c.font = '7px sans-serif'; c.textAlign = 'center';
-    c.fillText(`${100-w}/${w}`, bx, by + 3);
+    c.fillStyle = '#aaa'; c.font = '5px sans-serif'; c.textAlign = 'center';
+    c.fillText(`${100-w}/${w}`, bx, by + 2);
   }
   blendNode(blendLX, blendY);
   blendNode(blendRX, blendY);
@@ -2365,6 +2380,7 @@ function drawInlineSchematic(v, vc) {
 
   motor(mLX, oY, v.leftSpeed, 'L Motor', '#ff8a65');
   motor(mRX, oY, v.rightSpeed, 'R Motor', '#81c784');
+  if (v.light && v.light.on) _drawLightIndicator(c, cx, oY + 30);
   c.restore();
 }
 
@@ -5611,6 +5627,7 @@ function buildBriefingPanel(level) {
   schematicBtn.addEventListener('click', () => {
     schematicViewActive = !schematicViewActive;
     schematicBtn.textContent = schematicViewActive ? '\uD83C\uDF0D Map View' : '\uD83D\uDD27 Schematic View';
+    dismissWalkthrough(); // close any open bubbles
   });
   panel.appendChild(schematicBtn);
 
