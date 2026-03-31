@@ -531,6 +531,54 @@
   .bubble-close { position:absolute; top:4px; right:6px; background:none; border:none; color:rgba(255,255,255,0.5); font-size:20px; line-height:1; cursor:pointer; padding:4px 8px; transition: color 0.15s; z-index:2; }
   .bubble-close:hover { color:#4fc3f7; }
 
+  @keyframes tutorial-pulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(79,195,247,0.5), 0 0 12px rgba(79,195,247,0.2); }
+    50% { box-shadow: 0 0 0 8px rgba(79,195,247,0.8), 0 0 28px rgba(79,195,247,0.4); }
+  }
+  .tutorial-highlight-pulse {
+    position: relative;
+    z-index: 499;
+    animation: tutorial-pulse 1.2s ease-in-out infinite;
+    border-radius: 6px;
+  }
+  .tutorial-progress-bar {
+    height: 3px;
+    background: rgba(255,255,255,0.1);
+    border-radius: 2px;
+    margin-bottom: 8px;
+    overflow: hidden;
+  }
+  .tutorial-progress-fill {
+    height: 100%;
+    background: #4fc3f7;
+    border-radius: 2px;
+    transition: width 0.3s;
+  }
+  .tutorial-phase-label {
+    display: inline-block;
+    font-size: 9px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: #ff9800;
+    background: rgba(255,152,0,0.15);
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-bottom: 4px;
+  }
+  .tutorial-auto-bar {
+    height: 2px;
+    background: rgba(255,255,255,0.08);
+    border-radius: 1px;
+    margin-top: 10px;
+    overflow: hidden;
+  }
+  .tutorial-auto-fill {
+    height: 100%;
+    background: rgba(79,195,247,0.5);
+    border-radius: 1px;
+    width: 0%;
+    transition: width 0.1s linear;
+  }
   .tutorial-highlight {
     position: relative;
     z-index: 499;
@@ -2109,6 +2157,7 @@ function draw() {
   if (gameMode) drawGameObjects();
   if (gameMode) drawEditorOverlay();
   for (const v of vehicles) drawVehicle(v);
+  drawTutorialOverlay();
 
   ctx.restore();
 
@@ -3495,117 +3544,493 @@ function drawRefDiagrams() {
 }
 drawRefDiagrams();
 
-// --- Getting Started tutorial ---
-const tutorialSteps = [
+// --- Interactive Guided Tutorial ---
+let tutorialStep = -1;
+let tutorialActive = false;
+let tutorialTimer = null;
+let tutorialAutoStart = 0;
+let tutorialAutoDuration = 0;
+let tutorialOverlayFn = null;
+let tutorialSavedState = null;
+const bubbleContainer = document.getElementById('tutorial-bubble-container');
+
+const TUTORIAL_PHASES = ['Basics', 'Vehicle Types', 'Tuning', 'Gates & Logic', 'Side Sensors & Light'];
+
+const guidedTutorialSteps = [
+  // === PHASE 0: BASICS ===
   {
-    target: '#world-size-select',
-    text: 'First, choose your world size. This sets how large the simulation area is. A smaller world keeps vehicles closer together.',
-    arrow: 'left',
+    phase: 0,
+    text: '<b>Welcome!</b> Braitenberg vehicles are simple machines: <b>sensors</b> detect light, wires carry the signal to <b>motors</b>, and behavior emerges from the wiring.',
+    target: '#canvas', arrow: 'right',
+    autoMs: 7000,
+    setup() {
+      // Clear everything, place one light
+      vehicles = []; staticLights = [];
+      camZoom = 1; camX = 0; camY = 0;
+      createStaticLight(WORLD_W / 2 + 120, WORLD_H / 2);
+      buildVehicleCards();
+    },
+    overlay(ctx, t, v) {
+      if (!v) return;
+      // Draw sensor and motor labels on the vehicle
+      const cos = Math.cos(v.theta), sin = Math.sin(v.theta);
+      const sz = 1 / camZoom;
+      ctx.font = 'bold ' + (10 * sz) + 'px sans-serif';
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      // Sensors
+      ctx.fillStyle = 'rgba(79,195,247,0.9)';
+      ctx.fillText('L sensor', v.x + cos * 20 - sin * 14, v.y + sin * 20 + cos * 14 - 16 * sz);
+      ctx.fillText('R sensor', v.x + cos * 20 + sin * 14, v.y + sin * 20 - cos * 14 - 16 * sz);
+      // Motors
+      ctx.fillStyle = 'rgba(255,183,77,0.9)';
+      ctx.fillText('L motor', v.x - cos * 14 - sin * 14, v.y - sin * 14 + cos * 14 + 16 * sz);
+      ctx.fillText('R motor', v.x - cos * 14 + sin * 14, v.y - sin * 14 - cos * 14 + 16 * sz);
+    }
   },
   {
-    target: '#add-vehicle-btn',
-    text: 'Add a vehicle. It will appear in the center of your view as a V2b Aggression type — it steers toward light.',
-    arrow: 'left',
-  },
-  {
-    target: '#canvas',
-    text: 'Double-click anywhere on the canvas to place a light source. Vehicles will sense it and react based on their wiring.',
-    arrow: 'right',
-  },
-  {
-    target: null, // will target first vehicle card's start button
+    phase: 0,
+    text: 'A vehicle has been created and a light placed. Press <b>Next</b> to start it and watch it react to the light.',
     targetFn: () => document.querySelector('.vehicle-card .btn-stop'),
-    text: 'Press the Start button on a vehicle card to set it in motion. Each vehicle can be started and stopped independently.',
     arrow: 'left',
+    setup() {
+      if (vehicles.length === 0) {
+        const v = createVehicle(2); // V2b Aggression
+        v.x = WORLD_W / 2 - 80; v.y = WORLD_H / 2;
+        v.theta = 0; v.simSpeed = 2;
+      }
+      vehicles[0].running = false;
+      buildVehicleCards();
+    }
   },
   {
-    target: null,
-    targetFn: () => document.querySelector('.vehicle-card'),
-    text: 'Use the vehicle card controls to change type, adjust gates, enable side sensors, toggle its light, and more. Click "Explain Behavior" to understand what it will do.',
-    arrow: 'left',
+    phase: 0,
+    text: 'The vehicle <b>chases the light</b>! This is <b>V2b Aggression</b> — crossed wiring means the left sensor drives the right motor and vice versa, steering it toward the source.',
+    target: '#canvas', arrow: 'right',
+    autoMs: 7000,
+    setup() {
+      if (vehicles.length > 0) { vehicles[0].running = true; vehicles[0].simSpeed = 2; }
+      buildVehicleCards();
+    },
+    overlay(ctx, t, v) {
+      if (!v) return;
+      // Animated arrow from light to vehicle
+      const light = staticLights[0];
+      if (!light) return;
+      const dashOff = -t * 0.06;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(255,213,79,0.5)';
+      ctx.lineWidth = 2 / camZoom;
+      ctx.setLineDash([8, 6]);
+      ctx.lineDashOffset = dashOff;
+      ctx.beginPath(); ctx.moveTo(light.x, light.y); ctx.lineTo(v.x, v.y); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.restore();
+    }
+  },
+  // === PHASE 1: VEHICLE TYPES ===
+  {
+    phase: 1,
+    text: 'Now let\'s see <b>V2a Fear</b> — <b>direct</b> wiring. Left sensor drives left motor. The vehicle <b>runs away</b> from light!',
+    targetFn: () => document.querySelector('.vehicle-card select'),
+    arrow: 'left', pulse: true,
+    autoMs: 6000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].typeIndex = 1; // V2a Fear
+        vehicles[0].running = true; vehicles[0].simSpeed = 2;
+        vehicles[0].x = WORLD_W / 2 - 60; vehicles[0].y = WORLD_H / 2;
+        vehicles[0].theta = 0; vehicles[0].trail = [];
+      }
+      buildVehicleCards();
+    }
   },
   {
-    target: '#canvas',
-    text: 'Scroll to zoom in/out. Click and drag empty space to pan. You can add more vehicles and lights to create complex interactions. Have fun experimenting!',
-    arrow: 'right',
+    phase: 1,
+    text: '<b>V3a Love</b> has <b>inhibitory</b> connections — brighter light means <b>slower</b> motor. It approaches gently and <b>stops near</b> the source.',
+    targetFn: () => document.querySelector('.vehicle-card select'),
+    arrow: 'left', pulse: true,
+    autoMs: 7000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].typeIndex = 3; // V3a Love
+        vehicles[0].running = true; vehicles[0].simSpeed = 2;
+        vehicles[0].x = WORLD_W / 2 - 100; vehicles[0].y = WORLD_H / 2;
+        vehicles[0].theta = 0; vehicles[0].trail = [];
+      }
+      buildVehicleCards();
+    }
+  },
+  {
+    phase: 1,
+    text: '<b>V3b Explorer</b> — crossed + inhibitory. It <b>approaches</b> light but <b>veers away</b> up close, always wandering and exploring.',
+    targetFn: () => document.querySelector('.vehicle-card select'),
+    arrow: 'left', pulse: true,
+    autoMs: 7000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].typeIndex = 4; // V3b Explorer
+        vehicles[0].running = true; vehicles[0].simSpeed = 2;
+        vehicles[0].x = WORLD_W / 2 - 100; vehicles[0].y = WORLD_H / 2;
+        vehicles[0].theta = 0; vehicles[0].trail = [];
+      }
+      buildVehicleCards();
+    }
+  },
+  {
+    phase: 1,
+    text: '<b>Summary:</b><br><table style="font-size:11px;margin-top:4px;border-collapse:collapse;width:100%"><tr><td></td><td style="color:#4fc3f7;padding:2px 6px"><b>Direct</b></td><td style="color:#4fc3f7;padding:2px 6px"><b>Crossed</b></td></tr><tr><td style="color:#ff9800"><b>Excitatory</b></td><td style="padding:2px 6px">V2a Fear</td><td style="padding:2px 6px">V2b Aggression</td></tr><tr><td style="color:#ff9800"><b>Inhibitory</b></td><td style="padding:2px 6px">V3a Love</td><td style="padding:2px 6px">V3b Explorer</td></tr></table>',
+    target: '#canvas', arrow: 'right',
+    autoMs: 8000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].typeIndex = 2; // back to V2b
+        vehicles[0].running = true; vehicles[0].simSpeed = 2;
+        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
+        vehicles[0].theta = 0; vehicles[0].trail = [];
+      }
+      buildVehicleCards();
+    }
+  },
+  // === PHASE 2: TUNING ===
+  {
+    phase: 2,
+    text: '<b>Speed</b> controls the simulation rate. Watch the difference between <b>1x</b> (slow, careful) and <b>3x</b> (fast, aggressive).',
+    targetFn: () => {
+      const card = document.querySelector('.vehicle-card');
+      return card ? card.querySelectorAll('.card-slider')[0] : null;
+    },
+    arrow: 'left', pulse: true,
+    autoMs: 6000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].simSpeed = 1; vehicles[0].running = true;
+        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
+        vehicles[0].theta = 0; vehicles[0].trail = [];
+      }
+      buildVehicleCards();
+      // Ramp speed up after 2.5s
+      setTimeout(() => { if (vehicles.length > 0) { vehicles[0].simSpeed = 3; buildVehicleCards(); } }, 2500);
+    }
+  },
+  {
+    phase: 2,
+    text: '<b>Contrast</b> amplifies the difference between left and right motor speeds.<br><b>Low</b> = gentle curves. <b>High</b> = sharp turns.',
+    targetFn: () => {
+      const card = document.querySelector('.vehicle-card');
+      return card ? card.querySelectorAll('.card-slider')[1] : null;
+    },
+    arrow: 'left', pulse: true,
+    autoMs: 7000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].speedContrast = 15; vehicles[0].simSpeed = 2;
+        vehicles[0].running = true;
+        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
+        vehicles[0].theta = 0; vehicles[0].trail = [];
+      }
+      buildVehicleCards();
+      setTimeout(() => { if (vehicles.length > 0) { vehicles[0].speedContrast = 90; buildVehicleCards(); } }, 3000);
+    }
+  },
+  // === PHASE 3: GATES ===
+  {
+    phase: 3,
+    text: '<b>Gates</b> filter sensor signals before they reach the motors. <b>Direct</b> passes everything through. Let\'s try <b>Threshold</b> — it ignores weak light.',
+    targetFn: () => document.querySelector('.vehicle-card .card-gate select'),
+    arrow: 'left', pulse: true,
+    autoMs: 7000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].typeIndex = 2; vehicles[0].speedContrast = 50;
+        vehicles[0].gate.front.type = 1; // Threshold
+        vehicles[0].gate.front.threshold = 50;
+        vehicles[0].simSpeed = 2; vehicles[0].running = true;
+        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
+        vehicles[0].theta = 0; vehicles[0].trail = [];
+      }
+      // Add a dim light far away
+      if (staticLights.length < 2) {
+        const l = createStaticLight(WORLD_W / 2 - 200, WORLD_H / 2 - 100);
+        l.intensity = 20;
+      }
+      buildVehicleCards();
+    },
+    overlay(ctx, t, v) {
+      // Label the dim light
+      if (staticLights.length >= 2) {
+        const dim = staticLights[1];
+        const sz = 1 / camZoom;
+        ctx.fillStyle = 'rgba(239,83,80,0.8)';
+        ctx.font = 'bold ' + (9 * sz) + 'px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText('dim (ignored)', dim.x, dim.y - 14 * sz);
+      }
+      if (staticLights.length >= 1) {
+        const bright = staticLights[0];
+        const sz = 1 / camZoom;
+        ctx.fillStyle = 'rgba(76,175,80,0.8)';
+        ctx.font = 'bold ' + (9 * sz) + 'px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText('bright (reacts)', bright.x, bright.y - 14 * sz);
+      }
+    }
+  },
+  {
+    phase: 3,
+    text: '<b>AND</b> gate requires <b>both</b> sensors to see light. The vehicle only reacts when facing the light head-on. <b>XOR</b> responds to <b>differences</b> between sensors.',
+    targetFn: () => document.querySelector('.vehicle-card .card-gate select'),
+    arrow: 'left', pulse: true,
+    autoMs: 7000,
+    setup() {
+      // Remove dim light
+      if (staticLights.length > 1) staticLights.splice(1);
+      if (vehicles.length > 0) {
+        vehicles[0].gate.front.type = 2; // AND
+        vehicles[0].simSpeed = 2; vehicles[0].running = true;
+        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
+        vehicles[0].theta = 0; vehicles[0].trail = [];
+      }
+      buildVehicleCards();
+      setTimeout(() => {
+        if (vehicles.length > 0) { vehicles[0].gate.front.type = 4; buildVehicleCards(); } // XOR
+      }, 3500);
+    }
+  },
+  // === PHASE 4: SIDE SENSORS & LIGHT ===
+  {
+    phase: 4,
+    text: '<b>Side sensors</b> add a secondary behavior layer. Enable them with the <b>Side</b> checkbox. They sense light from the sides and blend with the front behavior.',
+    targetFn: () => {
+      const card = document.querySelector('.vehicle-card');
+      if (!card) return null;
+      const rows = card.querySelectorAll('.card-light');
+      return rows.length >= 2 ? rows[1] : null;
+    },
+    arrow: 'left', pulse: true,
+    autoMs: 7000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].gate.front.type = 0; // Direct
+        vehicles[0].typeIndex = 2; vehicles[0].speedContrast = 50;
+        vehicles[0].sidePair.enabled = true;
+        vehicles[0].sidePair.behaviorIndex = 0; // Fear
+        vehicles[0].sidePair.weight = 60;
+        vehicles[0].simSpeed = 2; vehicles[0].running = true;
+        vehicles[0].x = WORLD_W / 2 - 80; vehicles[0].y = WORLD_H / 2;
+        vehicles[0].theta = 0; vehicles[0].trail = [];
+      }
+      buildVehicleCards();
+    }
+  },
+  {
+    phase: 4,
+    text: '<b>Blend</b> controls how much the side sensors override the front behavior. At 0% only front matters; at 100% only side matters.',
+    targetFn: () => {
+      const card = document.querySelector('.vehicle-card');
+      return card ? card.querySelectorAll('.card-slider')[2] : null;
+    },
+    arrow: 'left', pulse: true,
+    autoMs: 6000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].sidePair.weight = 20;
+      }
+      buildVehicleCards();
+      setTimeout(() => { if (vehicles.length > 0) { vehicles[0].sidePair.weight = 80; buildVehicleCards(); } }, 2500);
+    }
+  },
+  {
+    phase: 4,
+    text: 'The vehicle can emit its own <b>light</b>. Toggle it here. Other vehicles will <b>sense it</b> — this creates social interactions between multiple vehicles!',
+    targetFn: () => {
+      const card = document.querySelector('.vehicle-card');
+      if (!card) return null;
+      return card.querySelector('.card-light');
+    },
+    arrow: 'left', pulse: true,
+    autoMs: 6000,
+    setup() {
+      if (vehicles.length > 0) {
+        vehicles[0].light.on = true;
+        vehicles[0].light.intensity = 70;
+      }
+      buildVehicleCards();
+    }
+  },
+  {
+    phase: 4,
+    text: 'That\'s it! You now know how to configure a Braitenberg vehicle. <b>Experiment</b> with different types, gates, side sensors, and multiple vehicles to discover emergent behaviors. Have fun!',
+    target: '#canvas', arrow: 'right',
+    setup() {
+      // Add a second vehicle for fun
+      if (vehicles.length < 2) {
+        const v2 = createVehicle(3); // V3a Love
+        v2.x = WORLD_W / 2 + 100; v2.y = WORLD_H / 2 + 60;
+        v2.theta = Math.PI; v2.simSpeed = 2; v2.running = true;
+        v2.light.on = true;
+      }
+      buildVehicleCards();
+    }
   },
 ];
 
-let tutorialStep = -1;
-const bubbleContainer = document.getElementById('tutorial-bubble-container');
+function startGuidedTutorial() {
+  // Save current state
+  tutorialSavedState = {
+    vehicles: JSON.parse(JSON.stringify(vehicles)),
+    staticLights: JSON.parse(JSON.stringify(staticLights)),
+    camX, camY, camZoom, stopped, selectedVehicleId,
+  };
+  stopped = false;
+  tutorialActive = true;
+  showGuidedStep(0);
+}
 
-function showTutorialStep(index) {
+function cleanupTutorial(restore) {
+  tutorialActive = false;
+  tutorialStep = -1;
+  tutorialOverlayFn = null;
+  if (tutorialTimer) { clearTimeout(tutorialTimer); tutorialTimer = null; }
+  bubbleContainer.innerHTML = '';
+  document.querySelectorAll('.tutorial-highlight, .tutorial-highlight-pulse').forEach(el => {
+    el.classList.remove('tutorial-highlight', 'tutorial-highlight-pulse');
+  });
+  if (restore && tutorialSavedState) {
+    vehicles = tutorialSavedState.vehicles;
+    staticLights = tutorialSavedState.staticLights;
+    camX = tutorialSavedState.camX;
+    camY = tutorialSavedState.camY;
+    camZoom = tutorialSavedState.camZoom;
+    stopped = tutorialSavedState.stopped;
+    selectedVehicleId = tutorialSavedState.selectedVehicleId;
+    buildVehicleCards();
+  }
+  tutorialSavedState = null;
+}
+
+function showGuidedStep(index) {
   // Clean up previous
   bubbleContainer.innerHTML = '';
-  document.querySelectorAll('.tutorial-highlight').forEach(el => el.classList.remove('tutorial-highlight'));
+  if (tutorialTimer) { clearTimeout(tutorialTimer); tutorialTimer = null; }
+  document.querySelectorAll('.tutorial-highlight, .tutorial-highlight-pulse').forEach(el => {
+    el.classList.remove('tutorial-highlight', 'tutorial-highlight-pulse');
+  });
+  tutorialOverlayFn = null;
 
-  if (index < 0 || index >= tutorialSteps.length) {
-    tutorialStep = -1;
+  if (index < 0 || index >= guidedTutorialSteps.length) {
+    cleanupTutorial(index < 0); // restore only on skip, not on finish
     return;
   }
 
   tutorialStep = index;
-  const step = tutorialSteps[index];
-  const targetEl = step.targetFn ? step.targetFn() : document.querySelector(step.target);
+  const step = guidedTutorialSteps[index];
 
-  if (!targetEl) {
-    // Target not found (e.g., no vehicle card yet), show centered
-    const bubble = document.createElement('div');
+  // Run setup
+  if (step.setup) step.setup();
+
+  // Set canvas overlay
+  if (step.overlay) {
+    tutorialOverlayFn = (ctx, elapsed) => {
+      const v = vehicles.length > 0 ? vehicles[0] : null;
+      step.overlay(ctx, elapsed, v);
+    };
+  }
+
+  // Find target element
+  const targetEl = step.targetFn ? step.targetFn() : (step.target ? document.querySelector(step.target) : null);
+
+  // Apply highlight
+  if (targetEl) {
+    targetEl.classList.add(step.pulse ? 'tutorial-highlight-pulse' : 'tutorial-highlight');
+  }
+
+  // Build bubble
+  const bubble = document.createElement('div');
+  const isLast = index === guidedTutorialSteps.length - 1;
+
+  // Progress
+  const progress = Math.round(((index + 1) / guidedTutorialSteps.length) * 100);
+  const phaseLabel = TUTORIAL_PHASES[step.phase] || '';
+
+  let html = '<button class="bubble-close" title="Close">&times;</button>';
+  html += '<div class="tutorial-progress-bar"><div class="tutorial-progress-fill" style="width:' + progress + '%"></div></div>';
+  html += '<div class="tutorial-phase-label">' + phaseLabel + '</div>';
+  html += '<div class="step-label">Step ' + (index + 1) + ' of ' + guidedTutorialSteps.length + '</div>';
+  html += '<div class="step-text">' + step.text + '</div>';
+  if (step.autoMs) {
+    html += '<div class="tutorial-auto-bar"><div class="tutorial-auto-fill" id="tutorial-auto-fill"></div></div>';
+  }
+  html += '<div class="step-btns">';
+  html += '<button class="tutorial-btn-skip">' + (isLast ? 'Finish' : 'Skip') + '</button>';
+  if (!isLast) html += '<button class="tutorial-btn-next">Next</button>';
+  html += '</div>';
+
+  bubble.innerHTML = html;
+
+  // Position
+  if (targetEl) {
+    const rect = targetEl.getBoundingClientRect();
+    const arrowDir = step.arrow || 'left';
+    bubble.className = 'tutorial-bubble arrow-' + arrowDir;
+    if (arrowDir === 'left') {
+      bubble.style.left = (rect.right + 16) + 'px';
+      bubble.style.top = Math.max(8, Math.min(window.innerHeight - 250, rect.top - 10)) + 'px';
+    } else if (arrowDir === 'right') {
+      bubble.style.left = Math.max(8, rect.left - 350) + 'px';
+      bubble.style.top = Math.max(8, Math.min(window.innerHeight - 250, rect.top + rect.height / 2 - 40)) + 'px';
+    } else if (arrowDir === 'top') {
+      bubble.style.left = Math.max(8, rect.left) + 'px';
+      bubble.style.top = (rect.bottom + 16) + 'px';
+    } else {
+      bubble.style.left = Math.max(8, rect.left) + 'px';
+      bubble.style.top = Math.max(8, rect.top - 160) + 'px';
+    }
+  } else {
     bubble.className = 'tutorial-bubble';
     bubble.style.cssText = 'top:50%;left:50%;transform:translate(-50%,-50%);';
-    bubble.innerHTML = buildBubbleHTML(index, step);
-    bubbleContainer.appendChild(bubble);
-    attachBubbleEvents(bubble, index);
-    return;
   }
 
-  targetEl.classList.add('tutorial-highlight');
-  const rect = targetEl.getBoundingClientRect();
-
-  const bubble = document.createElement('div');
-  bubble.className = 'tutorial-bubble arrow-' + step.arrow;
-
-  // Position bubble relative to target
-  if (step.arrow === 'left') {
-    bubble.style.left = (rect.right + 16) + 'px';
-    bubble.style.top = Math.max(8, rect.top - 10) + 'px';
-  } else if (step.arrow === 'right') {
-    bubble.style.left = Math.max(8, rect.left - 340) + 'px';
-    bubble.style.top = Math.max(8, rect.top + rect.height / 2 - 40) + 'px';
-  } else if (step.arrow === 'top') {
-    bubble.style.left = rect.left + 'px';
-    bubble.style.top = (rect.bottom + 16) + 'px';
-  } else if (step.arrow === 'bottom') {
-    bubble.style.left = rect.left + 'px';
-    bubble.style.top = Math.max(8, rect.top - 120) + 'px';
-  }
-
-  bubble.innerHTML = buildBubbleHTML(index, step);
   bubbleContainer.appendChild(bubble);
-  attachBubbleEvents(bubble, index);
-}
 
-function buildBubbleHTML(index, step) {
-  const isLast = index === tutorialSteps.length - 1;
-  return `
-    <div class="step-label">Step ${index + 1} of ${tutorialSteps.length}</div>
-    <div class="step-text">${step.text}</div>
-    <div class="step-btns">
-      <button class="tutorial-btn-skip">${isLast ? 'Close' : 'Skip'}</button>
-      ${isLast ? '' : '<button class="tutorial-btn-next">Next</button>'}
-    </div>
-  `;
-}
-
-function attachBubbleEvents(bubble, index) {
+  // Events
+  const closeBtn = bubble.querySelector('.bubble-close');
   const skipBtn = bubble.querySelector('.tutorial-btn-skip');
   const nextBtn = bubble.querySelector('.tutorial-btn-next');
-  skipBtn.addEventListener('click', () => showTutorialStep(-1));
-  if (nextBtn) nextBtn.addEventListener('click', () => showTutorialStep(index + 1));
+  closeBtn.addEventListener('click', () => { cleanupTutorial(true); });
+  if (isLast) {
+    skipBtn.addEventListener('click', () => { cleanupTutorial(false); });
+  } else {
+    skipBtn.addEventListener('click', () => { cleanupTutorial(true); });
+    if (nextBtn) nextBtn.addEventListener('click', () => showGuidedStep(index + 1));
+  }
+
+  // Auto-advance
+  if (step.autoMs) {
+    tutorialAutoStart = performance.now();
+    tutorialAutoDuration = step.autoMs;
+    const fillEl = document.getElementById('tutorial-auto-fill');
+    function animateBar() {
+      if (!tutorialActive || tutorialStep !== index) return;
+      const elapsed = performance.now() - tutorialAutoStart;
+      const pct = Math.min(100, (elapsed / tutorialAutoDuration) * 100);
+      if (fillEl) fillEl.style.width = pct + '%';
+      if (pct < 100) requestAnimationFrame(animateBar);
+    }
+    requestAnimationFrame(animateBar);
+    tutorialTimer = setTimeout(() => { if (tutorialStep === index) showGuidedStep(index + 1); }, step.autoMs);
+  }
+}
+
+// Canvas overlay hook — called from draw()
+function drawTutorialOverlay() {
+  if (!tutorialActive || !tutorialOverlayFn) return;
+  const elapsed = performance.now();
+  tutorialOverlayFn(ctx, elapsed);
 }
 
 document.getElementById('guide-btn').addEventListener('click', () => {
-  showTutorialStep(0);
+  if (gameMode) return; // don't start tutorial in game mode
+  startGuidedTutorial();
 });
 
 // =============================================
@@ -5294,6 +5719,9 @@ function drawEditorOverlay() {
 // --- Briefing / configurator ---
 function showBriefing(levelIndex, levelOverride) {
   currentLevelIndex = levelIndex;
+  // Capture current vehicle config before rebuilding (for abort/retry persistence)
+  const prevConfig = gameVehicle ? extractVehicleConfig(gameVehicle) : null;
+
   const source = levelOverride || GAME_LEVELS[levelIndex];
   // Store unmutated source for abort/retry; deep-copy for gameplay
   currentLevelSource = JSON.parse(JSON.stringify(source));
@@ -5344,8 +5772,10 @@ function showBriefing(levelIndex, levelOverride) {
   if (level.lockedDefaults.simSpeed != null) v.simSpeed = level.lockedDefaults.simSpeed;
   if (level.lockedDefaults.speedContrast != null) v.speedContrast = level.lockedDefaults.speedContrast;
 
-  // Load saved vehicle config from server (last attempt first, then best)
-  if (currentUser && userScenarioData[source.id]) {
+  // Restore vehicle config: prefer in-session config (abort/retry), then server-saved
+  if (prevConfig) {
+    applyVehicleConfig(v, prevConfig);
+  } else if (currentUser && userScenarioData[source.id]) {
     const saved = userScenarioData[source.id];
     const config = saved.last_vehicle_config || saved.best_vehicle_config;
     if (config) applyVehicleConfig(v, config);
@@ -6026,6 +6456,16 @@ function drawFullSchematic(v) {
 function launchLevel() {
   dismissWalkthrough();
   schematicViewActive = false;
+
+  // Save last vehicle config on every launch (not just on finish)
+  const level = currentLevel;
+  if (!level._editorTest && currentUser && gameVehicle) {
+    const config = extractVehicleConfig(gameVehicle);
+    if (!userScenarioData[level.id]) userScenarioData[level.id] = {};
+    userScenarioData[level.id].last_vehicle_config = config;
+    apiSaveAttempt(level.id, null, config);
+  }
+
   gamePhase = 'running';
   gameRunning = true;
   gamePaused = false;
