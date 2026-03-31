@@ -494,6 +494,8 @@
   .tutorial-btn-next:hover { background: #81d4fa; transform: translateY(-1px); }
   .tutorial-btn-skip { background: transparent; color: rgba(255,255,255,0.4); border: 1px solid rgba(255,255,255,0.15) !important; }
   .tutorial-btn-skip:hover { color: #fff; border-color: rgba(255,255,255,0.4) !important; }
+  .tutorial-btn-rec { background: #ff9800 !important; color: #0a0a1a !important; }
+  .tutorial-btn-rec:hover { background: #ffb74d !important; transform: translateY(-1px); }
   .bubble-close { position:absolute; top:6px; right:10px; background:none; border:none; color:rgba(255,255,255,0.4); font-size:18px; cursor:pointer; padding:2px 6px; transition: color 0.15s; }
   .bubble-close:hover { color:#4fc3f7; }
 
@@ -2921,7 +2923,7 @@ canvas.addEventListener('mousedown', (e) => {
   if (gameMode && gamePhase === 'editing') { editorMouseDown(e); return; }
   const pos = canvasCoords(e);
   mouseDownPos = pos;
-  const hit = (gameMode && gameRunning) ? null : staticLightAt(pos.x, pos.y);
+  const hit = (gameMode) ? null : staticLightAt(pos.x, pos.y);
   if (hit) {
     // Drag the light
     dragging = hit;
@@ -5591,113 +5593,206 @@ function buildBriefingPanel(level) {
 // --- Walkthrough ---
 
 function _hasPath(obj) { return obj.path && obj.path.waypoints && obj.path.waypoints.length >= 2; }
-function _pathDesc(obj) { return obj.path.mode === 'bounce' ? 'back and forth like it can\'t make up its mind' : 'one-way, no return ticket'; }
 
-function describeLight(l) {
+// Varied language pools to avoid repetition
+const _pathPhrases = ['Moves along a path.', 'On the move \u2014 watch the trail.', 'Follows a route, stay sharp.', 'Cruises a path. Timing is everything.'];
+const _lightPhrases = ['Has a light.', 'Comes with a light.', 'Packing a light source.', 'Lit up.'];
+let _phraseCounters = { path: 0, light: 0 };
+function _nextPhrase(pool, key) { const p = pool[_phraseCounters[key] % pool.length]; _phraseCounters[key]++; return p; }
+
+// --- Walkthrough descriptions (narrative, fun, short) ---
+
+function wtDescribeLight(l) {
   if (l._embedded) return null;
-  const parts = [`<b>Light source</b> (${l.intensity}% intensity)`];
-  if (_hasPath(l)) {
-    parts.push(`\u2014 a restless one. Cruises along a path ${_pathDesc(l)}.`);
-  } else {
-    parts.push('\u2014 grab it and drag it wherever you want. It won\'t complain.');
-  }
+  const parts = ['<b>Light source</b>'];
+  if (_hasPath(l)) parts.push('\u2014 this one won\'t sit still.');
+  else parts.push('\u2014 your vehicle\'s north star. Or kryptonite. Depends on your wiring.');
   if (l.onVisit) {
-    if (l.onVisit.action === 'off') parts.push(`Dramatic type: goes dark the moment your vehicle shows up.${l.onVisit.recovery ? ' Drama fades after ' + l.onVisit.recovery + 's.' : ' Permanently.'}`);
-    else if (l.onVisit.action === 'offDelay') parts.push(`Passive-aggressive: waits ${l.onVisit.delay}s after you arrive, then ghosts you.${l.onVisit.recovery ? ' Comes crawling back after ' + l.onVisit.recovery + 's.' : ''}`);
-    else if (l.onVisit.action === 'changeLuminosity') parts.push(`Moody \u2014 shifts to ${l.onVisit.newIntensity}% when your vehicle visits. No warning.`);
+    if (l.onVisit.action === 'off') parts.push(`Goes dark on contact.${l.onVisit.recovery ? ' Recovers after ' + l.onVisit.recovery + 's.' : ''}`);
+    else if (l.onVisit.action === 'offDelay') parts.push(`Ghosts you ${l.onVisit.delay}s after arrival.${l.onVisit.recovery ? ' Back after ' + l.onVisit.recovery + 's.' : ''}`);
+    else if (l.onVisit.action === 'changeLuminosity') parts.push('Changes intensity when visited.');
   }
-  if (!l.on) parts.push('Currently napping. Don\'t let that fool you.');
+  if (!l.on) parts.push('Currently off. Don\'t get comfortable.');
   return parts.join(' ');
 }
 
-function describeDanger(dz) {
-  const shape = dz.shape === 'circle' ? 'Circular' : 'Rectangular';
-  const parts = [`<b>${shape} danger zone</b> \u2014 your vehicle touches this, it\'s game over. No second chances, no appeals.`];
-  if (_hasPath(dz)) {
-    parts.push(`And yes, it moves ${_pathDesc(dz)}. Because stationary death was too easy.`);
-  }
+function wtDescribeDanger(dz) {
+  const parts = [`<b>Danger zone</b> \u2014 instant game over on contact.`];
+  if (_hasPath(dz)) parts.push('And it moves. Lovely.');
   if (dz.light) {
-    parts.push(`Equipped with a light (${dz.light.intensity}%). Apparently destruction needed ambiance.`);
-    if (dz.light.onVisit && dz.light.onVisit.action) parts.push('The light has a mood swing when your vehicle approaches.');
+    parts.push('Has a light, because destruction needed ambiance.');
   }
   return parts.join(' ');
 }
 
-function describeBouncer(b) {
-  const parts = ['<b>Bouncer</b> \u2014 the hexagonal nightclub doorman of the arena. Your vehicle will ping off it like a rubber ball. Could be useful, could be catastrophic.'];
-  if (_hasPath(b)) {
-    parts.push(`Patrols a route ${_pathDesc(b)}. Time your approach or get yeeted.`);
-  }
-  if (b.light) {
-    parts.push(`Packing a light (${b.light.intensity}%). Even bouncers need accessories.`);
-    if (b.light.onVisit && b.light.onVisit.action) parts.push('Its light pulls a stunt when visited.');
-  }
+function wtDescribeBouncer(b) {
+  const parts = ['<b>Bouncer</b> \u2014 hexagonal pinball bumper. Could save you, could ruin you.'];
+  if (_hasPath(b)) parts.push('Patrols a route, so time it right.');
+  if (b.light) parts.push('Has a built-in light.');
   return parts.join(' ');
 }
 
-function describeCheckpoint(cp, idx, total) {
-  const parts = [`<b>Checkpoint${total > 1 ? ' ' + (idx + 1) + ' of ' + total : ''}</b> \u2014 your vehicle needs to visit ${total > 1 ? 'all checkpoints' : 'this'} before the finish line counts. Any order works \u2014 we\'re flexible like that.`];
-  if (cp.approvalTime) parts.push(`Catch: you have to loiter inside for ${cp.approvalTime}s. No drive-throughs.`);
-  if (_hasPath(cp)) {
-    parts.push(`Oh, and it\'s moving ${_pathDesc(cp)}. Good luck catching it.`);
-  }
-  if (cp.light) {
-    parts.push(`Has a light (${cp.light.intensity}%).`);
-    if (cp.light.onVisit && cp.light.onVisit.action) parts.push('The light does something sneaky when visited.');
-  }
+function wtDescribeCheckpoint(cp, idx, total) {
+  const parts = [`<b>Checkpoint${total > 1 ? ' ' + (idx + 1) + '/' + total : ''}</b> \u2014 visit ${total > 1 ? 'all of these' : 'this'} before the finish line. Any order, we\'re not picky.`];
+  if (cp.approvalTime) parts.push(`Must stay inside for ${cp.approvalTime}s. No drive-throughs.`);
+  if (_hasPath(cp)) parts.push('Moves around. Good luck.');
+  if (cp.light) parts.push('Has a light source.');
   return parts.join(' ');
 }
 
-function describeGoal(g) {
+function wtDescribeGoal(g) {
   const customLabel = g.label && g.label !== 'Finish' && g.label !== 'Goal' && g.label !== 'FINISH';
-  const parts = [`<b>Finish line${customLabel ? ' (' + g.label + ')' : ''}</b> \u2014 the promised land. Get your vehicle here (after any checkpoints) and victory is yours.`];
-  if (_hasPath(g)) {
-    parts.push(`Plot twist: it moves ${_pathDesc(g)}. Nothing worth having comes easy.`);
-  }
-  if (g.light) {
-    parts.push(`Glowing at ${g.light.intensity}% intensity, like a beacon of hope.`);
-    if (g.light.onVisit && g.light.onVisit.action) parts.push('The light reacts on approach \u2014 because why not.');
-  }
+  const parts = [`<b>Finish line${customLabel ? ' (' + g.label + ')' : ''}</b> \u2014 the promised land. Get here after hitting all checkpoints.`];
+  if (_hasPath(g)) parts.push('It moves. Because nothing is easy.');
+  if (g.light) parts.push('Has a light.');
   return parts.join(' ');
 }
 
-function describeElement(type, obj, level) {
-  if (type === 'light') return describeLight(obj);
-  if (type === 'danger') return describeDanger(obj);
-  if (type === 'bouncer') return describeBouncer(obj);
-  if (type === 'checkpoint') {
-    const idx = level.checkpoints.indexOf(obj);
-    return describeCheckpoint(obj, idx >= 0 ? idx : 0, level.checkpoints.length);
+// --- Click-info descriptions (factual list) ---
+
+function _lightBehaviorLine(light) {
+  if (!light || !light.onVisit || !light.onVisit.action) return '';
+  const a = light.onVisit;
+  let line = '';
+  if (a.action === 'off') line = 'Turns off on visit';
+  else if (a.action === 'offDelay') line = `Turns off after ${a.delay}s`;
+  else if (a.action === 'changeLuminosity') line = `Changes to ${a.newIntensity}%`;
+  if (a.recovery) line += `, recovers after ${a.recovery}s`;
+  return line;
+}
+
+function infoDescribeLight(l) {
+  const lines = ['<b>Light Source</b>'];
+  if (!l.on) lines.push('\u2022 Currently off');
+  if (l.onVisit && l.onVisit.action) lines.push('\u2022 ' + _lightBehaviorLine(l));
+  if (_hasPath(l)) lines.push('\u2022 Motion path');
+  return lines.join('<br>');
+}
+
+function infoDescribeDanger(dz) {
+  const shape = dz.shape === 'circle' ? 'Circular' : 'Rectangular';
+  const lines = [`<b>${shape} Danger Zone</b>`];
+  if (dz.light) {
+    lines.push('\u2022 Light source');
+    const lb = _lightBehaviorLine(dz.light);
+    if (lb) lines.push('&nbsp;&nbsp;' + lb);
   }
-  if (type === 'goal') return describeGoal(obj);
+  if (_hasPath(dz)) lines.push('\u2022 Motion path');
+  return lines.join('<br>');
+}
+
+function infoDescribeBouncer(b) {
+  const lines = ['<b>Bouncer</b>'];
+  if (b.light) {
+    lines.push('\u2022 Light source');
+    const lb = _lightBehaviorLine(b.light);
+    if (lb) lines.push('&nbsp;&nbsp;' + lb);
+  }
+  if (_hasPath(b)) lines.push('\u2022 Motion path');
+  return lines.join('<br>');
+}
+
+function infoDescribeCheckpoint(cp, level) {
+  const idx = level.checkpoints.indexOf(cp);
+  const total = level.checkpoints.length;
+  const lines = [`<b>Checkpoint${total > 1 ? ' ' + (idx + 1) + '/' + total : ''}</b>`];
+  if (cp.approvalTime) lines.push(`\u2022 Dwell time: ${cp.approvalTime}s`);
+  if (cp.light) {
+    lines.push('\u2022 Light source');
+    const lb = _lightBehaviorLine(cp.light);
+    if (lb) lines.push('&nbsp;&nbsp;' + lb);
+  }
+  if (_hasPath(cp)) lines.push('\u2022 Motion path');
+  return lines.join('<br>');
+}
+
+function infoDescribeGoal(g) {
+  const customLabel = g.label && g.label !== 'Finish' && g.label !== 'Goal' && g.label !== 'FINISH';
+  const lines = [`<b>Finish Line${customLabel ? ' (' + g.label + ')' : ''}</b>`];
+  if (g.light) {
+    lines.push('\u2022 Light source');
+    const lb = _lightBehaviorLine(g.light);
+    if (lb) lines.push('&nbsp;&nbsp;' + lb);
+  }
+  if (_hasPath(g)) lines.push('\u2022 Motion path');
+  return lines.join('<br>');
+}
+
+function infoDescribeElement(type, obj, level) {
+  if (type === 'light') return infoDescribeLight(obj);
+  if (type === 'danger') return infoDescribeDanger(obj);
+  if (type === 'bouncer') return infoDescribeBouncer(obj);
+  if (type === 'checkpoint') return infoDescribeCheckpoint(obj, level);
+  if (type === 'goal') return infoDescribeGoal(obj);
   return '';
+}
+
+// --- Car recommendation ---
+
+function generateRecommendation(level) {
+  const hasCheckpoints = level.checkpoints.length > 0;
+  const hasDangers = level.dangers.length > 0;
+  const hasBouncers = level.bouncers && level.bouncers.length > 0;
+  const hasMovingParts = [
+    ...level.checkpoints, ...level.dangers, ...(level.bouncers || []), ...level.goals,
+    ...staticLights.filter(l => !l._embedded)
+  ].some(o => _hasPath(o));
+
+  // Analyze light positions vs finish position
+  const finish = level.goals[0];
+  const start = level.startPos;
+  const lightsNearFinish = staticLights.filter(l => !l._embedded).some(l => {
+    const df = Math.hypot(l.x - finish.x, l.y - finish.y);
+    const ds = Math.hypot(l.x - start.x, l.y - start.y);
+    return df < ds;
+  });
+
+  const lines = ['<b>Car Recommendation</b>', ''];
+  if (lightsNearFinish) {
+    lines.push('\u2022 <b>Type:</b> V2b Aggression or V3a Love \u2014 the finish is near light, so go toward it.');
+  } else {
+    lines.push('\u2022 <b>Type:</b> V2a Fear or V3b Explorer \u2014 lights are away from the finish, flee them.');
+  }
+  if (hasDangers || hasBouncers) {
+    lines.push('\u2022 <b>Speed:</b> Start low (2\u20133x). Cautious beats fast when death zones are involved.');
+  } else {
+    lines.push('\u2022 <b>Speed:</b> Crank it up (5\u20137x). Clear path, no reason to dawdle.');
+  }
+  if (hasCheckpoints && hasCheckpoints > 1) {
+    lines.push('\u2022 <b>Contrast:</b> Higher contrast helps navigate between spread-out checkpoints.');
+  }
+  if (hasMovingParts) {
+    lines.push('\u2022 <b>Tip:</b> Moving parts mean timing matters. Watch the paths before launching.');
+  }
+  lines.push('', '<i style="color:#78909c;font-size:11px;">This is a suggestion \u2014 experimenting is half the fun.</i>');
+  return lines.join('<br>');
 }
 
 function startWalkthrough(level) {
   walkthroughSteps = [];
+  _phraseCounters = { path: 0, light: 0 };
   // Order: checkpoints, lights, bouncers, dangers, finish line
   for (let i = 0; i < level.checkpoints.length; i++) {
     const cp = level.checkpoints[i];
-    walkthroughSteps.push({ type: 'checkpoint', obj: cp, getPos: () => ({ x: cp.x, y: cp.y }), text: describeCheckpoint(cp, i, level.checkpoints.length) });
+    walkthroughSteps.push({ type: 'checkpoint', obj: cp, getPos: () => ({ x: cp.x, y: cp.y }), text: wtDescribeCheckpoint(cp, i, level.checkpoints.length) });
   }
   const nonEmbeddedLights = staticLights.filter(l => !l._embedded);
   for (const l of nonEmbeddedLights) {
-    walkthroughSteps.push({ type: 'light', obj: l, getPos: () => ({ x: l.x, y: l.y }), text: describeLight(l) });
+    walkthroughSteps.push({ type: 'light', obj: l, getPos: () => ({ x: l.x, y: l.y }), text: wtDescribeLight(l) });
   }
   if (level.bouncers) {
     for (const b of level.bouncers) {
-      walkthroughSteps.push({ type: 'bouncer', obj: b, getPos: () => ({ x: b.x, y: b.y }), text: describeBouncer(b) });
+      walkthroughSteps.push({ type: 'bouncer', obj: b, getPos: () => ({ x: b.x, y: b.y }), text: wtDescribeBouncer(b) });
     }
   }
   for (const dz of level.dangers) {
     const cx = dz.shape === 'circle' ? dz.x : dz.x + dz.w / 2;
     const cy = dz.shape === 'circle' ? dz.y : dz.y + dz.h / 2;
-    walkthroughSteps.push({ type: 'danger', obj: dz, getPos: () => ({ x: cx, y: cy }), text: describeDanger(dz) });
+    walkthroughSteps.push({ type: 'danger', obj: dz, getPos: () => ({ x: cx, y: cy }), text: wtDescribeDanger(dz) });
   }
   for (const g of level.goals) {
-    walkthroughSteps.push({ type: 'goal', obj: g, getPos: () => ({ x: g.x, y: g.y }), text: describeGoal(g) });
+    walkthroughSteps.push({ type: 'goal', obj: g, getPos: () => ({ x: g.x, y: g.y }), text: wtDescribeGoal(g), isFinish: true });
   }
-  // Filter out nulls (embedded lights return null)
   walkthroughSteps = walkthroughSteps.filter(s => s.text);
   if (walkthroughSteps.length > 0) {
     walkthroughActive = true;
@@ -5713,22 +5808,19 @@ function dismissWalkthrough() {
   if (container) container.innerHTML = '';
 }
 
-function _positionBubble(bubble, screenX, screenY) {
-  const bw = 320; // max-width of bubble
-  // Place bubble so the arrow points at (screenX, screenY)
+function _positionBubble(bubble, screenX, screenY, extraClass) {
+  const bw = 320;
   let bubbleLeft = screenX - bw / 2;
   bubbleLeft = Math.max(8, Math.min(bubbleLeft, window.innerWidth - bw - 8));
-  // Arrow offset within bubble
   const arrowX = Math.max(16, Math.min(screenX - bubbleLeft, bw - 16));
 
   let arrowDir = 'top';
   if (screenY > window.innerHeight * 0.55) arrowDir = 'bottom';
 
-  bubble.className = 'tutorial-bubble arrow-' + arrowDir;
+  bubble.className = 'tutorial-bubble arrow-' + arrowDir + (extraClass ? ' ' + extraClass : '');
   bubble.style.setProperty('--arrow-x', arrowX + 'px');
   bubble.style.left = bubbleLeft + 'px';
   bubble.style.top = (arrowDir === 'top' ? screenY + 24 : Math.max(8, screenY - bubble.offsetHeight - 24)) + 'px';
-  // Re-measure after setting top (for bottom case)
   if (arrowDir === 'bottom') {
     bubble.style.top = Math.max(8, screenY - bubble.offsetHeight - 24) + 'px';
   }
@@ -5742,7 +5834,6 @@ function showWalkthroughStep(index) {
   const step = walkthroughSteps[index];
   const wp = step.getPos();
 
-  // Pan camera to center on element
   camX = wp.x - (canvas.width / camZoom) / 2;
   camY = wp.y - (canvas.height / camZoom) / 2;
   clampCamera();
@@ -5754,19 +5845,37 @@ function showWalkthroughStep(index) {
 
   const bubble = document.createElement('div');
   const isLast = index === walkthroughSteps.length - 1;
+  const recBtn = step.isFinish ? '<button class="tutorial-btn-next tutorial-btn-rec">Recommendation</button>' : '';
   bubble.innerHTML = `
     <div class="step-label">Step ${index + 1} of ${walkthroughSteps.length}</div>
     <div class="step-text">${step.text}</div>
     <div class="step-btns">
       <button class="tutorial-btn-skip">Skip</button>
-      <button class="tutorial-btn-next" ${isLast ? 'style="background:#4caf50;color:#fff;"' : ''}>${isLast ? 'Done' : 'Next'}</button>
+      ${recBtn}
+      <button class="tutorial-btn-next" ${isLast ? 'style="background:#4caf50;color:#0a0a1a;"' : ''}>${isLast ? 'Done' : 'Next'}</button>
     </div>
   `;
   container.appendChild(bubble);
   _positionBubble(bubble, screenX, screenY);
 
   bubble.querySelector('.tutorial-btn-skip').addEventListener('click', dismissWalkthrough);
-  bubble.querySelector('.tutorial-btn-next').addEventListener('click', () => {
+  const recBtnEl = bubble.querySelector('.tutorial-btn-rec');
+  if (recBtnEl) {
+    recBtnEl.addEventListener('click', () => {
+      container.innerHTML = '';
+      const recBubble = document.createElement('div');
+      recBubble.innerHTML = `
+        <button class="bubble-close">&times;</button>
+        <div class="step-text" style="margin-top:4px;">${generateRecommendation(currentLevel)}</div>
+        <div class="step-btns"><button class="tutorial-btn-next">Back</button></div>
+      `;
+      container.appendChild(recBubble);
+      _positionBubble(recBubble, screenX, screenY);
+      recBubble.querySelector('.bubble-close').addEventListener('click', dismissWalkthrough);
+      recBubble.querySelector('.tutorial-btn-next').addEventListener('click', () => showWalkthroughStep(index));
+    });
+  }
+  bubble.querySelector('.step-btns').lastElementChild.addEventListener('click', () => {
     if (isLast) dismissWalkthrough();
     else showWalkthroughStep(index + 1);
   });
@@ -5806,7 +5915,7 @@ function showElementInfoBubble(hit) {
   const container = document.getElementById('tutorial-bubble-container');
   container.innerHTML = '';
 
-  const text = describeElement(hit.type, hit.obj, currentLevel);
+  const text = infoDescribeElement(hit.type, hit.obj, currentLevel);
 
   const rect = canvas.getBoundingClientRect();
   const sc = worldToScreen(hit.x, hit.y);
@@ -6339,11 +6448,37 @@ function isInsideDanger(v, dz) {
 }
 
 // --- Game canvas rendering ---
+function _drawMotionPath(obj, color) {
+  if (!obj.path || !obj.path.waypoints || obj.path.waypoints.length < 2) return;
+  const wps = obj.path.waypoints;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2 / camZoom;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(wps[0].x, wps[0].y);
+  for (let j = 1; j < wps.length; j++) ctx.lineTo(wps[j].x, wps[j].y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  for (let j = 0; j < wps.length; j++) {
+    ctx.fillStyle = j === 0 ? color : color.replace('0.5', '0.3');
+    ctx.beginPath(); ctx.arc(wps[j].x, wps[j].y, 4 / camZoom, 0, Math.PI * 2); ctx.fill();
+  }
+}
+
 function drawGameObjects() {
   if (!gameMode || !currentLevel) return;
   const level = currentLevel;
   const t = Date.now();
   const s = 1 / camZoom; // convenience: size scaling factor
+
+  // === MOTION PATHS (briefing only) ===
+  if (gamePhase === 'briefing') {
+    for (const l of staticLights.filter(sl => !sl._embedded)) _drawMotionPath(l, 'rgba(0, 188, 212, 0.5)');
+    for (const cp of level.checkpoints) _drawMotionPath(cp, 'rgba(0, 188, 212, 0.4)');
+    for (const dz of level.dangers) _drawMotionPath(dz, 'rgba(239, 83, 80, 0.4)');
+    for (const b of (level.bouncers || [])) _drawMotionPath(b, 'rgba(100, 181, 246, 0.4)');
+    for (const g of level.goals) _drawMotionPath(g, 'rgba(76, 175, 80, 0.4)');
+  }
 
   // === DANGER ZONES — hazard stripes and skull ===
   for (const dz of level.dangers) {
