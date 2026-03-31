@@ -6270,6 +6270,11 @@ function drawGameObjects() {
 // --- Login flow ---
 function showLoginOverlay() {
   document.getElementById('login-overlay').classList.add('open');
+  document.getElementById('login-btn').disabled = false;
+  document.getElementById('login-error').textContent = '';
+  document.getElementById('login-nickname-row').classList.remove('show');
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-nickname').value = '';
   document.getElementById('login-email').focus();
 }
 
