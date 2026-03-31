@@ -5841,10 +5841,22 @@ function dismissWalkthrough() {
 }
 
 function _positionBubble(bubble, screenX, screenY, extraClass) {
-  const bw = 320;
-  let bubbleLeft = screenX - bw / 2;
-  bubbleLeft = Math.max(8, Math.min(bubbleLeft, window.innerWidth - bw - 8));
-  const arrowX = Math.max(16, Math.min(screenX - bubbleLeft, bw - 16));
+  // First pass: place bubble to measure its actual width
+  bubble.className = 'tutorial-bubble' + (extraClass ? ' ' + extraClass : '');
+  bubble.style.left = '0px';
+  bubble.style.top = '0px';
+  bubble.style.visibility = 'hidden';
+
+  // Force layout to measure
+  const actualW = bubble.offsetWidth;
+  const actualH = bubble.offsetHeight;
+
+  // Center bubble on screenX, clamp to viewport
+  let bubbleLeft = screenX - actualW / 2;
+  bubbleLeft = Math.max(8, Math.min(bubbleLeft, window.innerWidth - actualW - 8));
+
+  // Arrow horizontal offset within bubble, pointing at screenX
+  const arrowX = Math.max(12, Math.min(screenX - bubbleLeft, actualW - 12));
 
   let arrowDir = 'top';
   if (screenY > window.innerHeight * 0.55) arrowDir = 'bottom';
@@ -5852,10 +5864,8 @@ function _positionBubble(bubble, screenX, screenY, extraClass) {
   bubble.className = 'tutorial-bubble arrow-' + arrowDir + (extraClass ? ' ' + extraClass : '');
   bubble.style.setProperty('--arrow-x', arrowX + 'px');
   bubble.style.left = bubbleLeft + 'px';
-  bubble.style.top = (arrowDir === 'top' ? screenY + 24 : Math.max(8, screenY - bubble.offsetHeight - 24)) + 'px';
-  if (arrowDir === 'bottom') {
-    bubble.style.top = Math.max(8, screenY - bubble.offsetHeight - 24) + 'px';
-  }
+  bubble.style.top = (arrowDir === 'top' ? screenY + 20 : Math.max(8, screenY - actualH - 20)) + 'px';
+  bubble.style.visibility = '';
 }
 
 function showWalkthroughStep(index) {
